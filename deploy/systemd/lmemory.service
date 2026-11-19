@@ -1,0 +1,44 @@
+# Lmemory team server as a systemd service on a Linux host, for vaults that live on the host (a git checkout kept
+# current by your own pull job, or a synced folder). The server only reads them.
+#
+#   sudo useradd --system --home /var/lib/lmemory --shell /usr/sbin/nologin lmemory
+#   sudo git clone https://github.com/TinkCarlos/Lmemory /opt/lmemory     # or unpack a release tarball
+#   sudo install -d -o lmemory -m 700 /etc/lmemory
+#   openssl rand -hex 24 | sudo tee /etc/lmemory/team.token >/dev/null; sudo chown lmemory /etc/lmemory/team.token
+#   sudo chmod 600 /etc/lmemory/team.token
+#   sudo cp /opt/lmemory/deploy/systemd/lmemory.service /etc/systemd/system/ && sudo systemctl enable --now lmemory
+#
+# Put TLS in front of it (Caddy, nginx) before it faces the internet; docs/TEAM.md has the reverse-proxy lines.
+[Unit]
+Description=Lmemory team memory (MCP over HTTP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lmemory
+Group=lmemory
+Environment=LMEMORY_CACHE_DIR=/var/cache/lmemory
+Environment=LMEMORY_STATE_DIR=/var/lib/lmemory
+Environment=LMEMORY_NO_QUERY_LOG=1
+ExecStart=/usr/bin/python3 /opt/lmemory/skill/lmemory/scripts/mcp_server.py --http 0.0.0.0:8787 \
+    --bank team=/srv/lmemory/team --bank-token team=/etc/lmemory/team.token --workers 4 --refresh-every 2
+Restart=on-failure
+RestartSec=2
+CacheDirectory=lmemory
+StateDirectory=lmemory
+# 只读库、只写自己的缓存和状态目录
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ReadOnlyPaths=/srv/lmemory /etc/lmemory
+
+[Install]
+WantedBy=multi-user.target

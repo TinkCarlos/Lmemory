@@ -1,5 +1,7 @@
 # Every number, with its method
 
+> Historical KRouter measurements and evaluation context, preserved from upstream. See the [Lmemory README](../README.md) for the current build.
+
 [中文](NUMBERS.zh.md) · back to the [README](../README.md#measured-not-claimed)
 
 One row per measurement: the set it belongs to (registered in [`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md)

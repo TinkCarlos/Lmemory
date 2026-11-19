@@ -1,7 +1,7 @@
 """Render docs/img/demo-content.gif: the same story as demo.gif, for short-video work instead of code. Every line
 shown is real: the two vault pages are a demo vault's (the Chinese template plus these two pages), the `→` lines are
 the router's recall output on it, and the answers are what `claude -p --plugin-dir .` (Claude Code with this repo's
-plugin, a clean HOME, only the krouter_ask tool allowed) replied on 2026-10-18. Of three runs of the second
+plugin, a clean HOME, only the lmemory_ask tool allowed) replied on 2026-10-18. Of three runs of the second
 question, two answered as shown and one went off topic. Requires Pillow; macOS fonts.
 
     python3 docs/img/make_demo_content_gif.py docs/img/demo-content.gif
@@ -60,7 +60,7 @@ def frame(title, day_color, lines, footer=True):
         draw_text(d, X0, y, text, color, bold)
         y += LH
     if footer:
-        draw_text(d, X0, H - 30, "真实输出：Claude Code + KRouter 插件，演示库，2026-10-18（github.com/398894496-arch/KRouter）", DIM)
+        draw_text(d, X0, H - 30, "真实输出：Claude Code + Lmemory 插件，演示库，2026-10-18（github.com/TinkCarlos/Lmemory）", DIM)
     return im
 
 
@@ -94,7 +94,7 @@ a1 = ["现在的封面标题要直接给结论，最多 10 个字，不用问句
       "这版已经被上面的规则替换，不要再用了。"]
 for i in range(0, len(q1) + 1):
     add(frame("周四 · 随便哪个 agent 来问", OK, [("> " + q1[:i] + "▌", FG, True)]), 110)
-base = [("> " + q1, FG, True), ("", FG, False), ("  krouter_ask(\"封面标题现在怎么写？\")", DIM, False),
+base = [("> " + q1, FG, True), ("", FG, False), ("  lmemory_ask(\"封面标题现在怎么写？\")", DIM, False),
         ("  → 02 经验与方法/短视频/封面标题规则.md  tier=rule status=active", DIM, False), ("", FG, False)]
 add(frame("周四 · 随便哪个 agent 来问", OK, base), 1400)
 add(frame("周四 · 随便哪个 agent 来问", OK, base + [(ln, FG, False) for ln in a1]), 5200)
@@ -104,7 +104,7 @@ a2 = ["我在你的知识库里查过了，没有找到直播开播时间的记�
       "如果这件事是在别处定的（比如聊天记录、日历或会议纪要），", "可以把时间发给我。"]
 for i in range(0, len(q2) + 1):
     add(frame("库里没有的事", ACC, [("> " + q2[:i] + "▌", FG, True)]), 110)
-base2 = [("> " + q2, FG, True), ("", FG, False), ("  krouter_ask(\"我们定的直播几点开播？\")", DIM, False),
+base2 = [("> " + q2, FG, True), ("", FG, False), ("  lmemory_ask(\"我们定的直播几点开播？\")", DIM, False),
          ("  → recall: none（库里没有页面覆盖这个问题；不要猜）", WARN, False), ("", FG, False)]
 add(frame("库里没有的事", ACC, base2), 1400)
 add(frame("库里没有的事", ACC, base2 + [(ln, FG, False) for ln in a2]), 5000)

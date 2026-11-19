@@ -1,7 +1,7 @@
 # Auto-capture: what is written down, when, and what it costs
 
-How KRouter turns sessions into "what was decided" lines, how it lives next to another collector, and what moving the
-work from the nightly run to the end of each session costs. Code: `import_sessions.py`, `session_hook.py`,
+How Lmemory turns sessions into "what was decided" lines, how it lives next to another collector, and what moving the
+work from the nightly run to the end of each session costs. Code: `import_sessions.py`, `lmemory_capture.py`,
 `answer_cards.py`. Measured on the author's machine on 2026-10-30 unless said otherwise.
 
 ## 1. Answer cards the checkup lists as unfaithful or too broad
@@ -31,7 +31,7 @@ unfaithful cards and the broad ones among them. Tests: `tests/test_recall_index.
 The host's daily job (`collect_day.py` + `distill_llm.py`) writes one `type: daily-log` page per day under
 `05 时间日志/YYYY-MM/`: a stub that lists every session as `` `claude:<id>` ``, then a distilled day summary that
 cites sessions by an 8-character prefix. It reads session metadata (first question, turn count), not the turns:
-its distilled logs say "索引未提供" where the content would be. KRouter's pages are the turn-by-turn record of one
+its distilled logs say "索引未提供" where the content would be. Lmemory's pages are the turn-by-turn record of one
 session-day. They are not the same content, so the plan is to link them and remove true duplicates, not to pick one.
 
 - **Matching a session to a daily log**, in the vault only (no import of the host's code): a `type: daily-log` page
@@ -52,7 +52,7 @@ Tests: `tests/test_import_sessions.py`.
 
 ## 3. Distilling at session end instead of at night
 
-`session_hook.py end` already imports the session that ended, in a detached process, and distills it when consent
+`lmemory_capture.py end` already imports the session that ended, in a detached process, and distills it when consent
 included `--distill`. So "real time" needed no new hook; it needed three fixes before it is reasonable to leave on:
 
 | | Before | Now |
@@ -95,13 +95,13 @@ late or not at all; it is a top-up, not the trigger. What runs the work on a sch
   wakes (the latest missed slot only); a failed slot is tried once more on the next tick, then left to the nightly
   job. `--intraday` needs consent, uses the lane and distill choice recorded then, and covers today and yesterday,
   so a session that crossed midnight is seen; with the incremental digest a page that did not grow sends nothing.
-  State and a one-line summary per run: `~/.local/state/krouter/intraday.json`, `intraday.log`.
-- **Corrections on the spot.** `session_hook.py prompt` (UserPromptSubmit) appends a typed correction to
+  State and a one-line summary per run: `~/.local/state/lmemory/intraday.json`, `intraday.log`.
+- **Corrections on the spot.** `lmemory_capture.py prompt` (UserPromptSubmit) appends a typed correction to
   `05 时间日志/会话摘录/YYYY-MM-DD｜纠正候选.md` (`status: provisional`, time, project, `claude:<id8>` (or `codex:`, `cursor:`), the cue word,
   "待下次蒸馏判定"). Pattern match only: correction cues (改成/改为/换成/以后都/一律/锁死/不要再/别再/记住/纠正/搞错/说错,
   `from now on`, `instead of`, `that's wrong`, …), minus a sentence that ends as a rhetorical question (不是吗/对不对/
   是不是/难道不是, `isn't it`). Skipped: no consent, a prompt over 1500 characters, a session marked `#不记`, and any
-  prompt under a KRouter model call (`llm.cli_env()` sets `KROUTER_IN_DISTILL`, so the distill's own `claude -p`
+  prompt under a Lmemory model call (`llm.cli_env()` sets `LMEMORY_IN_DISTILL`, so the distill's own `claude -p`
   never records its excerpt as your correction). Redacted, cut to 300 characters, nothing sent, never fails the
   session, prints nothing into it. The page is a clue (time-log tier in recall); the next distill of that session
   settles each candidate on its own (`corrections.py`): a digest line sharing enough of its content words makes it
@@ -113,13 +113,13 @@ Capture writes memory without a yes: a yes/no gate on every digest line was one 
 nothing ever took effect. In its place every run that changes something is visible and reversible:
 
 - **One commit per run** (when the vault is a git repository) with exactly the files that run wrote or deleted,
-  tagged `[krouter-run <id>]`. Other changes in the vault are left out of it (`git commit --only`). Hook-written
+  tagged `[lmemory-run <id>]`. Other changes in the vault are left out of it (`git commit --only`). Hook-written
   candidates are committed as they were just before they are settled, so undoing a run puts them back to pending.
 - **One ledger entry per run** in `90 系统文件/自动化/记忆变更记录.md` (`status: generated`, so recall never cites
   it): each page that gained lines and its session, each added line (a change of mind shown as `取代：原来 A → 改成
   B`), each candidate's verdict, each page removed. The entry is committed separately, so undoing keeps the record.
 - **One command back:** `import_sessions.py --undo <id>` reverts that run's commit and notes the undo in the ledger.
-- The SessionStart hook brings every distilled line (corrections first), unmarked; `KROUTER_INJECT=confirmed`
+- The SessionStart hook brings every distilled line (corrections first), unmarked; `LMEMORY_INJECT=confirmed`
   restores the earlier confirmed-pages-only default. A run that changes nothing writes no commit and no entry.
 
 ## 3c. Every turn, in Claude Code, Codex and Cursor
@@ -127,7 +127,7 @@ nothing ever took effect. In its place every run that changes something is visib
 Reviewers comparing memory tools in November 2026 put it plainly: real-time capture was Claude Code only, Codex and
 Cursor were batch. Codex and Cursor both have documented lifecycle hooks now, so the same four hooks run in all three:
 
-| `session_hook.py` | Claude Code (plugin) | Codex (`~/.codex/hooks.json`) | Cursor (`~/.cursor/hooks.json`) | What it does |
+| `lmemory_capture.py` | Claude Code (plugin) | Codex (`~/.codex/hooks.json`) | Cursor (`~/.cursor/hooks.json`) | What it does |
 |---|---|---|---|---|
 | `start` | `SessionStart` | `SessionStart` → `hookSpecificOutput.additionalContext` | `sessionStart` → `additional_context` | this repository's recorded decisions, corrections first, each with its page |
 | `prompt` | `UserPromptSubmit` | `UserPromptSubmit`; prints nothing unless a page is recalled (Codex adds any output to the context) | `beforeSubmitPrompt`, always `{"continue": true}` (no recall: it cannot add context) | a typed correction becomes a candidate; a page the message names comes as `additionalContext` (§3d) |
@@ -144,9 +144,9 @@ Cursor were batch. Codex and Cursor both have documented lifecycle hooks now, so
   `transcript_path` that may be empty; a missing transcript is found by the session id under
   `~/.cursor/projects/*/agent-transcripts/<id>/<id>.jsonl` (Codex: under `~/.codex/sessions/`).
 - **Installed only after a yes to importing**, by `bootstrap.py` (`register_hooks`), merged into the app's own file:
-  every entry already there is kept, the file is copied to `.krouter-bak`, re-running replaces only KRouter's entries
-  (`session_hook.py … --agent codex|cursor`), a file that is not plain JSON is left alone, and
-  `bootstrap.py --unregister-mcp` (what `uninstall.sh` runs) takes out only KRouter's. An app counts as installed
+  every entry already there is kept, the file is copied to `.lmemory-bak`, re-running replaces only Lmemory's entries
+  (`lmemory_capture.py … --agent codex|cursor`), a file that is not plain JSON is left alone, and
+  `bootstrap.py --unregister-mcp` (what `uninstall.sh` runs) takes out only Lmemory's. An app counts as installed
   when its folder exists (`~/.codex`, or Cursor's own settings folder; `~/.cursor` alone does not count, since
   `install.sh` creates it for the rule).
 - **Codex runs no hook you have not trusted.** Trust is recorded against the hook's hash in Codex's `/hooks`; the
@@ -166,7 +166,7 @@ was read back correctly as an interactive session. Without the bypass the untrus
 prompt "以后一律用 pnpm" became a candidate on the day's 纠正候选 page, and `Stop` and `SessionEnd` each ran the import
 (0 sessions, as above). **Checked in the Cursor agent CLI** (2026.11.05-86047df, 2026-11-09, `cursor-agent -p --force`, project-level
 `.cursor/mcp.json` and `.cursor/hooks.json`): the turn-end and session-end hooks wrote a `cursor` session page for each
-run; `beforeSubmitPrompt` did not run, so "以后一律用 pnpm" was not noted there (fed to `session_hook.py prompt --agent
+run; `beforeSubmitPrompt` did not run, so "以后一律用 pnpm" was not noted there (fed to `lmemory_capture.py prompt --agent
 cursor` by hand with Cursor's payload it is). The hook formats follow
 Cursor's hooks documentation and are covered by `tests/test_live_hooks.py`, which also runs the installed command line
 through a shell.
@@ -177,15 +177,15 @@ The lock answers when the agent asks. This makes the vault answer when you merel
 layers: the prompt hook catches a page by its name, and the host, given a standing index of what the vault knows at
 session start, catches the mentions in other words and fetches the page itself.
 
-- **The standing index** (`compile_subconscious.standing_index`, printed by `session_hook.py start`;
-  `KROUTER_RECALL_INDEX=0` off): one line per live topic of the alias table, "name / one other name: what was decided
+- **The standing index** (`compile_subconscious.standing_index`, printed by `lmemory_capture.py start`;
+  `LMEMORY_RECALL_INDEX=0` off): one line per live topic of the alias table, "name / one other name: what was decided
   〔page〕", rule pages first, then the newest of last used (`recalled.jsonl`, `queries.jsonl`) and last updated; at
   most 60 full lines and 5,400 characters; with more topics, every topic keeps its name in one "also known" line and
   the first ones keep full lines. Then one usage line: when the message touches any of them, even in other words,
-  fetch the one page that bears on it most before answering, with `krouter_ask`, else the route command (absolute
+  fetch the one page that bears on it most before answering, with `lmemory_ask`, else the route command (absolute
   path), else by reading the file (absolute path), and cite it; a word inside pasted code or logs is not a mention;
   otherwise do nothing and do not mention the index. The whole session-start text stays under 9,400 characters.
-- **Learning from use** (`KROUTER_RECALL_LEARN=1`, off by default): the turn hook reads the end of the transcript; a
+- **Learning from use** (`LMEMORY_RECALL_LEARN=1`, off by default): the turn hook reads the end of the transcript; a
   page a lookup returned (or a vault file read) that the agent's answer names, and that the prompt hook had not
   brought, is a `learn` event in `recall-learn.jsonl`; the nightly `learn_mentions` step adds one distinctive phrase
   of the message to `90 系统文件/自动化/下意识触发词-待验证.psv` (recall only), and drops a provisional phrase the
@@ -205,9 +205,9 @@ session start, catches the mentions in other words and fetches the page itself.
   not-yet-valid and secret pages never come.
 - **Quiet**: code fences and lines that read like pasted code, logs, stack traces, diffs, commands or config are not
   matched (blocks the app attached were already dropped); a page comes once per session unless its conclusion
-  changed; ten per session at most; nothing matched, nothing printed. `KROUTER_RECALL_PROMPT=0` off, or a list of
-  routes; `KROUTER_INJECT=0` also off.
-- **Seen**: each page brought is one line in `~/.local/state/krouter/recalled.jsonl` (time, app, session id, the
+  changed; ten per session at most; nothing matched, nothing printed. `LMEMORY_RECALL_PROMPT=0` off, or a list of
+  routes; `LMEMORY_INJECT=0` also off.
+- **Seen**: each page brought is one line in `~/.local/state/lmemory/recalled.jsonl` (time, app, session id, the
   sentence the phrase was in, redacted and cut to 200 characters, the phrase, the route, the page, any older page);
   with `#不记` the sentence is left empty. Outside the vault, never sent.
 - **Fast**: it reads the recall index as it is and never builds it in the hook; a detached refresh runs at most every
@@ -266,7 +266,7 @@ ones (the machine had no Codex or Cursor sessions after 2026-10-30), so this say
 From the turn that made the correction to the run that wrote it down: 0.5 to 17.7 hours, median 15. The machine slept
 through most daytime slots; the slot then runs once after wake.
 
-**The correction catcher** (`session_hook.py prompt`) only worked from 2026-11-04 (a manual install had not recorded
+**The correction catcher** (`lmemory_capture.py prompt`) only worked from 2026-11-04 (a manual install had not recorded
 the vault path; fixed in `install.sh`). On the 12 lines it kept from then to 11-09:
 
 | | 1.3.0 | after this change |
@@ -288,10 +288,10 @@ on the same pages, the three missed corrections are now written in, and no candi
 ## 4. A correction that holds in the same turn, with no key (2026-11-09)
 
 The gap: on a fresh install with no key, "use SQLite from now on" was written down as a correction candidate
-(`session_hook.py prompt`) to be settled by the next distill, and distilling needs a model, so the next lookup still
+(`lmemory_capture.py prompt`) to be settled by the next distill, and distilling needs a model, so the next lookup still
 put the old answer first. Now the agent makes it hold in its own turn, with the vault's existing supersede rule:
 
-- `krouter_correct(new, old, page)` over MCP (or `corrections.py apply --new … --old … --page …`): a correction page in
+- `lmemory_correct(new, old, page)` over MCP (or `corrections.py apply --new … --old … --page …`): a correction page in
   `05 时间日志/会话摘录/` (`type: correction`, `supersedes: [[old page]]`, the "原来 A → 改成 B" line); the old page
   gets `status: superseded` and `superseded_by` when it is only that decision (≤ 12 lines of body), or a "⚠ 已改" line
   under the old sentence when it says other things too (its status is left alone); one line in
@@ -303,5 +303,5 @@ put the old answer first. Now the agent makes it hold in its own turn, with the 
   prints nothing for a correction (`tests/test_correction_capture.py`; it prints only a recalled page, §3d); the candidate it writes is settled either way.
 
 Measured: `tests/test_correct_now.py` puts "本地开发数据库用 Postgres 16" on a page, asks "本地开发用什么数据库" (that
-page first), calls `krouter_correct`, and asks again: the old page is no longer first and the first page holds the new
+page first), calls `lmemory_correct`, and asks again: the old page is no longer first and the first page holds the new
 answer. Ordering two live pages that disagree, newest first, is another session's change in `recall_index.py`.

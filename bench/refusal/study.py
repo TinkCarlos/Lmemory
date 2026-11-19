@@ -2,7 +2,7 @@
 """Set 37 (bench/memory_honesty/HELDOUT.md): can a coverage rule turn more "the memory does not have this" questions into
 `recall: none`, without refusing questions the memory can answer?
 
-No model is called. For every question it runs KRouter's recall as shipped (the gate, then the memory's pages) and,
+No model is called. For every question it runs Lmemory's recall as shipped (the gate, then the memory's pages) and,
 when the gate answers, the deterministic coverage signals of `recall_index.coverage_signals` on the pages it gave.
 A candidate rule ("also refuse when ...") can only turn an answer into a refusal.
 
@@ -17,9 +17,9 @@ split) and the same half with its answer sessions removed, LoCoMo's dev half (se
 adversarial and answerable drawn separately), and the memory-honesty sets `dev`, `dev2`, `dev3`. Held out: the other
 halves of LongMemEval and LoCoMo, `heldout`, `heldout2`, `heldout3`, and the synthetic set (`synthetic.jsonl` here).
 
-State: `~/.local/state/krouter-eval/kb-refusal/` (`KROUTER_REFUSAL_STATE`). LongMemEval's converted vaults are read
-from `KROUTER_LME_STATE` (default `~/.local/state/krouter-eval/lme`), never written; LoCoMo's from
-`KROUTER_LOCOMO_STATE` (run `bench/locomo/locomo.py convert` with it set first).
+State: `~/.local/state/lmemory-eval/kb-refusal/` (`LMEMORY_REFUSAL_STATE`). LongMemEval's converted vaults are read
+from `LMEMORY_LME_STATE` (default `~/.local/state/lmemory-eval/lme`), never written; LoCoMo's from
+`LMEMORY_LOCOMO_STATE` (run `bench/locomo/locomo.py convert` with it set first).
 """
 
 from __future__ import annotations
@@ -35,11 +35,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-# 对比旧版本时指向另一份代码（`git archive <commit> skill/krouter/scripts` 解出来的目录）
-SCRIPTS = Path(os.environ.get("KROUTER_REFUSAL_SCRIPTS") or REPO / "skill/krouter/scripts")
-STATE = Path(os.environ.get("KROUTER_REFUSAL_STATE") or Path.home() / ".local/state/krouter-eval/kb-refusal")
-LME_STATE = Path(os.environ.get("KROUTER_LME_STATE") or Path.home() / ".local/state/krouter-eval/lme")
-LOCOMO_STATE = Path(os.environ.get("KROUTER_LOCOMO_STATE") or STATE / "locomo")
+# 对比旧版本时指向另一份代码（`git archive <commit> skill/lmemory/scripts` 解出来的目录）
+SCRIPTS = Path(os.environ.get("LMEMORY_REFUSAL_SCRIPTS") or REPO / "skill/lmemory/scripts")
+STATE = Path(os.environ.get("LMEMORY_REFUSAL_STATE") or Path.home() / ".local/state/lmemory-eval/kb-refusal")
+LME_STATE = Path(os.environ.get("LMEMORY_LME_STATE") or Path.home() / ".local/state/lmemory-eval/lme")
+LOCOMO_STATE = Path(os.environ.get("LMEMORY_LOCOMO_STATE") or STATE / "locomo")
 SEED = 20261110
 MH = REPO / "bench/memory_honesty"
 
@@ -109,16 +109,16 @@ def lookup(ri, vault: Path, q: str) -> dict:
 
 
 def _env(tmp: Path) -> None:
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
-    os.environ["KROUTER_CACHE_DIR"] = str(tmp / "cache")
-    os.environ.pop("KROUTER_MAP", None)
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
+    os.environ["LMEMORY_CACHE_DIR"] = str(tmp / "cache")
+    os.environ.pop("LMEMORY_MAP", None)
     sys.path.insert(0, str(SCRIPTS))
 
 
 def run_items(items: list[dict], label: str) -> list[dict]:
     """items: {id, q, vault, ...}; vaults are read in place (the cache goes to a temporary folder)."""
     out = []
-    with tempfile.TemporaryDirectory(prefix="krouter-refusal-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="lmemory-refusal-") as tmp:
         _env(Path(tmp))
         import recall_index as ri
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set 14 (HELDOUT.md): can KRouter's refusal gate refuse more unanswerable questions without losing answerable ones?
+"""Set 14 (HELDOUT.md): can Lmemory's refusal gate refuse more unanswerable questions without losing answerable ones?
 
 No model is called. For every LongMemEval S question it records what the shipped gate decided and a handful of
 candidate signals (top score, gap to the second page, strong-match count, how much of the question's idf mass the
@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lme  # noqa: E402
 
-SCRIPTS = lme.REPO / "skill/krouter/scripts"
+SCRIPTS = lme.REPO / "skill/lmemory/scripts"
 FEATURES = ("top", "margin", "strong", "cov1", "nterms", "nabsent", "miss_mass", "gap_rel")
 HIGH_IS_ABSENT = {"nabsent", "miss_mass"}  # for these a rule fires when the value is >=; for the rest when <=
 BUDGETS = (0, 2, 5)  # answerable-dev answers lost (235 of them: 2 is 0.85 points)
@@ -39,7 +39,7 @@ BUDGETS = (0, 2, 5)  # answerable-dev answers lost (235 of them: 2 is 0.85 point
 
 def features(ri, vault: Path, question: str, cache: Path) -> dict:
     """What the gate decided and the signals around it. Uses recall's own helpers, changes nothing in it."""
-    os.environ["KROUTER_CACHE_DIR"] = str(cache)
+    os.environ["LMEMORY_CACHE_DIR"] = str(cache)
     gated = ri.recall(vault, question, limit=3)
     free = ri.recall(vault, question, limit=5, gate=False, refresh_first=False)
     con = ri.connect(ri.cache_path(vault))
@@ -79,11 +79,11 @@ def features(ri, vault: Path, question: str, cache: Path) -> dict:
 
 def collect(rows: list[dict], label: str) -> list[dict]:
     sys.path.insert(0, str(SCRIPTS))
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
     import recall_index as ri
 
     out = []
-    with tempfile.TemporaryDirectory(prefix="krouter-gate-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="lmemory-gate-") as tmp:
         for i, it in enumerate(rows):
             out.append({"id": it["id"], "split": it["split"], **features(ri, Path(it["vault"]), it["q"], Path(tmp))})
             for f in Path(tmp).glob("recall-*"):

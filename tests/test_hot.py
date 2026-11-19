@@ -24,10 +24,10 @@ def _card(v: Path, cid: str, day: str, when: str, lesson: str) -> None:
 
 @pytest.fixture()
 def vault(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_TODAY", TODAY.isoformat())
-    monkeypatch.delenv("KROUTER_HOT_DAYS", raising=False)
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_TODAY", TODAY.isoformat())
+    monkeypatch.delenv("LMEMORY_HOT_DAYS", raising=False)
     v = tmp_path / "v"
     v.mkdir()
     return v
@@ -43,11 +43,11 @@ def test_window_edges():
 
 def test_settings_and_env(vault, monkeypatch):
     assert hot.days(vault) == 60
-    (vault / "krouter-settings.psv").write_text("hot_days|30\n", encoding="utf-8")
+    (vault / "lmemory-settings.psv").write_text("hot_days|30\n", encoding="utf-8")
     assert hot.days(vault) == 30
-    (vault / "krouter-settings.psv").write_text("hot_days|off\n", encoding="utf-8")
+    (vault / "lmemory-settings.psv").write_text("hot_days|off\n", encoding="utf-8")
     assert hot.days(vault) is None
-    monkeypatch.setenv("KROUTER_HOT_DAYS", "45")
+    monkeypatch.setenv("LMEMORY_HOT_DAYS", "45")
     assert hot.days(vault) == 45
 
 
@@ -73,7 +73,7 @@ def test_cold_card_sorts_after_and_comes_back_when_adopted(vault):
 
 
 def test_off_means_no_demotion(vault):
-    (vault / "krouter-settings.psv").write_text("hot_days|off\n", encoding="utf-8")
+    (vault / "lmemory-settings.psv").write_text("hot_days|off\n", encoding="utf-8")
     _card(vault, "C01", "2020-01-01", "部署失败", "部署失败时先看日志")
     _card(vault, "C02", "2026-11-01", "部署失败", "部署失败时先回滚")
     assert not any(c["cold"] for c in experience.suggest(vault, "部署失败了怎么办"))
@@ -94,7 +94,7 @@ def test_cold_trigger_gives_up_its_place_and_is_restored_when_brought(vault, mon
     monkeypatch.setattr(recollect, "GATE", False)
     rep = hot.nightly(vault)  # 第一晚：记下 first_seen，都不冷
     assert rep["triggers_total"] == 2 and rep["triggers_cold"] == []
-    monkeypatch.setenv("KROUTER_TODAY", (TODAY + dt.timedelta(days=60)).isoformat())
+    monkeypatch.setenv("LMEMORY_TODAY", (TODAY + dt.timedelta(days=60)).isoformat())
     rep = hot.nightly(vault)
     assert len(rep["triggers_cold"]) == 2 and len(rep["triggers_new_cold"]) == 2
     assert "冷热" in "".join(hot.report_lines(rep))

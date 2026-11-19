@@ -32,7 +32,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SCRIPTS = HERE.parents[1] / "skill/krouter/scripts"
+SCRIPTS = HERE.parents[1] / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 DAY = date(2026, 10, 1)
 NONE_LINES = ("没有定下来的事", "没有改主意的事", "nothing was decided", "no decisions")
@@ -124,11 +124,11 @@ def main() -> int:
     elif args.replay:
         lines = {r["id"]: r["lines"] for r in map(json.loads, Path(args.replay).read_text(encoding="utf-8").splitlines())}
     else:
-        os.environ["KROUTER_LEARN_CLI"] = args.cli
-        os.environ.setdefault("KROUTER_NO_QUERY_LOG", "1")
+        os.environ["LMEMORY_LEARN_CLI"] = args.cli
+        os.environ.setdefault("LMEMORY_NO_QUERY_LOG", "1")
         import tempfile
 
-        lines = distill_all(sessions, Path(tempfile.mkdtemp(prefix="krouter-decision-bench-")))
+        lines = distill_all(sessions, Path(tempfile.mkdtemp(prefix="lmemory-decision-bench-")))
     if args.save:
         Path(args.save).write_text("".join(json.dumps({"id": k, "lines": v}, ensure_ascii=False) + "\n"
                                            for k, v in lines.items()), encoding="utf-8")

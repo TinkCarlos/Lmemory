@@ -5,8 +5,8 @@ Offline, no model: for each answerable LongMemEval question and k = 3, 5, 8, whe
 include every session the benchmark labels as holding the answer. Systems, each giving exactly k pages, no refusal:
 
 - `bm25`: FTS5 BM25 over character pairs and words, superseded pages skipped (`bench/memory_honesty/run.py`);
-- `krouter`: in-process `recall(..., gate=False)` with the associative path off;
-- `krouter+assoc`: the same direct hits, the associative pages filling the k slots as `recall_index.page_list` does.
+- `lmemory`: in-process `recall(..., gate=False)` with the associative path off;
+- `lmemory+assoc`: the same direct hits, the associative pages filling the k slots as `recall_index.page_list` does.
 
     python3 bench/longmemeval/assoc.py --half dev                  # tune on this
     python3 bench/longmemeval/assoc.py --half heldout              # once, for the configuration chosen on dev
@@ -17,7 +17,7 @@ with evidence labels, a session counts as an answer session when the authors cit
 it; it is a second outside check, all questions, no halves.
 
 The halves are set 14's (`lme.split_of`, seed 20261110). Questions come from `lme.py convert` (state in
-`~/.local/state/krouter-eval/lme/`, `KROUTER_LME_STATE` to move it). The recall cache goes to a temporary directory.
+`~/.local/state/lmemory-eval/lme/`, `LMEMORY_LME_STATE` to move it). The recall cache goes to a temporary directory.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ sys.path.insert(0, str(HERE))
 import lme  # noqa: E402
 
 KS = (3, 5, 8)
-SYSTEMS = ("bm25", "krouter", "krouter+assoc")
+SYSTEMS = ("bm25", "lmemory", "lmemory+assoc")
 SEED = 20261110
 _BM25: dict = {}
 RESAMPLES = 10_000
@@ -74,7 +74,7 @@ def bm25_pages(bench, vault: Path, q: str, n: int) -> list[str]:
     return [r[0] for r in rows]
 
 
-def krouter_pages(ri, vault: Path, q: str, k: int, assoc: bool) -> tuple[list[str], list[dict]]:
+def lmemory_pages(ri, vault: Path, q: str, k: int, assoc: bool) -> tuple[list[str], list[dict]]:
     res = ri.recall(vault, q, limit=k, gate=False, assoc=assoc)
     return ri.page_list(res, k), res.get("assoc", [])
 
@@ -106,10 +106,10 @@ def main() -> int:
         ap.error("--why is for the dev half only")
     if not args.half and not args.locomo:
         ap.error("--half or --locomo")
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
-    os.environ.pop("KROUTER_MAP", None)
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
+    os.environ.pop("LMEMORY_MAP", None)
     repo = Path(args.repo)
-    sys.path.insert(0, str(repo / "skill/krouter/scripts"))
+    sys.path.insert(0, str(repo / "skill/lmemory/scripts"))
     if args.locomo:
         rows = locomo_rows()[: args.limit or None]
         args.half = "locomo"
@@ -120,8 +120,8 @@ def main() -> int:
     _, bench = lme.bench_module()
     result: dict[str, dict[int, list[int]]] = {s: {k: [] for k in KS} for s in SYSTEMS}
     per = []
-    with tempfile.TemporaryDirectory(prefix="krouter-assoc-", ignore_cleanup_errors=True) as tmp:
-        os.environ["KROUTER_CACHE_DIR"] = tmp
+    with tempfile.TemporaryDirectory(prefix="lmemory-assoc-", ignore_cleanup_errors=True) as tmp:
+        os.environ["LMEMORY_CACHE_DIR"] = tmp
         import recall_index as ri
 
         for it in rows:
@@ -129,9 +129,9 @@ def main() -> int:
             b = bm25_pages(bench, vault, it["q"], max(KS))
             row = {"id": it["id"], "type": it["type"]}
             for k in KS:
-                kr, _ = krouter_pages(ri, vault, it["q"], k, False)
-                ka, extra = krouter_pages(ri, vault, it["q"], k, True)
-                for name, pages in (("bm25", b[:k]), ("krouter", kr), ("krouter+assoc", ka)):
+                kr, _ = lmemory_pages(ri, vault, it["q"], k, False)
+                ka, extra = lmemory_pages(ri, vault, it["q"], k, True)
+                for name, pages in (("bm25", b[:k]), ("lmemory", kr), ("lmemory+assoc", ka)):
                     result[name][k].append(int(full(it, pages)))
                     row[f"{name}@{k}"] = int(full(it, pages))
                 if args.why and k == 3:
@@ -158,13 +158,13 @@ def main() -> int:
         focus = "category-1" if args.locomo else "multi-session"
         ms = [i for i, r in enumerate(rows) if r["type"] == focus]
         report["assoc_minus_bm25_ci95"][k] = {
-            focus: paired_ci([result["krouter+assoc"][k][i] for i in ms], [result["bm25"][k][i] for i in ms]),
-            "all": paired_ci(result["krouter+assoc"][k], result["bm25"][k])}
+            focus: paired_ci([result["lmemory+assoc"][k][i] for i in ms], [result["bm25"][k][i] for i in ms]),
+            "all": paired_ci(result["lmemory+assoc"][k], result["bm25"][k])}
     if args.out:
         Path(args.out).write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in per), encoding="utf-8")
     if args.why:
         for r in per:
-            if r["krouter+assoc@3"] != r["krouter@3"]:
+            if r["lmemory+assoc@3"] != r["lmemory@3"]:
                 print(json.dumps(r, ensure_ascii=False))
     if args.out:
         Path(args.out).with_suffix(".report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1),

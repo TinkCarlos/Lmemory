@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 
 
 def _talk(env: dict, *msgs: dict) -> list[dict]:
@@ -24,23 +24,23 @@ def _talk(env: dict, *msgs: dict) -> list[dict]:
 def test_initialize_list_and_ask(tmp_path):
     vault = tmp_path / "vault"
     shutil.copytree(REPO / "template", vault)
-    vault_file = tmp_path / "config/krouter/vault"
+    vault_file = tmp_path / "config/lmemory/vault"
     vault_file.parent.mkdir(parents=True)
     vault_file.write_text(str(vault) + "\n", encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k != "OBSIDIAN_VAULT"}
-    env.update({"KROUTER_VAULT_FILE": str(vault_file), "KROUTER_NO_QUERY_LOG": "1", "KROUTER_CACHE_DIR": str(tmp_path / "c")})
+    env.update({"LMEMORY_VAULT_FILE": str(vault_file), "LMEMORY_NO_QUERY_LOG": "1", "LMEMORY_CACHE_DIR": str(tmp_path / "c")})
     replies = _talk(env,
                     {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
                     {"jsonrpc": "2.0", "method": "notifications/initialized"},
                     {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
                     {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-                     "params": {"name": "krouter_ask", "arguments": {"query": "Agent second brain"}}},
+                     "params": {"name": "lmemory_ask", "arguments": {"query": "Agent second brain"}}},
                     {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
-                     "params": {"name": "krouter_ask", "arguments": {"query": "x", "route": "rm -rf"}}},
+                     "params": {"name": "lmemory_ask", "arguments": {"query": "x", "route": "rm -rf"}}},
                     {"jsonrpc": "2.0", "id": 5, "method": "nope"})
     assert [r["id"] for r in replies] == [1, 2, 3, 4, 5]  # 通知不回
     assert replies[0]["result"]["protocolVersion"] == "2025-06-18" and "recall: none" in replies[0]["result"]["instructions"]
-    assert {t["name"] for t in replies[1]["result"]["tools"]} == {"krouter_ask", "krouter_status", "krouter_note", "krouter_correct", "krouter_learn"}
+    assert {t["name"] for t in replies[1]["result"]["tools"]} == {"lmemory_ask", "lmemory_status", "lmemory_note", "lmemory_correct", "lmemory_learn"}
     ask = replies[2]["result"]
     assert ask["isError"] is False and "receipt_version:" in ask["content"][0]["text"]
     assert str(vault) in ask["content"][0]["text"]
@@ -50,9 +50,9 @@ def test_initialize_list_and_ask(tmp_path):
 
 def test_no_vault_is_said_plainly(tmp_path):
     env = {k: v for k, v in os.environ.items() if k != "OBSIDIAN_VAULT"}
-    env["KROUTER_VAULT_FILE"] = str(tmp_path / "missing")
+    env["LMEMORY_VAULT_FILE"] = str(tmp_path / "missing")
     replies = _talk(env, {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                          "params": {"name": "krouter_status", "arguments": {}}})
+                          "params": {"name": "lmemory_status", "arguments": {}}})
     res = replies[0]["result"]
     assert res["isError"] is True and "one-line install" in res["content"][0]["text"]
 
@@ -63,7 +63,7 @@ def test_router_scripts_find_the_recorded_vault(tmp_path):
     vf = tmp_path / "vault-file"
     vf.write_text(str(vault) + "\n", encoding="utf-8")
     env = {k: v for k, v in os.environ.items() if k != "OBSIDIAN_VAULT"}
-    env.update({"KROUTER_VAULT_FILE": str(vf), "KROUTER_NO_QUERY_LOG": "1"})
+    env.update({"LMEMORY_VAULT_FILE": str(vf), "LMEMORY_NO_QUERY_LOG": "1"})
     for argv in ([sys.executable, str(SCRIPTS / "route_knowledge.py"), "status"],
                  *([["/bin/sh", str(SCRIPTS / "route_knowledge.sh"), "status"]] if os.name != "nt" else [])):
         res = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=120)
@@ -79,20 +79,20 @@ def test_note_writes_a_line_the_ledger_and_one_commit(tmp_path):
     for args in (["init", "-q"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"]):
         subprocess.run(["git", "-C", str(vault), *args], check=True, capture_output=True)
     env = {k: v for k, v in os.environ.items() if k != "OBSIDIAN_VAULT"}
-    env.update({"OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1", "KROUTER_CACHE_DIR": str(tmp_path / "c")})
+    env.update({"OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1", "LMEMORY_CACHE_DIR": str(tmp_path / "c")})
     key = "sk-" + "Abc123XyZ" * 4
     replies = _talk(env,
                     {"jsonrpc": "2.0", "id": 1, "method": "initialize",
                      "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "test-client"}}},
                     {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
                     {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-                     "params": {"name": "krouter_note", "arguments": {"text": f"发版只从 main 打 tag，密钥 {key} 不进库",
+                     "params": {"name": "lmemory_note", "arguments": {"text": f"发版只从 main 打 tag，密钥 {key} 不进库",
                                                                        "kind": "decision"}}},
                     {"jsonrpc": "2.0", "id": 4, "method": "tools/call",
-                     "params": {"name": "krouter_note", "arguments": {"text": "x" * 501}}},
+                     "params": {"name": "lmemory_note", "arguments": {"text": "x" * 501}}},
                     {"jsonrpc": "2.0", "id": 5, "method": "tools/call",
-                     "params": {"name": "krouter_note", "arguments": {"text": "ok", "kind": "rule"}}})
-    assert "krouter_note" in {t["name"] for t in replies[1]["result"]["tools"]}
+                     "params": {"name": "lmemory_note", "arguments": {"text": "ok", "kind": "rule"}}})
+    assert "lmemory_note" in {t["name"] for t in replies[1]["result"]["tools"]}
     done = replies[2]["result"]
     assert done["isError"] is False and "noted: 05 时间日志/会话摘录/" in done["content"][0]["text"]
     assert "undo: " in done["content"][0]["text"] and "--undo " in done["content"][0]["text"]
@@ -113,8 +113,8 @@ def test_http_server_is_read_only_unless_asked(tmp_path):
     try:
         m.WRITE = False  # what main() sets for --http without --allow-write
         names = {t["name"] for t in m.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})["result"]["tools"]}
-        assert names == {"krouter_ask", "krouter_status"}
-        res = m.call("krouter_note", {"text": "x"})
+        assert names == {"lmemory_ask", "lmemory_status"}
+        res = m.call("lmemory_note", {"text": "x"})
         assert res["isError"] is True and "unknown tool" in res["content"][0]["text"]
     finally:
         m.WRITE = saved

@@ -1,6 +1,6 @@
 """The commands the install prints at the end run as printed (issue #74).
 
-On Windows the install used to print `set "PYTHONPATH=…" && python -m krouter.cli doctor`: `&&` is not a statement
+On Windows the install used to print `set "PYTHONPATH=…" && python -m lmemory.cli doctor`: `&&` is not a statement
 separator in PowerShell 5.1, `set` does not set an environment variable in PowerShell 7 (so the module could not be
 imported), and `… search "question"` was rejected by the Python command line, which has no `search` (it is `ask`).
 
@@ -34,7 +34,7 @@ def _bootstrap():
 
 def _printed(mod, lang: str, windows: bool, monkeypatch) -> str:
     monkeypatch.setattr(mod, "WINDOWS", windows)
-    monkeypatch.setattr(mod.shutil, "which", lambda name, *a, **k: None)  # `krouter` is not on PATH
+    monkeypatch.setattr(mod.shutil, "which", lambda name, *a, **k: None)  # `lmemory` is not on PATH
     return mod.cli_line(mod.MSG[lang])
 
 
@@ -53,14 +53,14 @@ def test_windows_line_has_no_and_and_no_set(lang, monkeypatch):
     cli = mod.cli_path()  # WINDOWS is still patched
     assert "&&" not in cli and "&&" not in line
     assert not cli.startswith("set ")
-    assert cli.startswith('python "') and cli.endswith('krouter_run.py"')
-    assert "krouter.cli" not in line  # no module call that needs PYTHONPATH
+    assert cli.startswith('python "') and cli.endswith('lmemory_run.py"')
+    assert "lmemory.cli" not in line  # no module call that needs PYTHONPATH
 
 
 @pytest.mark.parametrize("lang", ["en", "zh"])
 @pytest.mark.parametrize("windows", [True, False])
 def test_printed_doctor_and_ask_are_accepted_by_the_argument_parser(lang, windows, monkeypatch):
-    from krouter.cli import build_parser
+    from lmemory.cli import build_parser
 
     mod = _bootstrap()
     line = _printed(mod, lang, windows, monkeypatch)
@@ -77,7 +77,7 @@ def test_printed_doctor_and_ask_are_accepted_by_the_argument_parser(lang, window
 
 
 def test_the_old_search_is_rejected_by_the_parser():
-    from krouter.cli import build_parser
+    from lmemory.cli import build_parser
 
     with pytest.raises(SystemExit):
         build_parser().parse_args(["search", "x"])
@@ -85,10 +85,10 @@ def test_the_old_search_is_rejected_by_the_parser():
 
 def test_launcher_runs_without_pythonpath():
     env = {k: v for k, v in __import__("os").environ.items() if k != "PYTHONPATH"}
-    res = subprocess.run([sys.executable, str(REPO / "scripts/krouter_run.py"), "--version"], capture_output=True, text=True,
+    res = subprocess.run([sys.executable, str(REPO / "scripts/lmemory_run.py"), "--version"], capture_output=True, text=True,
                          env=env, timeout=60, cwd="/")
-    assert res.returncode == 0 and res.stdout.startswith("krouter "), res.stdout + res.stderr
-    bad = subprocess.run([sys.executable, str(REPO / "scripts/krouter_run.py"), "search", "x"], capture_output=True, text=True,
+    assert res.returncode == 0 and res.stdout.startswith("lmemory "), res.stdout + res.stderr
+    bad = subprocess.run([sys.executable, str(REPO / "scripts/lmemory_run.py"), "search", "x"], capture_output=True, text=True,
                          env=env, timeout=60, cwd="/")
     assert bad.returncode != 0 and "invalid choice" in bad.stderr
 
@@ -96,4 +96,4 @@ def test_launcher_runs_without_pythonpath():
 def test_posix_line_unchanged_in_shape(monkeypatch):
     mod = _bootstrap()
     line = _printed(mod, "en", False, monkeypatch)
-    assert "scripts/krouter doctor" in line.replace("\\", "/") and "&&" not in line
+    assert "scripts/lmemory doctor" in line.replace("\\", "/") and "&&" not in line

@@ -6,7 +6,7 @@ card_id: C14
 when: tell them it's done; report it finished; before handing it over
 source_ref: "[[05 时间日志/会话摘录/example C14]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: Before telling someone it is done, try it yourself first

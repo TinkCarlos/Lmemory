@@ -6,8 +6,8 @@ Reference material: three English articles under `参考资料/` (with web-clipp
 knowledge base even when no folder is declared), and three under `01 项目/支付重构/调研/` written the way a saved article
 usually is (a `Source:` line in the text, no frontmatter), which nothing recognises until the folder is declared.
 
-Three configurations of the same files: `none` (no `krouter-kb.txt`), `ref` (`参考资料` declared), `all` (both folders
-declared, as after following `krouter kb suggest`). Four kinds of question, Chinese and English: `memory` (a memory page
+Three configurations of the same files: `none` (no `lmemory-kb.txt`), `ref` (`参考资料` declared), `all` (both folders
+declared, as after following `lmemory kb suggest`). Four kinds of question, Chinese and English: `memory` (a memory page
 answers it), `kb` (only an article answers it), `near` (the memory holds something close, nothing answers it), `absent`
 (nothing in the folder is about it). The scenario from the maintainer's vault is `near-en-01`.
 
@@ -178,7 +178,7 @@ RESEARCH = "01 项目/支付重构/调研"
 
 
 def lay_out(root: Path) -> None:
-    """The files, once; `krouter-kb.txt` is written per configuration by `vault_for`."""
+    """The files, once; `lmemory-kb.txt` is written per configuration by `vault_for`."""
     if root.exists():
         shutil.rmtree(root)
     rules = root / "02 经验与方法"
@@ -202,7 +202,7 @@ def vault_for(base: Path, config: str) -> Path:
     v = base / config
     if not v.exists():
         shutil.copytree(base / "files", v)
-    kb = v / "krouter-kb.txt"
+    kb = v / "lmemory-kb.txt"
     if CONFIGS[config]:
         kb.write_text("# set 37 synthetic\n" + "".join(f + "\n" for f in CONFIGS[config]), encoding="utf-8")
     elif kb.exists():

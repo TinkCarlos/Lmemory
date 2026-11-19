@@ -3,7 +3,7 @@
 another model family. Only the judge changes; no question is read again.
 
     GROQ_API_KEY=... python3 bench/longmemeval/second_judge.py run \
-        --data ~/.cache/krouter-eval/lme-data/longmemeval_s_cleaned.json \
+        --data ~/.cache/lmemory-eval/lme-data/longmemeval_s_cleaned.json \
         --replies bench/longmemeval/results/2026-11-13-sonnet-qa.set22.jsonl \
         --out bench/longmemeval/results/2026-11-13-gptoss-judge.set22.jsonl
     python3 bench/longmemeval/second_judge.py report --data ... --replies ... --out ...

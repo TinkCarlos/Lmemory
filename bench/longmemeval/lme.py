@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set 7 (HELDOUT.md): KRouter and a BM25 floor on LongMemEval, scored from the benchmark authors' own labels.
+"""Set 7 (HELDOUT.md): Lmemory and a BM25 floor on LongMemEval, scored from the benchmark authors' own labels.
 
 LongMemEval (Wu et al., ICLR 2025) gives each of its 500 questions a haystack of about 50 dated chat sessions and
 labels which sessions hold the answer. Each question becomes its own small vault, one Markdown page per session, and
@@ -12,22 +12,22 @@ each system answers with up to three cited pages or a refusal. Scoring needs no 
 The dataset is not in this repository and this script downloads nothing; pass the file you fetched:
 
     python3 bench/longmemeval/lme.py convert --data longmemeval_s_cleaned.json
-    python3 bench/longmemeval/lme.py run --system krouter
+    python3 bench/longmemeval/lme.py run --system lmemory
     python3 bench/longmemeval/lme.py run --system bm25-floor
     python3 bench/longmemeval/lme.py score
 
 The dense prototype (`bench/memory_honesty/dense.py`, local embeddings, floors from dev3) runs on a seed-drawn sample
 of the answerable questions; those are seen (HELDOUT.md, set 7 amendment), so its numbers are marked as such:
 
-    KROUTER_DENSE_MODEL=BAAI/bge-m3 python3 bench/longmemeval/lme.py run --system rescue --sample 60
-    python3 bench/longmemeval/lme.py run --system krouter-inproc --sample 60   # the same sample, KRouter in-process
+    LMEMORY_DENSE_MODEL=BAAI/bge-m3 python3 bench/longmemeval/lme.py run --system rescue --sample 60
+    python3 bench/longmemeval/lme.py run --system lmemory-inproc --sample 60   # the same sample, Lmemory in-process
 
 Set 14 (HELDOUT.md) asks whether the refusal gate can be raised without losing answerable questions. Its data step:
 
     python3 bench/longmemeval/lme.py ablate        # each answerable question's vault with its answer sessions removed
     python3 bench/longmemeval/gate_study.py        # features, the development-half rule search, no model
 
-State (vaults, outputs, report) lives in `~/.local/state/krouter-eval/lme/` (`KROUTER_LME_STATE` to move it).
+State (vaults, outputs, report) lives in `~/.local/state/lmemory-eval/lme/` (`LMEMORY_LME_STATE` to move it).
 """
 
 from __future__ import annotations
@@ -44,8 +44,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-STATE = Path(os.environ.get("KROUTER_LME_STATE") or Path.home() / ".local/state/krouter-eval/lme")
-SESSIONS = "05 时间日志/会话摘录"  # KRouter 自己导入会话时放的位置
+STATE = Path(os.environ.get("LMEMORY_LME_STATE") or Path.home() / ".local/state/lmemory-eval/lme")
+SESSIONS = "05 时间日志/会话摘录"  # Lmemory 自己导入会话时放的位置
 SEED = 20261018
 SPLIT_SEED = 20261110  # set 14: which half of the 470 answerable questions is the development half
 RESAMPLES = 10_000
@@ -149,14 +149,14 @@ def make_ablated(rows: list[dict]) -> list[dict]:
 
 
 def ablate(repo: Path) -> None:
-    """KRouter's own gate (in-process `recall`) on the ablated vaults; counts the refusals per half."""
+    """Lmemory's own gate (in-process `recall`) on the ablated vaults; counts the refusals per half."""
     import tempfile
 
-    sys.path.insert(0, str(repo / "skill/krouter/scripts"))
+    sys.path.insert(0, str(repo / "skill/lmemory/scripts"))
     rows = make_ablated(load_questions())
     out = []
-    with tempfile.TemporaryDirectory(prefix="krouter-ablate-") as tmp:
-        os.environ["KROUTER_CACHE_DIR"] = tmp
+    with tempfile.TemporaryDirectory(prefix="lmemory-ablate-") as tmp:
+        os.environ["LMEMORY_CACHE_DIR"] = tmp
         import recall_index as ri
 
         for it in rows:
@@ -166,7 +166,7 @@ def ablate(repo: Path) -> None:
                         "cited": [] if refused else [h["rel"] for h in res["hits"]]})
             for f in Path(tmp).glob("recall-*"):
                 f.unlink(missing_ok=True)
-    (STATE / "ablated.krouter.jsonl").write_text("".join(json.dumps(o, ensure_ascii=False) + "\n" for o in out),
+    (STATE / "ablated.lmemory.jsonl").write_text("".join(json.dumps(o, ensure_ascii=False) + "\n" for o in out),
                                                  encoding="utf-8")
     by = {h: [o for o in out if o["split"] == h] for h in ("dev", "heldout")}
     print(json.dumps({"ablated_refused": f"{sum(o['refused'] for o in out)}/{len(out)}",
@@ -180,17 +180,17 @@ def run(system: str, limit: int, repo: Path, sample: int = 0, pages: int = 3) ->
     run_real, bench = bench_module()
     out = []
     name = system
-    if system in DENSE_SYSTEMS or system == "krouter-inproc":
+    if system in DENSE_SYSTEMS or system == "lmemory-inproc":
         d = dense_module()
         floors = d.session_floors() if system in DENSE_SYSTEMS else None
         for it in rows:
             q = [{"id": it["id"], "q": it["q"]}]
             ans = (d.session_answers(system, Path(it["vault"]), q, floors) if floors else
-                   [{**a, "cited": [] if a["refused"] else a["cited"]} for a in d._krouter_raw(q, Path(it["vault"]))])[0]
+                   [{**a, "cited": [] if a["refused"] else a["cited"]} for a in d._lmemory_raw(q, Path(it["vault"]))])[0]
             out.append({"id": it["id"], "cited": ans["cited"][:3], "refused": ans["refused"]})
         if floors:
             name = f"{system}.{re.sub(r'[^a-z0-9]+', '-', d.MODEL.split('/')[-1].lower()).strip('-')}"
-    elif system == "krouter":
+    elif system == "lmemory":
         cache = STATE / "cache"
         for it in rows:
             ans = run_real.route_answers(repo, [{"id": it["id"], "q": it["q"]}], Path(it["vault"]), cache / it["id"],
@@ -248,9 +248,9 @@ def score() -> None:
     for name, res in systems.items():
         outs = list(res.values())
         report["systems"][name] = {m: "{}/{}".format(*rate(outs, *spec)) for m, spec in METRICS.items()}
-    for name in systems:  # samples: each system against KRouter in-process on the same questions
-        if name.endswith(tuple(f".s{n}" for n in range(1, 10_000))) and not name.startswith("krouter-inproc"):
-            base = "krouter-inproc." + name.rsplit(".", 1)[1]
+    for name in systems:  # samples: each system against Lmemory in-process on the same questions
+        if name.endswith(tuple(f".s{n}" for n in range(1, 10_000))) and not name.startswith("lmemory-inproc"):
+            base = "lmemory-inproc." + name.rsplit(".", 1)[1]
             if base in systems:
                 common = sorted(systems[name].keys() & systems[base].keys())
                 rng = random.Random(SEED)
@@ -259,21 +259,21 @@ def score() -> None:
                          if (not systems[base][i]["answerable"] if subset == "abs" else systems[base][i][subset])]
                     if d:
                         boots = sorted(sum(rng.choice(d) for _ in d) / len(d) for _ in range(RESAMPLES))
-                        report.setdefault("paired_vs_krouter", {}).setdefault(name, {})[m] = {
+                        report.setdefault("paired_vs_lmemory", {}).setdefault(name, {})[m] = {
                             "diff": round(sum(d) / len(d), 4), "n": len(d),
                             "ci95": [round(boots[int(0.025 * RESAMPLES)], 4), round(boots[int(0.975 * RESAMPLES)], 4)]}
-    if {"krouter", "bm25-floor"} <= systems.keys():
-        common = sorted(systems["krouter"].keys() & systems["bm25-floor"].keys())
+    if {"lmemory", "bm25-floor"} <= systems.keys():
+        common = sorted(systems["lmemory"].keys() & systems["bm25-floor"].keys())
         rng = random.Random(SEED)
         diffs = {}
         for m, (subset, field) in METRICS.items():
-            ids = [i for i in common if (not systems["krouter"][i]["answerable"] if subset == "abs"
-                                         else systems["krouter"][i][subset])]
+            ids = [i for i in common if (not systems["lmemory"][i]["answerable"] if subset == "abs"
+                                         else systems["lmemory"][i][subset])]
             if not ids:
                 continue
-            d = [int(systems["krouter"][i][field]) - int(systems["bm25-floor"][i][field]) for i in ids]
+            d = [int(systems["lmemory"][i][field]) - int(systems["bm25-floor"][i][field]) for i in ids]
             boots = sorted(sum(rng.choice(d) for _ in d) / len(d) for _ in range(RESAMPLES))
-            diffs[m] = {"krouter_minus_bm25": round(sum(d) / len(d), 4),
+            diffs[m] = {"lmemory_minus_bm25": round(sum(d) / len(d), 4),
                         "ci95": [round(boots[int(0.025 * RESAMPLES)], 4), round(boots[int(0.975 * RESAMPLES)], 4)],
                         "n": len(ids)}
         report["paired"] = diffs
@@ -288,16 +288,16 @@ def main() -> int:
     c = sub.add_parser("convert")
     c.add_argument("--data", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--system", choices=["krouter", "bm25-floor", "krouter-inproc", *sorted(DENSE_SYSTEMS)], required=True)
+    r.add_argument("--system", choices=["lmemory", "bm25-floor", "lmemory-inproc", *sorted(DENSE_SYSTEMS)], required=True)
     r.add_argument("--sample", type=int, default=0, help="a seed-drawn sample of this many answerable questions")
-    r.add_argument("--pages", type=int, default=3, help="krouter: how many cited pages to keep (set 22: 5)")
+    r.add_argument("--pages", type=int, default=3, help="lmemory: how many cited pages to keep (set 22: 5)")
     r.add_argument("--limit", type=int, default=0)
-    r.add_argument("--repo", default=str(REPO), help="the KRouter checkout to run (e.g. a worktree at the release tag)")
+    r.add_argument("--repo", default=str(REPO), help="the Lmemory checkout to run (e.g. a worktree at the release tag)")
     sub.add_parser("score")
     a = sub.add_parser("ablate")
     a.add_argument("--repo", default=str(REPO))
     args = ap.parse_args()
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
     STATE.mkdir(parents=True, exist_ok=True)
     if args.cmd == "convert":
         convert(Path(args.data))

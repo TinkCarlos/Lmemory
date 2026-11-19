@@ -1,72 +1,10 @@
 # Memory honesty bench
 
-<!-- krouter-status:start (source: docs/STATUS.md; run scripts/sync_status.py) -->
-> **Current status of `main` (latest release v2.1.2, 2026-11-13). Measured, and what is not.** One-line installs get
-> the latest release; anything under "Unreleased" in CHANGELOG.md is on `main` only. Every fact an evaluating agent
-> needs, with sources: [`docs/FOR-AGENTS.md`](https://github.com/398894496-arch/KRouter/blob/main/docs/FOR-AGENTS.md).
-> - **Held-out bench** (200 questions on a synthetic 110-page vault, never tuned on; *not* real traffic): KRouter 26%
->   wrong citations, 47 of 80 unanswerable questions refused, 102 of 120 answerable right. At their defaults claude-mem
->   64% and basic-memory 78%, 72 and 45 right; neither can refuse. BM25 given KRouter's two rules (skip replaced
->   pages, refuse a weak match) is level with KRouter: the lead is those rules being on by default, not the ranker.
-> - **Answer accuracy** (LongMemEval S, the number other projects publish; measured on 1.3.0, which gave three pages):
->   400 of 500 right, 80.0% [76.4, 83.4], with KRouter's top three pages as the only context; reader and judge Claude Sonnet 5.5 with the benchmark's own
->   prompts, not the GPT-4o most projects use. Weakest on questions that add up several sessions (69 of 121).
->   The same reader given plain BM25's top three sessions gets 405 right (81.0%): no difference shown (paired −1.0
->   points [−2.8, +0.8]); given nothing it gets 0 of the 470 answerable. On this benchmark the lookup is level with
->   BM25, not ahead. Given the benchmark's own answer sessions (perfect retrieval) the reader gets 492 (98.4%), so
->   the missing 18 points [15.0, 21.8] are lost in retrieval, not by the reader. 2.0 gives five pages, two of them
->   ones the vault connects to the hits: every answer session among them for 210 of 235 held-out questions (BM25's
->   top five 198), multi-session 40 of 47 (31) ([set 18](https://github.com/398894496-arch/KRouter/blob/main/bench/memory_honesty/HELDOUT.md)).
->   **Answer accuracy at 2.1.1's default pages** (about 5.6 a question; set 22, 2026-11-13, same reader and judge): **449 of
->   500, 89.8% [87.2, 92.4]**, held-out half 201 of 235 (85.5%); multi-session 100 of 121 (69), temporal 111 of 127 (97). BM25
->   was not rerun at the same page count; at it, BM25 hands over every answer session for 396 of 470, KRouter 417.
-> - **Someone else's benchmarks** (scored from the authors' labels, no model judge): LongMemEval S, an answer session
->   cited for 439 of 470 answerable questions (1.x, three pages); 9 of 30 unanswerable refused by the gate (set 14; the
->   "3 of 30" quoted before was 1.1.1; with a reader model on top, 29 of 30 are answered "not mentioned", but the same
->   reader given nothing says so for all 30, so that layer is mostly the model's: [`NUMBERS.md`](https://github.com/398894496-arch/KRouter/blob/main/docs/NUMBERS.md)); LoCoMo, evidence first for 991 of 1,540,
->   37 of 446 adversarial refused. Page found, not answer accuracy; plain BM25 finds about as many.
-> - **Real-traffic blind test on fresh queries** ([VERIFY.md](https://github.com/398894496-arch/KRouter/blob/main/docs/VERIFY.md)
->   layer 4): not run yet; it waits for 50 new queries (30 logged by 2026-11-09).
-> - **Who wrote the held-out questions:** Claude Opus in separate claude.ai sessions, not a person. A person-written
->   set is planned.
-> - **Lessons across tasks** (held-out; the host model judges from a digest of the cards): the right lesson offered on
->   14 / 14 (Sonnet 5.5) and 11 / 14 (Haiku 5.5) Chinese tasks with a new subject, 14 / 14 and 13 / 14 in English,
->   none of the 14 quiet tasks disturbed; cards the agent writes itself passed on set 23 (13 / 16, faithful 92%).
-> - **Releases:** 2.1.2 (2026-11-13): no engine change; the set 22 answer-accuracy run and its docs (449 of 500, held-out half 201 of 235).
->   2.1.1 (2026-11-12): reference material is recognised on positive evidence (a source address, an
->   author or byline; on one real vault the owner's pages taken for reference fell from 30 to 3 of 692, set 42), and
->   experience cards and the hook's trigger phrases unused for 60 days step back (`hot_days`; rules are never weighed
->   down). 2.1.0 (2026-11-11, the bullet after this one); 2.0.0 (2026-11-10): mention something and the agent recalls what was settled about it; lessons carry
->   over between tasks and grow into skills; five pages with the ones the vault connects; a change of mind holds
->   with no key; a lighter install that is English end to end; the router moved to `skill/krouter` (an older
->   install's path is left as a link on upgrade). Minor releases at most once a week, patches when ready;
->   `KROUTER_TAG` pins one.
-> - **New in 2.1.0 (2026-11-11):** a knowledge-base layer: folders declared in `krouter-kb.txt` (and clippings,
->   as before) are reference material, listed apart under `knowledge_base:` and never setting the confidence; when only
->   they match, the receipt starts `memory: none` (tests, and set 37's synthetic set). `krouter kb add / suggest /
->   import` (PDF, Word, HTML with a converter already on the machine). A rule to refuse more near misses was studied
->   on development data (set 37) and **not shipped**: none of 216 candidates refused 10 more within a 1-point loss
->   (the best: 3), so the refusal numbers above are unchanged. Instead the receipt's first line says `memory: direct`,
->   `related` (only related pages) or `none` (LongMemEval's 30: 0 / 21 / 9); an optional strict mode treats `related`
->   as `none` and on session-only memories answers almost nothing (set 38). Also: the README's team section and two-layer refusal
->   numbers, and a `recall_note:` naming question words the top page never uses (its effect **not measured**).
-> - **Team server** (self-hosted; no KRouter cloud): several isolated memories per server, a token each, Prometheus
->   `/metrics`; Docker, Compose, Kubernetes and systemd files. Over HTTP on one M2 laptop: 10,000 pages 13 ms a lookup
->   and 301 answers/s with 32 callers, 50,000 pages 54 ms and 75/s (synthetic vaults, `bench/scale/serve_load.py`).
->   The Kubernetes manifest and systemd unit are checked by tests, not yet run on a cluster or host.
-> - **Install and capture:** the one-line install asks nothing, connects every app it finds (Claude Code with its
->   plugin, Codex, Cursor, Claude Desktop, VS Code, Copilot CLI, Gemini CLI, Kiro, Zed, Cline CLI), lists every settings
->   file it changed (a copy of each kept), and imports nothing from the past (`--all` imports the last 7 days, locally,
->   no model call; `--minimal` is lookup only and connects only the apps you name). From then on, Claude Code, Codex and Cursor each
->   record every turn as it ends through their session hooks (local, no model call; Codex runs them once you trust them
->   in `/hooks`; Cursor's run in its agent CLI, where a typed correction is not noted). Distilling with a model and the nightly job
->   ask first (`--ask`). The manual `install.sh` installs the job (`KROUTER_NO_TIMER=1` skips). Queries never leave the machine.
-> - **Nightly writer lanes:** an API key runs nothing locally; grok (kernel sandbox) and claude (tool allow-list) are
->   limited to the vault; Codex can read the whole account and writes only the vault, so it is used only when you name
->   it or set `KROUTER_ALLOW_CODEX=1`; other CLIs are unconfined and are never picked unless you set
->   `KROUTER_ALLOW_UNCONFINED=1`.
->   [SECURITY.md](https://github.com/398894496-arch/KRouter/blob/main/SECURITY.md) has the table.
-<!-- krouter-status:end -->
+<!-- lmemory-status:start (source: docs/STATUS.md; run scripts/sync_status.py) -->
+> **Lmemory source checkout.** Maintained by [Tink](https://github.com/TinkCarlos). Install from source using the [README](../README.md). The public cold lookup comparison and its exact reproduction steps are linked there. Historical upstream measurements are labeled in [NUMBERS.md](NUMBERS.md).
+<!-- lmemory-status:end -->
+
+> Historical benchmark and client records on this page come from upstream. The README specifies the Lmemory build and its verification.
 
 Does an agent memory cite the right page, follow a correction, and refuse what it does not hold? Retrieval benches
 usually score how often the right page shows up. This one scores the opposite failure, the one users actually get
@@ -93,8 +31,8 @@ questions, a runner, and a scorer that grades any system's output.
 
 ## Results
 
-Four systems, both question sets, run on 2026-10-12. Held-out means the 25 questions in `heldout.jsonl` that KRouter was
-never tuned on ([`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md)); dev means the 30 bench questions, on which KRouter
+Four systems, both question sets, run on 2026-10-12. Held-out means the 25 questions in `heldout.jsonl` that Lmemory was
+never tuned on ([`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md)); dev means the 30 bench questions, on which Lmemory
 was fixed once (see below). Each cell gives the wrong-citation rate, refusals out of 10 neighbour questions, and right
 answers on correction and current questions.
 
@@ -103,12 +41,12 @@ answers on correction and current questions.
 | Plain full-text search (SQLite FTS5 BM25), always answers | 61% (14 / 23) | 1 / 10 | 4 / 9 | 5 / 6 | 63% (19 / 30) | 0 / 10 | 1 / 10 | 10 / 10 |
 | basic-memory 0.22.1, default search (vector) | 60% (15 / 25) | 0 / 10 | 4 / 9 | 6 / 6 | 39% (11 / 28) | 2 / 10 | 7 / 10 | 10 / 10 |
 | claude-mem 13.35.0, its search over what it observed | 60% (15 / 25) | 0 / 10 | 5 / 9 | 5 / 6 | 43% (13 / 30) | 0 / 10 | 7 / 10 | 10 / 10 |
-| **KRouter 1.0.1** | **25% (3 / 12)** | **8 / 10** | 5 / 9 | 4 / 6 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
+| **Lmemory 1.0.1** | **25% (3 / 12)** | **8 / 10** | 5 / 9 | 4 / 6 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
 
 That table compares systems at their defaults, and at their defaults the other three have no way to refuse and no
 notion of a replaced page, so "neighbours refused 0 / 10" is settled before the first question. An outside review
 (2026-10-12) pointed this out. The fair question is what an ordinary search does once it gets the same two things
-KRouter has: replaced pages left out (`status: superseded`), and a score floor below which it refuses.
+Lmemory has: replaced pages left out (`status: superseded`), and a score floor below which it refuses.
 
 ### Matched baselines: the same two things, for everyone
 
@@ -121,22 +59,22 @@ output. claude-mem's search returns no score, so it has no row here.
 |---|---|---|---|
 | BM25 + skip superseded + dev floor | 19% (3 / 16) | 7 / 10 | 13 |
 | basic-memory 0.22.1 + skip superseded + dev floor | 30% (6 / 20) | 4 / 10 | 14 |
-| KRouter 1.0.1 (as shipped) | 25% (3 / 12) | 8 / 10 | 9 |
+| Lmemory 1.0.1 (as shipped) | 25% (3 / 12) | 8 / 10 | 9 |
 
 Systems that answer more questions also cite more wrong pages, so the fair comparison is at the **same coverage**:
-each baseline's floor set so that it answers as many questions as KRouter does (12 on held-out, 17 on dev). Choosing
-an operating point on held-out is done here for baselines only, never for KRouter.
+each baseline's floor set so that it answers as many questions as Lmemory does (12 on held-out, 17 on dev). Choosing
+an operating point on held-out is done here for baselines only, never for Lmemory.
 
 | Same coverage | Held-out: wrong / right | Dev: wrong / right |
 |---|---|---|
 | BM25 + skip superseded | 2 / 10 | 1 / 16 |
 | basic-memory + skip superseded | 2 / 10 | 1 / 16 |
-| KRouter 1.0.1 | 3 / 9 | 0 / 17 (tuned on dev) |
+| Lmemory 1.0.1 | 3 / 9 | 0 / 17 (tuned on dev) |
 
-**What this says.** On this bench, KRouter's retrieval is not better than plain full-text search or basic-memory's
+**What this says.** On this bench, Lmemory's retrieval is not better than plain full-text search or basic-memory's
 embedding search once they are given the same two rules; at the same coverage it is slightly worse on held-out. Almost
 all of the gap in the first table, 61% → 25% wrong citations, comes from those two rules: a replaced page that is
-marked and left out, and an answer withheld when the match is weak. KRouter's real difference is that it does both
+marked and left out, and an answer withheld when the match is weak. Lmemory's real difference is that it does both
 by default and says so with a receipt, in plain Markdown that several agents share. That is a design choice
 anyone can copy, not a better ranker. The bench is small (30 pages, English, 55 questions): a fair reading is "no
 measurable ranking advantage", not "worse".
@@ -144,8 +82,8 @@ measurable ranking advantage", not "worse".
 What the default-settings table still shows, because it is how people run these tools:
 - **Neighbour questions are where the defaults differ.** basic-memory, claude-mem and plain search answer nearly every
   question that sounds like something in the vault, so a question about the search API timeout gets the payments API
-  timeout page. KRouter refuses 8 of 10 on held-out.
-- **KRouter pays for that in answerable questions:** 9 of 15 on held-out against 10 for basic-memory and claude-mem.
+  timeout page. Lmemory refuses 8 of 10 on held-out.
+- **Lmemory pays for that in answerable questions:** 9 of 15 on held-out against 10 for basic-memory and claude-mem.
   Five of its six misses there are refusals of a question phrased in words the page does not use.
 - **Corrections are hard at defaults.** All four put the replaced page first on some correction questions; with
   replaced pages left out, BM25 and basic-memory get 8 and 9 of 9.
@@ -176,7 +114,7 @@ system's defaults, isolated HOME):
   setting: even with its own HOME, claude-mem looks for Claude Code's login in the macOS keychain, which is shared
   across HOMEs; `CLAUDE_MEM_CLAUDE_CONFIG_DIR` set to a fresh folder keeps it off your real login, and the worker then
   needs `CLAUDE_CODE_OAUTH_TOKEN` in its own environment.
-- **KRouter** runs in-process (`run.py`); BM25 is `run.py --adapter bm25`, and `--adapter bm25-floor` is BM25 with
+- **Lmemory** runs in-process (`run.py`); BM25 is `run.py --adapter bm25`, and `--adapter bm25-floor` is BM25 with
   superseded pages removed before indexing and the dev-picked floor.
 - **basic-memory was re-run in a Linux container** (`bench/memory_honesty/adapters/Dockerfile`) for the matched
   baseline, recording its scores; its answers were identical to the first run on the host.
@@ -193,23 +131,23 @@ needs an LLM and a vector store configured, and has no default to compare agains
 
 | System | Wrong-citation rate | Refused | Correction hit | Current hit |
 |---|---|---|---|---|
-| KRouter 0.12.1 (first run, before any change) | 22% (4 / 18) | 7 / 10 | 5 / 10 | 9 / 10 |
-| KRouter 0.13.0 to 1.0.1 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
+| Lmemory 0.12.1 (first run, before any change) | 22% (4 / 18) | 7 / 10 | 5 / 10 | 9 / 10 |
+| Lmemory 0.13.0 to 1.0.1 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
 
 **Who the "outside reviewer" is.** Every held-out set here, and the outside reviews in `CHANGELOG.md`, come from
 Claude Opus in claude.ai chat sessions that the maintainer starts and relays: not a human, and not the Claude Code
-sessions that change KRouter, but the same model family. "Outside" means a separate session that did not write the
+sessions that change Lmemory, but the same model family. "Outside" means a separate session that did not write the
 code it reviews; it does not mean independent of Anthropic's models, so question wording may share that family's
 habits. A set written by a person is planned and will be logged here before it is run.
 
-**Held-out, on questions KRouter was never tuned on.** An outside reviewer wrote 25 new questions for the same 30-page vault: 15 answerable ones phrased differently, and 10 neighbour questions. They were written independently of any tuning. KRouter 1.0: 25% wrong citations (3 / 12), 8 / 10 neighbours refused, 9 / 15 answerable right. Plain BM25 that always answers: 61%, 1 / 10. The questions are in [`bench/memory_honesty/heldout.jsonl`](../bench/memory_honesty/heldout.jsonl), frozen at 1.0.1; the rules for using them (aggregates only, no tuning toward them, what burns the set) and a log of who has seen what are in [`bench/memory_honesty/HELDOUT.md`](../bench/memory_honesty/HELDOUT.md). CI pins the questions and the vault and checks only a sanity guard against plain full-text search, never a floor. Quote this figure, or the 0.12.1 row (22%), as KRouter's wrong-citation rate, not the 0% above. The three wrong citations: a git branch-name format question cited the date-format page (both say "format"); a release-tag naming question and a checkout-page load-budget question each cited a neighbouring page.
+**Held-out, on questions Lmemory was never tuned on.** An outside reviewer wrote 25 new questions for the same 30-page vault: 15 answerable ones phrased differently, and 10 neighbour questions. They were written independently of any tuning. Lmemory 1.0: 25% wrong citations (3 / 12), 8 / 10 neighbours refused, 9 / 15 answerable right. Plain BM25 that always answers: 61%, 1 / 10. The questions are in [`bench/memory_honesty/heldout.jsonl`](../bench/memory_honesty/heldout.jsonl), frozen at 1.0.1; the rules for using them (aggregates only, no tuning toward them, what burns the set) and a log of who has seen what are in [`bench/memory_honesty/HELDOUT.md`](../bench/memory_honesty/HELDOUT.md). CI pins the questions and the vault and checks only a sanity guard against plain full-text search, never a floor. Quote this figure, or the 0.12.1 row (22%), as Lmemory's wrong-citation rate, not the 0% above. The three wrong citations: a git branch-name format question cited the date-format page (both say "format"); a release-tag naming question and a checkout-page load-budget question each cited a neighbouring page.
 
 **Read the 0.13.0 row as a development-set number.** The bench was written for 0.13.0, and its first run found a bug:
 English function words (`what`, `which`, `does`, `should`) were counted as words "the vault has never seen", so a
 plain English question about a page that was there got refused, while a neighbour question that happened to share
 `what` and `do` with a page got answered. 0.13.0 drops those words from ranking and refusal and lets `services` match
 `service`. The fix is general, not shaped to these 30 questions: on the author's Chinese vault the recall eval is
-identical before and after. Still, KRouter was changed after seeing the bench, so the honest held-out figure is the
+identical before and after. Still, Lmemory was changed after seeing the bench, so the honest held-out figure is the
 0.12.1 row.
 
 The 0.13.0 misses are all refusals, never wrong answers. Each one asks with a word the page does not use: a pull
@@ -234,9 +172,9 @@ for having no Latin words, which flatters the baseline), and `bm25-floor` picks 
 |---|---|---|---|---|---|---|
 | Plain BM25, always answers | 61% (30 / 49) | 1 / 20 | 19 / 30 | 55% (27 / 49) | 1 / 20 | 22 / 30 |
 | BM25 + skip superseded + dev3-picked floor | 23% (5 / 22) | 15 / 20 | 17 / 30 | 4% (1 / 22) | 19 / 20 | 21 / 30 |
-| KRouter 1.0.3 | 33% (12 / 36) | 9 / 20 | 24 / 30 | 24% (8 / 34) | 13 / 20 | 26 / 30 |
+| Lmemory 1.0.3 | 33% (12 / 36) | 9 / 20 | 24 / 30 | 24% (8 / 34) | 13 / 20 | 26 / 30 |
 
-Read plainly: on questions written by someone else, on a vault nobody tuned for, KRouter answers more questions right
+Read plainly: on questions written by someone else, on a vault nobody tuned for, Lmemory answers more questions right
 than the careful BM25 baseline (24 vs 17 of 30) but cites a wrong page more often (33% vs 23%) and refuses fewer
 neighbour questions (9 vs 15 of 20). It sits at a different point on the same trade-off, not above it. basic-memory and
 claude-mem have not been run on vault2 yet; their adapters take the vault1 sets only.
@@ -250,14 +188,14 @@ the dense model put the same page first, both with superseded pages left out and
 
 | heldout2, 50 questions | Wrong citations | Neighbours refused | Answerable right |
 |---|---|---|---|
-| KRouter 1.0.3 (shipped) | 33% (12 / 36) | 9 / 20 | 24 / 30 |
+| Lmemory 1.0.3 (shipped) | 33% (12 / 36) | 9 / 20 | 24 / 30 |
 | BM25 + skip superseded + dev3 floor | 19% (4 / 21) | 16 / 20 | 17 / 30 |
 | **`agree`: BM25 and dense must agree** | **18% (5 / 28)** | **15 / 20** | **23 / 30** |
 | dense + skip superseded + dev3 floor | 23% (7 / 30) | 13 / 20 | 23 / 30 |
 
 Read plainly: on questions written by someone else, on a vault nobody tuned for, the agreement of two different
 retrievers keeps the careful baseline's precision and refusals while answering six more questions, and against what
-KRouter ships it cites fewer than half as many wrong pages for one fewer right answer. It is a prototype on a 60-page
+Lmemory ships it cites fewer than half as many wrong pages for one fewer right answer. It is a prototype on a 60-page
 bench, not yet a feature: it needs an embedding model on the user's machine and floors that do not depend on a dev
 set of their own vault.
 
@@ -265,10 +203,10 @@ set of their own vault.
 
 Fifty questions cannot separate two systems: a 5 / 28 against a 5 / 22 wrong-citation rate is noise. `vault3/` has
 110 pages (English and Chinese rule pages, their replaced versions, and 20 daily logs as distractors) and 200
-held-out questions, 80 of them neighbours, with **no dev set**: it stands for a vault KRouter has never seen. `run.py`
+held-out questions, 80 of them neighbours, with **no dev set**: it stands for a vault Lmemory has never seen. `run.py`
 now gives 95% bootstrap intervals (`--ci`), paired intervals against another system (`--vs`), a comparison at equal
-coverage (`--vs-matched`) and the coverage curve (`--curve`). Baseline at freeze, KRouter 1.0.3 minus BM25 with the two
-rules at KRouter's coverage: wrong-citation rate −4.3 points [−10.2, +1.4], answerable right +6 [−2, +14]. Ahead
+coverage (`--vs-matched`) and the coverage curve (`--curve`). Baseline at freeze, Lmemory 1.0.3 minus BM25 with the two
+rules at Lmemory's coverage: wrong-citation rate −4.3 points [−10.2, +1.4], answerable right +6 [−2, +14]. Ahead
 on every point estimate, significant on none. The rule for claiming "surpasses BM25", and for shipping a new default,
 was written down before any candidate ran: [`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md), "Held-out set 3".
 
@@ -280,12 +218,12 @@ HELDOUT.md before each run.
 
 | System | wrong citations | neighbours refused (of 80) | corrections right (of 60) | current right (of 60) |
 |---|---|---|---|---|
-| KRouter 1.0.3, default | 27% (37 / 139) [19, 34] | 46 | 50 | 52 |
+| Lmemory 1.0.3, default | 27% (37 / 139) [19, 34] | 46 | 50 | 52 |
 | claude-mem 13.39.0, default | 64% (128 / 200) [58, 71] | 0 | 34 | 38 |
 | basic-memory 0.23.2, default | 78% (155 / 200) [72, 84] | 0 | 16 | 29 |
 | basic-memory + the two rules (floor from dev3) | 19% (5 / 27) [4, 33] | 76 | 3 | 19 |
 
-KRouter minus each at their defaults, paired 95% intervals: against claude-mem, wrong-citation rate −30 to −45 points,
+Lmemory minus each at their defaults, paired 95% intervals: against claude-mem, wrong-citation rate −30 to −45 points,
 answerable right +17 to +44; against basic-memory, −43 to −59 points and +43 to +72; neighbours refused +35 to +58
 against both. Neither has a way to refuse, and neither knows a page was replaced. With the two rules basic-memory cites few wrong pages but answers 27
 of 200 questions: its scores do not separate right from wrong well enough for one floor to keep the right answers.
@@ -297,7 +235,7 @@ extract memories, and none was configured.
 
 ## Learning from use (2026-10-15, dev sets)
 
-KRouter's nightly learner (`reconsolidate.py`) reads the questions the router did not answer well and, when a model
+Lmemory's nightly learner (`reconsolidate.py`) reads the questions the router did not answer well and, when a model
 confirms a page answers one, adds that question to the page's recall triggers. `learn_bench.py` measures what one
 night of that does: week-1 wordings go through the router into a private query log, the learner runs once, and week-2
 wordings are scored before and after. On the dev sets, the learner as shipped through 1.1.0 made recall **worse**:
@@ -324,7 +262,7 @@ not one question asked twice. Whether learning *helps* needs one intent in two w
 
 ## Scale: how big a vault can get (2026-11-09)
 
-**The team server** (`bench/scale/serve_load.py`: `mcp_server.py --http` on loopback, `krouter_ask` from 1, 8 and 32
+**The team server** (`bench/scale/serve_load.py`: `mcp_server.py --http` on loopback, `lmemory_ask` from 1, 8 and 32
 threads, 300 calls each, none failed; 4 resident lookup processes, files re-checked at most every 2 s):
 
 | Pages | One caller: median, answers/s | 8 callers | 32 callers: median, p95, answers/s | Resident | Ready after |
@@ -337,7 +275,7 @@ Up to and including 1.3.0 (one process per lookup), same machine and script: 210
 at 50,017. On the 10,017-page vault right after 200 pages changed, 64 calls from 16 threads: no errors, 0.14 s
 median, 0.41 s slowest, and the index held exactly one entry per page.
 
-**One lookup per process**, as the agent rules and `krouter ask` run it: `bench/scale/` builds a synthetic vault (the template plus N generated decision pages, seeded by N) and times
+**One lookup per process**, as the agent rules and `lmemory ask` run it: `bench/scale/` builds a synthetic vault (the template plus N generated decision pages, seeded by N) and times
 `route_knowledge.py search` the way the MCP server and the agent rules run it: one process per lookup, interpreter
 start included. The first lookup builds the full-text index in an empty cache; the next 30 (two in three about
 something on the generated pages, one in three about nothing in the vault) only check file times. Apple M2, 8 GB,
@@ -362,14 +300,14 @@ python3 bench/scale/serve_load.py /tmp/v10000 --concurrency 1,8,32 --calls 300
 ## Run it
 
 ```bash
-python3 bench/memory_honesty/run.py                  # KRouter, in-process
+python3 bench/memory_honesty/run.py                  # Lmemory, in-process
 python3 bench/memory_honesty/run.py --adapter bm25   # the plain full-text baseline
 python3 bench/memory_honesty/run.py --answers mine.jsonl
 python3 bench/memory_honesty/run.py --set heldout     # held-out set: aggregates only (HELDOUT.md)
 python3 bench/memory_honesty/run.py --set dev3        # second vault (vault2/), dev set
 python3 bench/memory_honesty/run.py --set heldout2    # second vault, held-out: aggregates only
 python3 bench/memory_honesty/run.py --set heldout3 --vs-matched bm25-floor   # third vault, equal coverage, intervals
-python3 bench/memory_honesty/run.py --set heldout3 --curve --adapter krouter  # coverage curve
+python3 bench/memory_honesty/run.py --set heldout3 --curve --adapter lmemory  # coverage curve
 ```
 
 To grade another system, index `bench/memory_honesty/vault/` with it, ask each question in
@@ -381,4 +319,4 @@ To grade another system, index `bench/memory_honesty/vault/` with it, ask each q
 
 `cited` is in rank order and uses vault-relative paths. A system that returns chunks maps each chunk to its file.
 `refused: true` means it said it had nothing; an empty `cited` with `refused: false` counts as a refusal too. CI runs
-the KRouter row on every push (`tests/test_memory_honesty.py`), and its floors only go up.
+the Lmemory row on every push (`tests/test_memory_honesty.py`), and its floors only go up.

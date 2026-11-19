@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Does KRouter write down what was decided? An offline replay of real sessions (registered in HELDOUT.md, set 6).
+"""Does Lmemory write down what was decided? An offline replay of real sessions (registered in HELDOUT.md, set 6).
 
-Takes recorded agent sessions, runs KRouter's own import and distill on them (the step that turns a session into
+Takes recorded agent sessions, runs Lmemory's own import and distill on them (the step that turns a session into
 "what was decided / what changed" lines), and compares those lines with the decisions the host confirms were made.
 Nothing new is run in an agent; the only model calls are the distill itself and the judge.
 
     capture_bench.py pick                      # 10 sessions, stratified by agent, seed 20261016
     capture_bench.py distill --cli /opt/homebrew/bin/claude
-    KROUTER_EVAL_KEY=… capture_bench.py propose --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
+    LMEMORY_EVAL_KEY=… capture_bench.py propose --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
     capture_bench.py sheet                     # a local page: tick each proposed decision, add the missing ones
-    KROUTER_EVAL_KEY=… capture_bench.py score --answers label.json --openai-base … --model grok-4.7
+    LMEMORY_EVAL_KEY=… capture_bench.py score --answers label.json --openai-base … --model grok-4.7
 
-Everything lives in `~/.local/state/krouter-eval/capture/` (private). Prints counts and rates only.
+Everything lives in `~/.local/state/lmemory-eval/capture/` (private). Prints counts and rates only.
 """
 
 from __future__ import annotations
@@ -28,11 +28,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "skill/krouter/scripts"))
+sys.path.insert(0, str(HERE.parents[1] / "skill/lmemory/scripts"))
 import classify_asks as ca  # noqa: E402
 import import_sessions as imp  # noqa: E402
 
-STATE = Path.home() / ".local/state/krouter-eval/capture"
+STATE = Path.home() / ".local/state/lmemory-eval/capture"
 QUOTA = {"claude-code": 4, "cursor": 3, "codex": 3}
 PROPOSE = """下面是一个人和他的编程 agent 某一天的一段会话摘录（只有他的提问和 agent 每轮最后的回答）。
 列出这段会话里**真正定下来的事**和**改主意的事**：
@@ -84,7 +84,7 @@ def pick() -> int:
                 continue
             s = {"claude-code": imp.read_claude, "codex": imp.read_codex, "cursor": imp.read_cursor}[agent](p)
             n, answered = len(s["turns"]), sum(1 for t in s["turns"] if t["answer"])
-            if 8 <= n <= 60 and answered >= 0.7 * n and "DSH-KRouter" not in s.get("cwd", ""):
+            if 8 <= n <= 60 and answered >= 0.7 * n and "DSH-Lmemory" not in s.get("cwd", ""):
                 pool[agent].append((str(p), s["turns"][0]["ts"][:10]))
     chosen = []
     for agent, k in QUOTA.items():
@@ -100,7 +100,7 @@ def pick() -> int:
 
 
 def units() -> list[dict]:
-    """One unit per (session, day), exactly as the importer pages them: the excerpt KRouter distills."""
+    """One unit per (session, day), exactly as the importer pages them: the excerpt Lmemory distills."""
     out = []
     for s in json.loads((STATE / "sessions.json").read_text(encoding="utf-8")):
         for e in entries_of(Path(s["path"]), s["agent"]):
@@ -112,7 +112,7 @@ def units() -> list[dict]:
 
 def distill(args) -> int:
     if args.cli:
-        os.environ["KROUTER_LEARN_CLI"] = args.cli
+        os.environ["LMEMORY_LEARN_CLI"] = args.cli
     rows = []
     for u in units():
         digest, chars = imp.distill(u["entry"], u["page"], STATE, False)
@@ -160,7 +160,7 @@ button{font:inherit;padding:6px 14px;border:1px solid var(--acc);color:var(--acc
 <p class="note">每段会话下面是模型列出的候选决定。对的勾「对」，错的或不是你认可的勾「不对」。漏掉的、你确实定了的事，写在下面的框里，一行一条（改主意的写成「原来 A → 改成 B」）。可以展开看会话摘录。</p>
 __ITEMS__</main><div id="bar"><span id="done"></span><button onclick="exportIt()">导出</button></div>
 <script>
-const KEY="krouter-capture-sheet-v1";let st={};try{st=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){}
+const KEY="lmemory-capture-sheet-v1";let st={};try{st=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){}
 document.querySelectorAll("input[type=radio]").forEach(r=>{if(st[r.name]===r.value)r.checked=true;r.addEventListener("change",()=>{st[r.name]=r.value;save()})});
 document.querySelectorAll("textarea").forEach(t=>{t.value=st[t.name]||"";t.addEventListener("input",()=>{st[t.name]=t.value;save()})});
 function save(){try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}count()}
@@ -279,7 +279,7 @@ def locate(excerpt: str, text: str, hint: str = "") -> str:
 
 REVIEW = SHEET.replace("会话决定核对（__N__ 段）", "抽检：这是不是你定下的事（__N__ 条）").replace(
     "每段会话下面是模型列出的候选决定。对的勾「对」，错的或不是你认可的勾「不对」。漏掉的、你确实定了的事，写在下面的框里，一行一条（改主意的写成「原来 A → 改成 B」）。可以展开看会话摘录。",
-    "每条下面附着它依据的那一轮对话原文。不用回忆，看原文判断就行。").replace("krouter-capture-sheet-v1", "krouter-capture-review-v1").replace(
+    "每条下面附着它依据的那一轮对话原文。不用回忆，看原文判断就行。").replace("lmemory-capture-sheet-v1", "lmemory-capture-review-v1").replace(
     "capture_sheet_answers.json", "capture_review_answers.json")
 CHOICES = [("decision", "我说了或明确同意了（算决定）"), ("unconfirmed", "agent 提的，我没明确表态"),
            ("absent", "原文里没这回事"), ("procedure", "只是操作或讨论，不算决定"), ("unsure", "说不清")]
@@ -300,7 +300,7 @@ def review(args) -> int:
     while len(picks) < 20 and any(by.values()):
         for cat in sorted(by):
             if by[cat] and len(picks) < 20:
-                picks.append({"kind": "krouter", **by[cat].pop(rng.randrange(len(by[cat])))})
+                picks.append({"kind": "lmemory", **by[cat].pop(rng.randrange(len(by[cat])))})
     gold = [{"kind": "reference", "unit": u, "line": g, "turn": "", "cat": ""}
             for u, props in proposed.items() for g in gold_of(u, props, ans)]
     picks += [{**g} for g in rng.sample(gold, min(10, len(gold)))]
@@ -318,7 +318,7 @@ def review(args) -> int:
     (STATE / "capture_review.key.json").write_text(json.dumps(key, ensure_ascii=False, indent=1), encoding="utf-8")
     for f in (out, STATE / "capture_review.key.json"):
         os.chmod(f, 0o600)
-    print(json.dumps({"sheet": str(out), "items": len(items), "krouter_lines": sum(p["kind"] == "krouter" for p in picks)}))
+    print(json.dumps({"sheet": str(out), "items": len(items), "lmemory_lines": sum(p["kind"] == "lmemory" for p in picks)}))
     return 0
 
 

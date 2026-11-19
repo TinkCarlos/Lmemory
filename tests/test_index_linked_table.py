@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
 
 
 def make_vault(root: Path) -> Path:
@@ -26,10 +26,10 @@ def make_vault(root: Path) -> Path:
 def test_index_is_not_empty_when_the_install_table_links_to_the_vaults(tmp_path, monkeypatch):
     import compile_subconscious as cs
 
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
     v = make_vault(tmp_path)
     table = v / "90 系统文件/canonical_sources.psv"
     plain = len(cs.index_topics(v))
@@ -47,7 +47,7 @@ def test_index_is_not_empty_when_the_install_table_links_to_the_vaults(tmp_path,
 def test_the_shipped_sample_is_still_recognised(tmp_path, monkeypatch):
     import compile_subconscious as cs
 
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
     sample = cs.sample_path()
     assert not sample.is_symlink()
     v = tmp_path / "vault"

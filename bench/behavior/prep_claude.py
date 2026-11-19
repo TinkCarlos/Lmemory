@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Lay out a set for a Claude Code subagent host: per scenario a project folder, a throwaway memory folder, a `kr`
-wrapper (KROUTER_VAULT and the call log pointed at that scenario) and the host's session context (`kr_cli.py --context`).
+wrapper (LMEMORY_VAULT and the call log pointed at that scenario) and the host's session context (`kr_cli.py --context`).
 
     python3 bench/behavior/prep_claude.py SET.json WORKDIR [--only ID,ID]
 Then one fresh subagent per scenario, given WORKDIR/<id>/prompt.txt; `finish_claude.py` turns the call log and the
@@ -20,7 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 # 宿主不许碰的、用户真实的知识库。公开版本里不写这台机器的路径；第 30、31 套测量时的提示词里是本机的真实路径，
 # 也就是这里在那台机器上算出来的值（HELDOUT.md 第 30、31 套日志）
-REAL_VAULT = os.environ.get("KROUTER_BENCH_REAL_VAULT") or str(Path.home() / "KnowledgeArchive")
+REAL_VAULT = os.environ.get("LMEMORY_BENCH_REAL_VAULT") or str(Path.home() / "KnowledgeArchive")
 sys.path.insert(0, str(HERE))
 from make_fixture import build  # noqa: E402
 from run_codex import write_project  # noqa: E402
@@ -49,7 +49,7 @@ def main() -> int:
         shutil.copytree(base, mem, symlinks=True)
         write_project(proj, sc["files"])
         kr = d / "kr"
-        kr.write_text(f"#!/bin/sh\nexec env KROUTER_VAULT='{mem}' KROUTER_STATE_DIR='{d}/state' KROUTER_NO_QUERY_LOG=1 "
+        kr.write_text(f"#!/bin/sh\nexec env LMEMORY_VAULT='{mem}' LMEMORY_STATE_DIR='{d}/state' LMEMORY_NO_QUERY_LOG=1 "
                       f"XDG_CONFIG_HOME='{d}/xdg' KR_CALL_LOG='{d}/calls.jsonl' python3 '{HERE}/kr_cli.py' \"$@\"\n")
         kr.chmod(kr.stat().st_mode | stat.S_IXUSR)
         ctx = subprocess.run([str(kr), "--context"], capture_output=True, text=True).stdout

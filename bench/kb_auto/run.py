@@ -4,7 +4,7 @@
     python3 bench/kb_auto/run.py DIR dev        # thresholds are set on this split only
     python3 bench/kb_auto/run.py DIR heldout    # once, with the code as chosen on dev
 
-Builds each vault's index in a temporary cache (KROUTER_NO_QUERY_LOG=1), asks `kb.classify` about every page, and reports
+Builds each vault's index in a temporary cache (LMEMORY_NO_QUERY_LOG=1), asks `kb.classify` about every page, and reports
 the share of outside pages recognised and the share of your own pages taken for reference material, by kind.
 """
 
@@ -24,11 +24,11 @@ def main(argv: list[str]) -> int:
     base, split = Path(argv[0]), argv[1]
     labels = [json.loads(x) for x in (base / "labels.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
     rows = [r for r in labels if r["split"] == split]
-    with tempfile.TemporaryDirectory(prefix="krouter-kbauto-") as tmp:
-        os.environ["KROUTER_NO_QUERY_LOG"] = "1"
-        os.environ["KROUTER_CACHE_DIR"] = str(Path(tmp) / "cache")
-        os.environ["KROUTER_STATE_DIR"] = str(Path(tmp) / "state")
-        sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+    with tempfile.TemporaryDirectory(prefix="lmemory-kbauto-") as tmp:
+        os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
+        os.environ["LMEMORY_CACHE_DIR"] = str(Path(tmp) / "cache")
+        os.environ["LMEMORY_STATE_DIR"] = str(Path(tmp) / "state")
+        sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
         import kb
         import recall_index as ri
 

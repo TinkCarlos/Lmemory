@@ -6,9 +6,9 @@ copy of `recall_index.py` is loaded in memory with a few lines that record the g
     python3 bench/subconscious/gate_reasons.py set45dev          # recall and quiet cases of set 45's development half
     python3 bench/subconscious/gate_reasons.py real --vault DIR  # counts only, on this machine's messages (fixed window)
 
-`real` needs the vault to replay against (`--vault` or `KROUTER_REPLAY_VAULT`; there is no default, and without one it
+`real` needs the vault to replay against (`--vault` or `LMEMORY_REPLAY_VAULT`; there is no default, and without one it
 says so and does nothing). It reads the vault and the Claude Code transcripts read-only; the index and state are copied to a temporary folder;
-`KROUTER_NO_QUERY_LOG=1`. It prints counts and distributions only: no message, phrase or page name.
+`LMEMORY_NO_QUERY_LOG=1`. It prints counts and distributions only: no message, phrase or page name.
 """
 
 from __future__ import annotations
@@ -26,10 +26,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(HERE))
-os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
 
 MARK1 = "    partial = not single and strong < need\n"
 REC1 = MARK1 + (
@@ -108,7 +108,7 @@ def set45dev(_a) -> int:
     ri = diag_module()
     rows = [json.loads(x) for x in (HERE / "set45_dev.jsonl").read_text(encoding="utf-8").split("\n") if x.strip()]
     tmp = Path(tempfile.mkdtemp())
-    os.environ.update(KROUTER_CACHE_DIR=str(tmp / "c"), KROUTER_STATE_DIR=str(tmp / "s"))
+    os.environ.update(LMEMORY_CACHE_DIR=str(tmp / "c"), LMEMORY_STATE_DIR=str(tmp / "s"))
     v = run.make_vault(tmp)
     ri.recall(v, "warm up the index")
     today = date.today()
@@ -189,9 +189,9 @@ def turns():
 
 
 def real(a) -> int:
-    raw_vault = a.vault or os.environ.get("KROUTER_REPLAY_VAULT", "")
+    raw_vault = a.vault or os.environ.get("LMEMORY_REPLAY_VAULT", "")
     if not raw_vault:
-        print("real: no vault given (--vault or KROUTER_REPLAY_VAULT); the replay on this machine's messages is skipped")
+        print("real: no vault given (--vault or LMEMORY_REPLAY_VAULT); the replay on this machine's messages is skipped")
         return 0
     VAULT = Path(raw_vault).expanduser()
     tmp = Path(tempfile.mkdtemp(prefix="kr-gate-"))
@@ -199,16 +199,16 @@ def real(a) -> int:
     (tmp / "cache").mkdir()
     import recall_index
 
-    live = Path(os.environ.get("KROUTER_CACHE_DIR") or Path.home() / ".cache" / "krouter")
+    live = Path(os.environ.get("LMEMORY_CACHE_DIR") or Path.home() / ".cache" / "lmemory")
     for src in live.glob(recall_index.cache_path(VAULT).name + "*"):  # 只读：复制到临时目录
         shutil.copy(src, tmp / "cache" / src.name)
-    os.environ.update(KROUTER_STATE_DIR=str(tmp / "state"), KROUTER_CACHE_DIR=str(tmp / "cache"))
+    os.environ.update(LMEMORY_STATE_DIR=str(tmp / "state"), LMEMORY_CACHE_DIR=str(tmp / "cache"))
     import subprocess
 
     subprocess.run([sys.executable, str(SCRIPTS / "recall_index.py"), "--vault", str(VAULT), "--stats"], env=os.environ,
                    capture_output=True)
     import recollect as R
-    from krouter_redact import human_words
+    from lmemory_redact import human_words
 
     ri = diag_module()
     C = collections.Counter()
@@ -274,7 +274,7 @@ def variant(a) -> int:
     import recollect as R
 
     tmp = Path(tempfile.mkdtemp())
-    os.environ.update(KROUTER_CACHE_DIR=str(tmp / "c"), KROUTER_STATE_DIR=str(tmp / "s"))
+    os.environ.update(LMEMORY_CACHE_DIR=str(tmp / "c"), LMEMORY_STATE_DIR=str(tmp / "s"))
     v = run.make_vault(tmp)
     sys.modules["recall_index"].recall(v, "warm up the index")
     out = {}

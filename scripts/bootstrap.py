@@ -5,13 +5,13 @@ Usually started by `bootstrap.sh` (macOS / Linux) or `bootstrap.ps1` (Windows), 
 latest release; can also be run from a clone. What it does, in order:
 
 1. Pick the language: `--lang zh|en`, else `LC_ALL` / `LC_MESSAGES` / `LANG`, else the system's; and the template.
-2. Pick the memory folder: `--vault PATH`, else `KROUTER_VAULT`, else `OBSIDIAN_VAULT` (the older name), else a new folder `Documents/第二大脑` (`Second Brain`).
+2. Pick the memory folder: `--vault PATH`, else `LMEMORY_VAULT`, else `OBSIDIAN_VAULT` (the older name), else a new folder `Documents/Lmemory 记忆库` (`Lmemory Vault`).
    A new or empty folder gets the template; in English its folders and files have English names (`zones_en.psv`,
-   recorded in the vault's `krouter-zones.psv`). An existing vault keeps every file and its own names; only missing
+   recorded in the vault's `lmemory-zones.psv`). An existing vault keeps every file and its own names; only missing
    skeleton files are added (`--vault` on a vault of your own). Nothing is ever overwritten.
 3. Install the router skill and the agent rules, keeping an existing alias table. Re-running it is an upgrade.
 4. Check for a model: a logged-in CLI or an API key. If there is none, say in one sentence what to do.
-5. Connect the apps it finds (a copy of every settings file it changes is kept as `*.krouter-bak`, and each one is
+5. Connect the apps it finds (a copy of every settings file it changes is kept as `*.lmemory-bak`, and each one is
    listed at the end) and start remembering from now on: turns are recorded as they end, on this machine, redacted,
    no model. Past sessions are not imported by default; the last line says the one command that brings in the last
    7 days. `--all` does that too (the old default); `--no-import` records nothing (lookup only). `--ask` asks about
@@ -43,11 +43,11 @@ WINDOWS = os.name == "nt"
 MSG = {
     "zh": {
         "plan": "计划", "vault_new": "新建记忆文件夹", "vault_merge": "使用已有的文件夹（只补缺失的骨架文件，不覆盖任何文件）",
-        "vault_ours": "已是 KRouter 记忆文件夹（升级）", "added": "补上的文件", "skill": "路由器", "timer": "每日定时任务",
+        "vault_ours": "已是 Lmemory 记忆文件夹（升级）", "added": "补上的文件", "skill": "路由器", "timer": "每日定时任务",
         "model_ok": "模型通道", "model_none": "还没有可用的模型：登录一个 AI 编程工具（Claude Code 运行 `claude`、Codex、grok 等任选其一），"
         "或把 API key 写进 {keys}（一行，如 DEEPSEEK_API_KEY=sk-…）。夜间任务开着的话，之后每晚自动整理，不用再做任何事。\n"
         "没有模型时：查询、带出处的回答、库里没有就直说、本地导入会话、记下纠正候选都照常；改了主意时，新旧两页冲突会把新页排前面并标出来，"
-        "你纠正 agent 时它会当轮调 krouter_correct 把旧页标成已取代。不工作的是提炼（每页开头的「定了什么、改了什么」）、夜间整理和纠正候选的判定，"
+        "你纠正 agent 时它会当轮调 lmemory_correct 把旧页标成已取代。不工作的是提炼（每页开头的「定了什么、改了什么」）、夜间整理和纠正候选的判定，"
         "所以换了别的说法、agent 也没当轮落实的改动，旧页仍可能排第一，要等接上模型、提炼过之后才换。",
         "done": "装好了。记忆文件夹在：{vault}\nagent 查询走：{router}",
         "obsidian": "已在 Obsidian 里打开这个记忆文件夹（用任何编辑器打开也一样）。", "obsidian_none": "它就是一个纯 Markdown 文件夹：用任何编辑器打开都行；想用 Obsidian（https://obsidian.md），选「打开本地仓库」→ {vault}",
@@ -59,7 +59,7 @@ MSG = {
         "perm_codex": "（在 Codex 沙箱里运行：只能写这个知识库，但读得到你账户里的文件，包括 key 文件）",
         "perm_key": "（直接调用 API，不在本机运行任何 agent）",
         "sub_note": "这会用到你已登录的 {cli} 的订阅额度：每天最多 {n} 次调用，每次记在知识库的「订阅调用记录」页；"
-        "KROUTER_HOST_CLI=0 关掉。\n",
+        "LMEMORY_HOST_CLI=0 关掉。\n",
         "perm_other": "（不受限制：它以你的身份运行，能读写你账户里的任何文件）",
         "prefer_key": "更稳妥的是用 API key：它直接调用接口，不在本机运行任何 agent（把 key 贴到知识库的「自进化钥匙」页就行）。\n",
         "timer_off": "没有开启每晚自动整理。想开的时候运行：{cmd}",
@@ -78,10 +78,10 @@ MSG = {
         "distilled": "，其中 {n} 个会话已提炼出定下来的事",
         "distilling": "正在提炼（每个会话一次模型调用）…",
         "try": "现在就可以问你的 agent，比如：「{q}」——它会先查这个记忆文件夹，答案带出处页；没有的会直说没有。",
-        "mcp": "已把 KRouter 注册成 {cli} 的 MCP 工具（krouter_ask）。",
-        "mcp_desktop": "已把 KRouter 加进 Claude Desktop 的 MCP 设置（重启 Claude Desktop 后生效）。",
-        "mcp_app": "已把 KRouter 加进 {app} 的 MCP 设置（{file}；重启 {app} 后生效）。",
-        "mcp_app_skip": "{app} 的设置文件 {file} 不是纯 JSON（可能带注释），没动它；要接上，把 krouter 这一项手动加进 {key}。",
+        "mcp": "已把 Lmemory 注册成 {cli} 的 MCP 工具（lmemory_ask）。",
+        "mcp_desktop": "已把 Lmemory 加进 Claude Desktop 的 MCP 设置（重启 Claude Desktop 后生效）。",
+        "mcp_app": "已把 Lmemory 加进 {app} 的 MCP 设置（{file}；重启 {app} 后生效）。",
+        "mcp_app_skip": "{app} 的设置文件 {file} 不是纯 JSON（可能带注释），没动它；要接上，把 lmemory 这一项手动加进 {key}。",
         "cmem_ask": "发现 claude-mem 的记忆库：{sessions} 个会话、{decisions} 条决定和改动（{projects} 个项目）。要导进记忆文件夹吗？"
         "只读它的库、不改 claude-mem，脱敏后写在本机{distill}；以后每晚同步一次。导入？[y/N] ",
         "cmem_distill": "，并让模型把每个项目的决定理一遍：哪些还有效、哪些被后来的取代了（约 {chars} 字）",
@@ -92,16 +92,16 @@ MSG = {
         "整个停掉：{revoke}；这次导入的每一页都记在 {ledger}，按里面的 run 编号可以撤回。",
         "capture_how_plugin": "Claude Code 的每个会话结束时记下",
         "capture_how_live": "{apps} 每轮结束时当场记下",
-        "hooks_done": "已把 KRouter 的钩子加进 {app}（{file}）：开会话时带上本项目的决定，每轮结束记下这一轮，你当场纠正的话也会记下。",
+        "hooks_done": "已把 Lmemory 的钩子加进 {app}（{file}）：开会话时带上本项目的决定，每轮结束记下这一轮，你当场纠正的话也会记下。",
         "hooks_skip": "{app} 的钩子文件 {file} 不是纯 JSON，没动它，也就没加上 {app} 的钩子。",
         "hooks_codex_shape": "{file} 的写法这个版本的 Codex 读不了：事件名要放在顶层的 \"hooks\" 下面（Codex 文档的写法），"
-        "现在 Codex 会整份跳过它，里面原有的钩子也没在跑。KRouter 没动它，也就没加上 Codex 的钩子。",
-        "hooks_codex_trust": "Codex 只跑你信任过的钩子：下次打开 Codex 输入 /hooks，把 KRouter 的 4 个钩子标为信任；信任之前 Codex 不跑它们。",
-        "hooks_codex_off": "你在 Codex 的 config.toml 里关了钩子（[features] hooks = false），KRouter 的钩子要等你打开才会跑。",
+        "现在 Codex 会整份跳过它，里面原有的钩子也没在跑。Lmemory 没动它，也就没加上 Codex 的钩子。",
+        "hooks_codex_trust": "Codex 只跑你信任过的钩子：下次打开 Codex 输入 /hooks，把 Lmemory 的 4 个钩子标为信任；信任之前 Codex 不跑它们。",
+        "hooks_codex_off": "你在 Codex 的 config.toml 里关了钩子（[features] hooks = false），Lmemory 的钩子要等你打开才会跑。",
         "capture_how_nightly": "其他 agent 的会话，打开每晚任务后每晚导入前一天的（{ask}）",
         "capture_how_timer": "其他 agent 的会话由每晚任务导入前一天的",
         "plugin_hint": "用 Claude Code 的话，装上插件还能在会话结束时自动记下、开会话时自动带上本项目的决定："
-        "/plugin install krouter --marketplace 398894496-arch/KRouter",
+        "/plugin install lmemory --marketplace TinkCarlos/Lmemory",
         "cli": "命令行（给你和 agent）：{cli} doctor 一条命令给结论（正常，或缺什么、怎么补）；{cli} ask \"问题\" 查询；"
         "卸载：sh {uninstall}",
         "cli_win": "命令行（给你和 agent，cmd、PowerShell 5.1 和 7 里照抄就能跑）：{cli} doctor 一条命令给结论（正常，或缺什么、怎么补）；"
@@ -111,21 +111,21 @@ MSG = {
         "现在写进去的条目一重启就没了。两条路任选：① 退出 Claude Desktop 后运行 {cmd}；② 不用退出，双击这个扩展包，在 Claude Desktop "
         "里点安装（不改配置文件、不用重启）：{mcpb}",
         "desktop_uninstall_running": "Claude Desktop 正在运行，没有改它的配置文件（它退出时会把旧内容写回去）。退出 Claude Desktop 后运行："
-        "{cmd}；如果是用扩展包装的，在 Claude Desktop 的「设置 → 扩展」里移除 KRouter。",
+        "{cmd}；如果是用扩展包装的，在 Claude Desktop 的「设置 → 扩展」里移除 Lmemory。",
         "capture_now": "从现在起它自己记：{how}。只写进本机这个记忆文件夹，先脱敏，不调任何模型。某个会话不想记，在提问里写 #不记；"
         "整个停掉：{revoke}。以前的会话没有导入；要把近 7 天的导进来，一条命令：{cmd}",
-        "changed": "改动的文件（每个改之前都在旁边留了一份 *.krouter-bak）：",
+        "changed": "改动的文件（每个改之前都在旁边留了一份 *.lmemory-bak）：",
         "created": "新建的文件和文件夹：",
         "obsidian_skip": "没有打开任何应用（不是在终端里运行）。它是纯 Markdown 文件夹，用任何编辑器或 Obsidian 打开都行：{vault}",
     },
     "en": {
         "plan": "Plan", "vault_new": "New memory folder", "vault_merge": "Existing folder (adds only missing skeleton files; overwrites nothing)",
-        "vault_ours": "Already a KRouter memory folder (upgrade)", "added": "files added", "skill": "Router", "timer": "Daily timer",
+        "vault_ours": "Already a Lmemory memory folder (upgrade)", "added": "files added", "skill": "Router", "timer": "Daily timer",
         "model_ok": "Model lane", "model_none": "No model yet: log in to one AI coding CLI (`claude`, Codex, grok, …), "
         "or put an API key in {keys} (one line, e.g. DEEPSEEK_API_KEY=sk-…). With the nightly job on, it then runs every night on its own.\n"
         "Without a model: lookup, answers with their source page, \"not in the memory\" instead of a guess, the local "
         "session import and noting correction candidates all work. A change of mind: when an older and a newer page "
-        "disagree, the newer one is listed first and flagged, and when you correct your agent it calls krouter_correct "
+        "disagree, the newer one is listed first and flagged, and when you correct your agent it calls lmemory_correct "
         "in the same turn, which marks the old page superseded. What does not run: distilling (each page's \"what was "
         "decided, what changed\"), the nightly upkeep, and settling correction candidates, so a change worded another "
         "way that the agent did not record can leave the older page first until a model is connected and the session "
@@ -140,7 +140,7 @@ MSG = {
         "perm_codex": " (in Codex's sandbox: it writes only this vault but can read files in your account, keys file included)",
         "perm_key": " (a direct API call; no agent runs on this machine)",
         "sub_note": "This uses the subscription of the {cli} you are logged in to: at most {n} calls a day, each one "
-        "recorded on the vault's 订阅调用记录 page; KROUTER_HOST_CLI=0 turns it off.\n",
+        "recorded on the vault's 订阅调用记录 page; LMEMORY_HOST_CLI=0 turns it off.\n",
         "perm_other": " (unconfined: it runs as you and can read and write any file in your account)",
         "prefer_key": "The safer choice is an API key: a direct API call, no agent runs on this machine (paste it on the vault's key page).\n",
         "timer_off": "Nightly upkeep is off. To turn it on later: {cmd}",
@@ -162,10 +162,10 @@ MSG = {
         "distilling": "Distilling (one model call per session) …",
         "try": "Ask your agent now, for example: \"{q}\" — it checks this memory folder first and cites the page; what it "
         "does not hold, it says so.",
-        "mcp": "Registered KRouter as an MCP tool for {cli} (krouter_ask).",
-        "mcp_desktop": "Added KRouter to Claude Desktop's MCP settings (restart Claude Desktop to load it).",
-        "mcp_app": "Added KRouter to {app}'s MCP settings ({file}; restart {app} to load it).",
-        "mcp_app_skip": "{app}'s settings file {file} is not plain JSON (comments?), so it was left alone; to connect it, add the krouter entry under {key} by hand.",
+        "mcp": "Registered Lmemory as an MCP tool for {cli} (lmemory_ask).",
+        "mcp_desktop": "Added Lmemory to Claude Desktop's MCP settings (restart Claude Desktop to load it).",
+        "mcp_app": "Added Lmemory to {app}'s MCP settings ({file}; restart {app} to load it).",
+        "mcp_app_skip": "{app}'s settings file {file} is not plain JSON (comments?), so it was left alone; to connect it, add the lmemory entry under {key} by hand.",
         "cmem_ask": "Found a claude-mem memory: {sessions} sessions, {decisions} decisions and changes ({projects} projects). Import it? "
         "It is read only (claude-mem is not changed), redacted, written on this machine{distill}, then synced nightly. "
         "Import? [y/N] ",
@@ -178,16 +178,16 @@ MSG = {
         "listed in {ledger}, and its run number takes it back.",
         "capture_how_plugin": "each Claude Code session when it ends",
         "capture_how_live": "each turn in {apps}, as it ends",
-        "hooks_done": "Added KRouter's hooks to {app} ({file}): a session starts with this project's decisions, each turn is recorded as it ends, and a correction you type is noted on the spot.",
-        "hooks_skip": "{app}'s hooks file {file} is not plain JSON, so it was left alone and {app} got no KRouter hooks.",
+        "hooks_done": "Added Lmemory's hooks to {app} ({file}): a session starts with this project's decisions, each turn is recorded as it ends, and a correction you type is noted on the spot.",
+        "hooks_skip": "{app}'s hooks file {file} is not plain JSON, so it was left alone and {app} got no Lmemory hooks.",
         "hooks_codex_shape": "{file} is not in the shape this Codex reads: event names belong under a top-level \"hooks\" key (as Codex's docs show), "
-        "so Codex skips the whole file and the hooks already in it are not running. KRouter left it alone and added no Codex hooks.",
-        "hooks_codex_trust": "Codex runs only hooks you have trusted: next time you open Codex, type /hooks and trust KRouter's 4 hooks; until then Codex skips them.",
-        "hooks_codex_off": "Hooks are turned off in Codex's config.toml ([features] hooks = false); KRouter's hooks run once you turn them back on.",
+        "so Codex skips the whole file and the hooks already in it are not running. Lmemory left it alone and added no Codex hooks.",
+        "hooks_codex_trust": "Codex runs only hooks you have trusted: next time you open Codex, type /hooks and trust Lmemory's 4 hooks; until then Codex skips them.",
+        "hooks_codex_off": "Hooks are turned off in Codex's config.toml ([features] hooks = false); Lmemory's hooks run once you turn them back on.",
         "capture_how_nightly": "other agents' sessions each night once the nightly job is on ({ask})",
         "capture_how_timer": "other agents' sessions each night, by the nightly job",
         "plugin_hint": "On Claude Code, the plugin also records each session when it ends and brings this project's "
-        "decisions when one starts: /plugin install krouter --marketplace 398894496-arch/KRouter",
+        "decisions when one starts: /plugin install lmemory --marketplace TinkCarlos/Lmemory",
         "cli": "Command line (for you and your agents): {cli} doctor gives one verdict (OK, or what is missing and how to "
         "fix it); {cli} ask \"question\" looks up. Uninstall: sh {uninstall}",
         "cli_win": "Command line (for you and your agents; copy as is into cmd, PowerShell 5.1 or 7): {cli} doctor gives one verdict "
@@ -200,26 +200,26 @@ MSG = {
         "restart. Either: (1) quit Claude Desktop, then run {cmd}; or (2) without quitting, double-click this extension "
         "and press Install in Claude Desktop (no settings file, no restart): {mcpb}",
         "desktop_uninstall_running": "Claude Desktop is running, so its settings file was left alone (it would write the old "
-        "contents back when it quits). Quit Claude Desktop, then run {cmd}; if KRouter was installed as an extension, "
+        "contents back when it quits). Quit Claude Desktop, then run {cmd}; if Lmemory was installed as an extension, "
         "remove it in Claude Desktop under Settings → Extensions.",
         "capture_now": "From now on it keeps up by itself: {how}. Written only to this memory folder on this machine, redacted, "
         "no model called. To keep a session out, put #nocapture in a question; to stop it: {revoke}. Past sessions were not "
         "imported; to bring in the last 7 days, one command: {cmd}",
-        "changed": "Files changed (a copy of each, taken first, sits next to it as *.krouter-bak):",
+        "changed": "Files changed (a copy of each, taken first, sits next to it as *.lmemory-bak):",
         "created": "Files and folders created:",
         "obsidian_skip": "No app was opened (not run from a terminal). It is a plain Markdown folder: open it in any editor, "
         "or in Obsidian: {vault}",
     },
 }
 KEEP = ("canonical_sources.psv", "canonical_alias_ledger.jsonl")
-CHANGED: list[str] = []  # 改过的设置文件（改之前都留了 *.krouter-bak），装完逐条列出
+CHANGED: list[str] = []  # 改过的设置文件（改之前都留了 *.lmemory-bak），装完逐条列出
 CREATED: list[str] = []  # 新建的文件和文件夹
 
 
 def backup(cfg: Path) -> None:
-    """Before KRouter changes a settings file: keep a copy next to it (`*.krouter-bak`) and list it at the end."""
+    """Before Lmemory changes a settings file: keep a copy next to it (`*.lmemory-bak`) and list it at the end."""
     if cfg.exists():
-        shutil.copy2(cfg, cfg.with_name(cfg.name + ".krouter-bak"))
+        shutil.copy2(cfg, cfg.with_name(cfg.name + ".lmemory-bak"))
         if str(cfg) not in CHANGED:
             CHANGED.append(str(cfg))
     elif str(cfg) not in CREATED:
@@ -278,23 +278,23 @@ def probe(argv: list[str], **kw) -> subprocess.CompletedProcess | None:
 def recorded_vault() -> str:
     """The memory folder an earlier install recorded, when it is still there: a second install (an upgrade) keeps
     using it, whatever language this terminal now says (1.x picked the folder name from the system's language)."""
-    from krouter_home import vault_path
+    from lmemory_home import vault_path
 
     raw = vault_path()
     return raw if raw and Path(raw).expanduser().is_dir() else ""
 
 
 def default_vault(lang: str) -> Path:
-    return Path.home() / "Documents" / ("第二大脑" if lang == "zh" else "Second Brain")
+    return Path.home() / "Documents" / ("Lmemory 记忆库" if lang == "zh" else "Lmemory Vault")
 
 
 DEFAULT_MARKS = ("Agent第二大脑.md", "90 系统文件", "05 时间日志", "02 经验与方法", "01 项目")
-sys.path.insert(0, str(ROOT / "skill/krouter/scripts"))
+sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
 import zones  # noqa: E402
 
 
 def layout_for(vault: Path, lang: str) -> Path | None:
-    """The names a vault is laid down with: its own `krouter-zones.psv`; else, for an English vault that does not
+    """The names a vault is laid down with: its own `lmemory-zones.psv`; else, for an English vault that does not
     already use the default (Chinese) names, `zones_en.psv`; else None (the default names)."""
     own = vault / zones.ZONES_FILE
     if own.is_file():
@@ -307,7 +307,7 @@ def layout_for(vault: Path, lang: str) -> Path | None:
 def vault_state(vault: Path) -> str:
     if not vault.exists() or (vault.is_dir() and not any(p for p in vault.iterdir() if p.name != ".DS_Store")):
         return "new"
-    if (vault / "Agent第二大脑.md").is_file() or (vault / "krouter-zones.psv").is_file() \
+    if (vault / "Agent第二大脑.md").is_file() or (vault / "lmemory-zones.psv").is_file() \
             or (vault / "90 系统文件" / "自动化" / "日更健康.md").is_file():
         return "ours"
     return "merge"
@@ -317,7 +317,7 @@ def lay_down(template: Path, vault: Path, dry: bool, lang: str = "zh") -> list[s
     """Copy template files that are missing in the vault, under the vault's names (`layout_for`). Never overwrites."""
     table = layout_for(vault, lang)
     if table is not None:
-        sample = ROOT / "skill/krouter/scripts/canonical_sources.psv"
+        sample = ROOT / "skill/lmemory/scripts/canonical_sources.psv"
         return zones.lay_out(template, vault, dry, table, sample if template == ROOT / "template" else None)
     added = []
     for src in sorted(template.rglob("*")):
@@ -335,34 +335,34 @@ def lay_down(template: Path, vault: Path, dry: bool, lang: str = "zh") -> list[s
 
 
 def skill_home() -> Path:
-    return Path(os.environ.get("KROUTER_SKILL_HOME") or Path.home() / ".agents/skills/krouter")
+    return Path(os.environ.get("LMEMORY_SKILL_HOME") or Path.home() / ".agents/skills/lmemory")
 
 
-LEGACY_SKILL = ".agents/skills/krouter-obsidian"  # 2.0 以前的安装目录；升级后留成指向新目录的软链
+LEGACY_SKILL = ".agents/skills/lmemory-obsidian"  # 2.0 以前的安装目录；升级后留成指向新目录的软链
 
 
 def legacy_skill_home() -> Path | None:
     """The pre-2.0 install directory, when it is still a real directory (not yet upgraded). None with a custom path."""
-    if os.environ.get("KROUTER_SKILL_HOME"):
+    if os.environ.get("LMEMORY_SKILL_HOME"):
         return None
     old = Path.home() / LEGACY_SKILL
     return old if old.is_dir() and not old.is_symlink() else None
 
 
 def legacy_timer() -> bool:
-    """A nightly job installed before 2.0 still runs the router from the old `skill/krouter-obsidian` folder."""
+    """A nightly job installed before 2.0 still runs the router from the old `skill/lmemory-obsidian` folder."""
     home = Path.home()
     texts = []
-    for f in (home / "Library/LaunchAgents/local.dsh-krouter.daily-evolution.plist",
-              home / ".config/systemd/user/dsh-krouter-daily.service"):
+    for f in (home / "Library/LaunchAgents/local.dsh-lmemory.daily-evolution.plist",
+              home / ".config/systemd/user/dsh-lmemory-daily.service"):
         try:
             texts.append(f.read_text(encoding="utf-8", errors="replace"))
         except OSError:
             pass
     if WINDOWS:
-        res = probe(["schtasks", "/Query", "/TN", "KRouter daily evolution", "/XML"])
+        res = probe(["schtasks", "/Query", "/TN", "Lmemory daily evolution", "/XML"])
         texts.append((res.stdout or "") if res else "")
-    return any("krouter-obsidian" in t for t in texts)
+    return any("lmemory-obsidian" in t for t in texts)
 
 
 def install_posix(vault: Path, dry: bool) -> int:
@@ -375,23 +375,23 @@ def install_posix(vault: Path, dry: bool) -> int:
         print(f"    {'replace' if skill.exists() else 'create'}: {skill}/ (the router; your alias table is kept)")
         if legacy_skill_home() is not None:
             print(f"    move: {legacy_skill_home()}/ → {skill}/, the old path left as a link to it")
-        if os.environ.get("KROUTER_NO_CURSOR_RULES") != "1":
-            for f in (os.environ.get("KROUTER_CURSOR_RULE") or home / ".cursor/rules/krouter.mdc",
-                      os.environ.get("KROUTER_ASK_RULE") or home / ".cursor/rules/ask-product.mdc"):
+        if os.environ.get("LMEMORY_NO_CURSOR_RULES") != "1":
+            for f in (os.environ.get("LMEMORY_CURSOR_RULE") or home / ".cursor/rules/lmemory.mdc",
+                      os.environ.get("LMEMORY_ASK_RULE") or home / ".cursor/rules/lmemory-ask-product.mdc"):
                 print(f"    write: {f}")
-        vf = os.environ.get("KROUTER_VAULT_FILE") or Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "krouter/vault"
+        vf = os.environ.get("LMEMORY_VAULT_FILE") or Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "lmemory/vault"
         print(f"    write: {vf} (where the vault is, for hooks and the MCP server)")
-        print(f"    set: lamp, self_evolution_key, krouter_writer on {zones.path(vault, '90 系统文件/自动化/日更健康.md')}")
+        print(f"    set: lamp, self_evolution_key, lmemory_writer on {zones.path(vault, '90 系统文件/自动化/日更健康.md')}")
         return 0
-    return subprocess.run(argv, env={**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_BOOTSTRAP": "1"}).returncode
+    return subprocess.run(argv, env={**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_BOOTSTRAP": "1"}).returncode
 
 
 def install_windows(vault: Path, dry: bool, timer: bool) -> int:
     """install.sh, for Windows: skill (keeping the alias table), agent rules, alias table into the vault, timer."""
     home = Path.home()
-    skill = Path(os.environ.get("KROUTER_SKILL_HOME") or home / ".agents/skills/krouter")
-    rules = Path(os.environ.get("KROUTER_CURSOR_RULE") or home / ".cursor/rules/krouter.mdc")
-    ask = Path(os.environ.get("KROUTER_ASK_RULE") or home / ".cursor/rules/ask-product.mdc")
+    skill = Path(os.environ.get("LMEMORY_SKILL_HOME") or home / ".agents/skills/lmemory")
+    rules = Path(os.environ.get("LMEMORY_CURSOR_RULE") or home / ".cursor/rules/lmemory.mdc")
+    ask = Path(os.environ.get("LMEMORY_ASK_RULE") or home / ".cursor/rules/lmemory-ask-product.mdc")
     if dry:
         print(f"  copy skill → {skill}\n  rules → {rules.parent}\n  timer: {'scheduled task' if timer else 'skipped'}")
         return 0
@@ -404,7 +404,7 @@ def install_windows(vault: Path, dry: bool, timer: bool) -> int:
             kept[name] = p.read_bytes()
     if skill.exists():
         shutil.rmtree(skill)
-    shutil.copytree(ROOT / "skill/krouter", skill)
+    shutil.copytree(ROOT / "skill/lmemory", skill)
     for name, data in kept.items():
         (skill / "scripts" / name).write_bytes(data)
     if legacy is not None:  # 2.0 以前的目录：删掉，原处留一个链接（Windows 建链接要权限，不行就用目录联接）
@@ -414,18 +414,18 @@ def install_windows(vault: Path, dry: bool, timer: bool) -> int:
         except OSError:
             probe(["cmd", "/c", "mklink", "/J", str(legacy), str(skill)])
         print(f"moved: {legacy} → {skill}")
-    old_rule = None if os.environ.get("KROUTER_CURSOR_RULE") else home / ".cursor/rules/krouter-obsidian.mdc"
-    if os.environ.get("KROUTER_NO_CURSOR_RULES") != "1":
+    old_rule = None if os.environ.get("LMEMORY_CURSOR_RULE") else home / ".cursor/rules/lmemory-obsidian.mdc"
+    if os.environ.get("LMEMORY_NO_CURSOR_RULES") != "1":
         rules.parent.mkdir(parents=True, exist_ok=True)
         ask.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / "extras/cursor/krouter.mdc", rules)
-        shutil.copy2(ROOT / "extras/cursor/ask-product.mdc", ask)
+        shutil.copy2(ROOT / "extras/cursor/lmemory.mdc", rules)
+        shutil.copy2(ROOT / "extras/cursor/lmemory-ask-product.mdc", ask)
         if old_rule is not None and old_rule.is_file() and "route_knowledge" in old_rule.read_text(encoding="utf-8", errors="replace"):
             old_rule.unlink()
     table = zones.path(vault, "90 系统文件/canonical_sources.psv")
     if not table.exists() and table.parent.is_dir():
         old = kept.get("canonical_sources.psv")
-        sample = (ROOT / "skill/krouter/scripts/canonical_sources.psv").read_bytes()
+        sample = (ROOT / "skill/lmemory/scripts/canonical_sources.psv").read_bytes()
         table.write_bytes(old if old and old != sample else sample)
     env = {**os.environ, "OBSIDIAN_VAULT": str(vault)}
     subprocess.run([sys.executable, str(ROOT / "extras/host-daily-evolution/resolve.py"), "--sync-health", "--offline"],
@@ -456,7 +456,7 @@ def model_lane(vault: Path) -> str:
 
 def ask_tty(prompt: str) -> str | None:
     """Ask on the terminal even when stdin is the piped install script (`curl … | sh`). None: no terminal."""
-    if os.environ.get("KROUTER_NO_PROMPT") == "1":
+    if os.environ.get("LMEMORY_NO_PROMPT") == "1":
         return None
     if WINDOWS:
         if not sys.stdin or not sys.stdin.isatty():
@@ -476,7 +476,7 @@ def ask_tty(prompt: str) -> str | None:
 
 def nightly_preview(vault: Path) -> tuple[str, str, int, int]:
     """(lane kind, CLI name, pages that would be sent, est tokens) — from resolve --status and nightly --dry-run."""
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1"}
     kind, cli = "", ""
     res = subprocess.run([sys.executable, str(ROOT / "extras/host-daily-evolution/resolve.py"), "--status"], env=env,
                          capture_output=True, text=True, timeout=180)
@@ -489,13 +489,13 @@ def nightly_preview(vault: Path) -> tuple[str, str, int, int]:
     except (ValueError, IndexError):
         pass
     pages = tokens = 0
-    dry = subprocess.run([sys.executable, str(ROOT / "skill/krouter/scripts/nightly.py"), "--vault", str(vault),
+    dry = subprocess.run([sys.executable, str(ROOT / "skill/lmemory/scripts/nightly.py"), "--vault", str(vault),
                           "--dry-run"], env=env, capture_output=True, text=True, timeout=600)
     try:
         tokens = int(json.loads(dry.stdout).get("est_tokens_total") or 0)
     except ValueError:
         pass
-    cards = subprocess.run([sys.executable, str(ROOT / "skill/krouter/scripts/answer_cards.py"), "--vault", str(vault),
+    cards = subprocess.run([sys.executable, str(ROOT / "skill/lmemory/scripts/answer_cards.py"), "--vault", str(vault),
                             "--dry-run"], env=env, capture_output=True, text=True, timeout=600)
     try:
         pages = len(json.loads(cards.stdout.strip().splitlines()[-1]).get("would_send_pages") or [])
@@ -516,7 +516,7 @@ def decide_timer(args: argparse.Namespace, vault: Path, t: dict) -> tuple[bool, 
     perm = t.get(f"perm_{kind}", t["perm_other"]) if kind else ""
     sub = ""
     if kind not in ("", "key"):
-        sys.path.insert(0, str(ROOT / "skill/krouter/scripts"))
+        sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
         import llm
 
         sub = t["sub_note"].format(cli=cli, n=llm.host_cli_max())  # 借订阅：先说清额度、上限、怎么关
@@ -527,7 +527,7 @@ def decide_timer(args: argparse.Namespace, vault: Path, t: dict) -> tuple[bool, 
     return answer.strip().lower() in {"y", "yes", "是", "好", "开"}, True
 
 
-IMPORT = ROOT / "skill/krouter/scripts/import_sessions.py"
+IMPORT = ROOT / "skill/lmemory/scripts/import_sessions.py"
 
 
 def capture_consented() -> bool:
@@ -559,7 +559,7 @@ DISTILL_AT_INSTALL = 8  # 安装时只提炼最近几个会话，免得一装就
 
 
 def run_import(vault: Path, *extra: str) -> dict:
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1"}
     res = subprocess.run([sys.executable, str(IMPORT), "--vault", str(vault), *extra], env=env, capture_output=True,
                          text=True, timeout=3600)
     try:
@@ -586,7 +586,7 @@ def consent_from_now() -> None:
 def decide_import(args: argparse.Namespace, vault: Path, t: dict, lane_kind: str) -> tuple[bool, bool, bool]:
     """(import, distill, worth saying how to do it later). Copying chat text into the vault, and sending it to a
     model, each need a yes: a flag, or `y` at the prompt. No terminal to ask on: nothing is imported."""
-    if args.no_import or os.environ.get("KROUTER_NO_IMPORT") == "1":
+    if args.no_import or os.environ.get("LMEMORY_NO_IMPORT") == "1":
         return False, False, False
     if not (args.ask or args.import_sessions or args.import_distill):
         return False, False, False  # 默认：不导入以前的会话，只从现在起记（main 里记下同意、接上钩子）
@@ -609,11 +609,11 @@ def decide_import(args: argparse.Namespace, vault: Path, t: dict, lane_kind: str
     return True, bool(answer and answer.strip().lower() in {"y", "yes", "是", "好"}), False
 
 
-CLAUDE_MEM = ROOT / "skill/krouter/scripts/import_claude_mem.py"
+CLAUDE_MEM = ROOT / "skill/lmemory/scripts/import_claude_mem.py"
 
 
 def run_claude_mem(vault: Path, *extra: str) -> dict:
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1"}
     res = subprocess.run([sys.executable, str(CLAUDE_MEM), "--vault", str(vault), *extra], env=env,
                          capture_output=True, text=True, timeout=3600)
     try:
@@ -625,7 +625,7 @@ def run_claude_mem(vault: Path, *extra: str) -> dict:
 def offer_claude_mem(args: argparse.Namespace, vault: Path, t: dict, distill: bool) -> dict:
     """claude-mem users already have a memory: offer to bring it in. Same rule as the sessions — a yes or a flag
     (`--import`, `--all`, or `y` with `--ask`); the default install imports nothing from the past."""
-    if args.no_import or os.environ.get("KROUTER_NO_IMPORT") == "1":
+    if args.no_import or os.environ.get("LMEMORY_NO_IMPORT") == "1":
         return {}
     if not (args.ask or args.import_sessions or args.import_distill):
         return {}
@@ -712,9 +712,9 @@ MCP_APPS = (
 
 def app_config(app: dict) -> Path | None:
     """The app's MCP settings file when the app is installed (its folder exists); else None.
-    `KROUTER_MCP_CONFIG_<ID>` points it elsewhere (tests; an unusual install)."""
-    env = "KROUTER_MCP_CONFIG_" + app["id"].upper().replace("-", "_")
-    raw = os.environ.get(env, "") or (os.environ.get("KROUTER_CLAUDE_DESKTOP_CONFIG", "") if app["id"] == "claude-desktop" else "")
+    `LMEMORY_MCP_CONFIG_<ID>` points it elsewhere (tests; an unusual install)."""
+    env = "LMEMORY_MCP_CONFIG_" + app["id"].upper().replace("-", "_")
+    raw = os.environ.get(env, "") or (os.environ.get("LMEMORY_CLAUDE_DESKTOP_CONFIG", "") if app["id"] == "claude-desktop" else "")
     if raw:
         return Path(raw).expanduser()
     return app["file"]() if app["dir"]().is_dir() else None
@@ -724,8 +724,8 @@ def claude_desktop_running() -> bool:
     """Claude Desktop is open right now. macOS: a process whose executable is `…/Claude.app/Contents/MacOS/Claude`
     (case-sensitive, so Claude Code's own `claude` binaries do not count). Windows: a `Claude` process whose path is
     under `AnthropicClaude` or the Store's `WindowsApps` (the desktop app, not the `claude.exe` CLI). Elsewhere there is
-    no desktop app. `KROUTER_CLAUDE_DESKTOP_RUNNING=1|0` overrides (tests)."""
-    forced = os.environ.get("KROUTER_CLAUDE_DESKTOP_RUNNING", "")
+    no desktop app. `LMEMORY_CLAUDE_DESKTOP_RUNNING=1|0` overrides (tests)."""
+    forced = os.environ.get("LMEMORY_CLAUDE_DESKTOP_RUNNING", "")
     if forced in ("0", "1"):
         return forced == "1"
     try:
@@ -751,9 +751,9 @@ def desktop_extension(py: str) -> Path | None:
     sys.path.insert(0, str(builder.parent))
     try:
         import build_mcpb
-        from krouter_home import vault_file, vault_path
+        from lmemory_home import vault_file, vault_path
 
-        return build_mcpb.build(vault_file().parent / "KRouter.mcpb", vault_path(), py)
+        return build_mcpb.build(vault_file().parent / "Lmemory.mcpb", vault_path(), py)
     except Exception:  # noqa: BLE001 - 做不出扩展包就只给"退出后重跑"那条路
         return None
 
@@ -767,15 +767,15 @@ def claude_desktop_config() -> Path | None:
 
 
 def register_app(app: dict, server: list[str], dry: bool, t: dict | None = None) -> bool:
-    """Add KRouter to one app's MCP settings, keeping everything else in the file. Never touches a file it cannot
-    parse, or a `krouter` entry that is not KRouter's mcp_server.py; keeps a copy of the file it changes."""
+    """Add Lmemory to one app's MCP settings, keeping everything else in the file. Never touches a file it cannot
+    parse, or a `lmemory` entry that is not Lmemory's mcp_server.py; keeps a copy of the file it changes."""
     cfg = app_config(app)
     if cfg is None:
         return False
     running = app["id"] == "claude-desktop" and claude_desktop_running()
     if dry:
         print(f"  {app['name']}: " + ("running now, so its settings file would be left alone and an extension "
-                                     "(KRouter.mcpb) built instead" if running else f"add {app['key']}.krouter to {cfg}"))
+                                     "(Lmemory.mcpb) built instead" if running else f"add {app['key']}.lmemory to {cfg}"))
         return False
     if running:
         mcpb = desktop_extension(server[0])
@@ -795,13 +795,13 @@ def register_app(app: dict, server: list[str], dry: bool, t: dict | None = None)
         return False
     servers = data.setdefault(app["key"], {})
     entry = app["entry"](server[0], server[1:])
-    old = servers.get("krouter")
+    old = servers.get("lmemory")
     if old == entry:
         return True
     if old is not None and "mcp_server.py" not in json.dumps(old):
-        return False  # 别人的 krouter 条目，不动
+        return False  # 别人的 lmemory 条目，不动
     backup(cfg)
-    servers["krouter"] = entry
+    servers["lmemory"] = entry
     cfg.parent.mkdir(parents=True, exist_ok=True)
     tmp = cfg.with_name(cfg.name + ".tmp")
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -810,7 +810,7 @@ def register_app(app: dict, server: list[str], dry: bool, t: dict | None = None)
 
 
 def unregister_apps(dry: bool) -> list[str]:
-    """Take our krouter entry (the one pointing at mcp_server.py) out of every app's MCP settings; keep the rest."""
+    """Take our lmemory entry (the one pointing at mcp_server.py) out of every app's MCP settings; keep the rest."""
     gone = []
     for app in MCP_APPS:
         cfg = app_config(app)
@@ -821,20 +821,20 @@ def unregister_apps(dry: bool) -> list[str]:
         except (OSError, ValueError):
             continue
         servers = data.get(app["key"]) if isinstance(data, dict) else None
-        if not isinstance(servers, dict) or "mcp_server.py" not in json.dumps(servers.get("krouter", "")):
+        if not isinstance(servers, dict) or "mcp_server.py" not in json.dumps(servers.get("lmemory", "")):
             continue
         if app["id"] == "claude-desktop" and claude_desktop_running():
             cmd = f'{"python" if WINDOWS else "python3"} "{ROOT / "scripts" / "bootstrap.py"}" --unregister-mcp'
             print("HOST ACTION: " + MSG["en"]["desktop_uninstall_running"].format(cmd=cmd))
             continue
         if dry:
-            print(f"would: remove {app['key']}.krouter from {cfg}")
+            print(f"would: remove {app['key']}.lmemory from {cfg}")
             continue
-        servers.pop("krouter")
+        servers.pop("lmemory")
         tmp = cfg.with_name(cfg.name + ".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         os.replace(tmp, cfg)
-        print(f"removed: MCP server krouter ({app['name']})")
+        print(f"removed: MCP server lmemory ({app['name']})")
         gone.append(app["id"])
     return gone
 
@@ -860,7 +860,7 @@ def codex_used() -> Path:
     return home / ".not-used"
 
 
-# 每轮记下来的钩子：Codex 和 Cursor 各自的事件名 → session_hook.py 的动作。格式照各家官方文档，2026-11-09 核对；
+# 每轮记下来的钩子：Codex 和 Cursor 各自的事件名 → lmemory_capture.py 的动作。格式照各家官方文档，2026-11-09 核对；
 # Codex 那份用 codex-cli 0.155 实测过（事件必须放在顶层 "hooks" 下面，否则整份被跳过）。Claude Code 的在插件里。
 HOOK_APPS = (
     {"id": "codex", "name": "Codex", "dir": lambda: codex_used(), "file": lambda: codex_home() / "hooks.json",
@@ -873,8 +873,8 @@ HOOK_APPS = (
 
 
 def hooks_config(app: dict) -> Path | None:
-    """The app's hooks file when the app is installed (its folder exists); `KROUTER_HOOKS_CONFIG_<ID>` points it elsewhere."""
-    raw = os.environ.get("KROUTER_HOOKS_CONFIG_" + app["id"].upper(), "")
+    """The app's hooks file when the app is installed (its folder exists); `LMEMORY_HOOKS_CONFIG_<ID>` points it elsewhere."""
+    raw = os.environ.get("LMEMORY_HOOKS_CONFIG_" + app["id"].upper(), "")
     if raw:
         return Path(raw).expanduser()
     return app["file"]() if app["dir"]().is_dir() else None
@@ -890,7 +890,7 @@ def _arg(x: str) -> str:
 
 def _ours(entry, agent: str) -> bool:
     text = json.dumps(entry, ensure_ascii=False)
-    return "session_hook.py" in text and f"--agent {agent}" in text
+    return "lmemory_capture.py" in text and f"--agent {agent}" in text
 
 
 def _write_json(cfg: Path, data: dict) -> None:
@@ -901,7 +901,7 @@ def _write_json(cfg: Path, data: dict) -> None:
 
 
 def _drop_ours(hooks: dict, app: dict) -> bool:
-    """Take KRouter's entries out of `hooks` (Codex: inside each matcher group); True when something was removed."""
+    """Take Lmemory's entries out of `hooks` (Codex: inside each matcher group); True when something was removed."""
     gone = False
     for event in list(hooks):
         groups = hooks[event]
@@ -945,18 +945,18 @@ def codex_hooks_off() -> bool:
 def register_hooks(t: dict, dry: bool, apps: set[str] | None = None) -> list[str]:
     """Add the turn-by-turn hooks to Codex and Cursor when they are installed, keeping every hook already there.
     Never touches a file it cannot parse; keeps a copy of a file it changes; re-running replaces only its own entries."""
-    if os.environ.get("KROUTER_NO_HOOKS") == "1":
+    if os.environ.get("LMEMORY_NO_HOOKS") == "1":
         return []
-    skill = Path(os.environ.get("KROUTER_SKILL_HOME") or Path.home() / ".agents/skills/krouter")
+    skill = Path(os.environ.get("LMEMORY_SKILL_HOME") or Path.home() / ".agents/skills/lmemory")
     py = sys.executable if WINDOWS else (shutil.which("python3") or sys.executable)
-    script = str(skill / "scripts" / "session_hook.py")
+    script = str(skill / "scripts" / "lmemory_capture.py")
     done = []
     for app in HOOK_APPS:
         cfg = hooks_config(app)
         if cfg is None or not wanted(app["id"], apps):
             continue
         if dry:
-            print(f"  {app['name']}: add KRouter's hooks ({', '.join(e for e, _, _ in app['events'])}) to {cfg}")
+            print(f"  {app['name']}: add Lmemory's hooks ({', '.join(e for e, _, _ in app['events'])}) to {cfg}")
             continue
         try:
             text = cfg.read_text(encoding="utf-8") if cfg.exists() else ""
@@ -993,7 +993,7 @@ def register_hooks(t: dict, dry: bool, apps: set[str] | None = None) -> list[str
 
 
 def unregister_hooks(dry: bool) -> list[str]:
-    """Take KRouter's entries out of Codex's and Cursor's hooks files; keep everything else."""
+    """Take Lmemory's entries out of Codex's and Cursor's hooks files; keep everything else."""
     gone = []
     for app in HOOK_APPS:
         cfg = hooks_config(app)
@@ -1007,11 +1007,11 @@ def unregister_hooks(dry: bool) -> list[str]:
         if not isinstance(hooks, dict) or not _drop_ours(json.loads(json.dumps(hooks)), app):
             continue
         if dry:
-            print(f"would: remove KRouter's hooks from {cfg}")
+            print(f"would: remove Lmemory's hooks from {cfg}")
             continue
         _drop_ours(hooks, app)
         _write_json(cfg, data)
-        print(f"removed: KRouter hooks ({app['name']})")
+        print(f"removed: Lmemory hooks ({app['name']})")
         gone.append(app["id"])
     return gone
 
@@ -1019,7 +1019,7 @@ def unregister_hooks(dry: bool) -> list[str]:
 def install_plugin(exe: str) -> bool:
     """The Claude Code plugin (session hooks) from this very release, added as a local marketplace, so what installs is
     the checksummed package, not GitHub's `main`. An older Claude Code without `claude plugin` just gets the hint."""
-    if os.environ.get("KROUTER_NO_PLUGIN") == "1" or not (ROOT / ".claude-plugin" / "marketplace.json").is_file():
+    if os.environ.get("LMEMORY_NO_PLUGIN") == "1" or not (ROOT / ".claude-plugin" / "marketplace.json").is_file():
         return False
     backup(Path.home() / ".claude/settings.json")  # 插件和它的市场记在这里
 
@@ -1027,9 +1027,9 @@ def install_plugin(exe: str) -> bool:
         return subprocess.run([exe, "plugin", *a], capture_output=True, text=True, timeout=180).returncode == 0
 
     try:
-        if run("install", "krouter@krouter"):  # 已经加过 krouter 市场（GitHub 或本地）就直接装
+        if run("install", "lmemory@lmemory"):  # 已经加过 lmemory 市场（GitHub 或本地）就直接装
             return True
-        return run("marketplace", "add", str(ROOT)) and run("install", "krouter@krouter")
+        return run("marketplace", "add", str(ROOT)) and run("install", "lmemory@lmemory")
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -1040,10 +1040,10 @@ def wanted(app_id: str, apps: set[str] | None) -> bool:
 
 
 def uninstall_plugin(dry: bool) -> list[str]:
-    """Disable and remove the Claude Code plugin, and the `krouter` marketplace when it points at a folder on this
-    machine (the one the installer added: a clone or ~/.dsh-krouter/<tag>). A GitHub marketplace you added is kept."""
+    """Disable and remove the Claude Code plugin, and the `lmemory` marketplace when it points at a folder on this
+    machine (the one the installer added: a clone or ~/.dsh-lmemory/<tag>). A GitHub marketplace you added is kept."""
     exe = shutil.which("claude")
-    if not exe or os.environ.get("KROUTER_NO_PLUGIN") == "1":
+    if not exe or os.environ.get("LMEMORY_NO_PLUGIN") == "1":
         return []
     gone = []
 
@@ -1052,22 +1052,22 @@ def uninstall_plugin(dry: bool) -> list[str]:
 
     try:
         listed = run("list", "--json")
-        if listed.returncode == 0 and "krouter@krouter" in listed.stdout:
+        if listed.returncode == 0 and "lmemory@lmemory" in listed.stdout:
             if dry:
-                print("would: claude plugin uninstall krouter@krouter")
-            elif run("uninstall", "krouter@krouter").returncode == 0:
-                print("removed: Claude Code plugin krouter@krouter")
+                print("would: claude plugin uninstall lmemory@lmemory")
+            elif run("uninstall", "lmemory@lmemory").returncode == 0:
+                print("removed: Claude Code plugin lmemory@lmemory")
                 gone.append("plugin")
         try:
             rows = json.loads(run("marketplace", "list", "--json").stdout or "[]")
         except ValueError:
             rows = []
         for m in rows if isinstance(rows, list) else []:
-            if isinstance(m, dict) and m.get("name") == "krouter" and m.get("source") == "directory":
+            if isinstance(m, dict) and m.get("name") == "lmemory" and m.get("source") == "directory":
                 if dry:
-                    print(f"would: claude plugin marketplace remove krouter ({m.get('path')})")
-                elif run("marketplace", "remove", "krouter").returncode == 0:
-                    print(f"removed: Claude Code marketplace krouter ({m.get('path')})")
+                    print(f"would: claude plugin marketplace remove lmemory ({m.get('path')})")
+                elif run("marketplace", "remove", "lmemory").returncode == 0:
+                    print(f"removed: Claude Code marketplace lmemory ({m.get('path')})")
                     gone.append("marketplace")
     except (OSError, subprocess.TimeoutExpired):
         pass
@@ -1076,32 +1076,32 @@ def uninstall_plugin(dry: bool) -> list[str]:
 
 def register_mcp(t: dict, dry: bool, apps: set[str] | None = None, plugin: bool = True) -> list[str]:
     """Register the MCP server with the agent CLIs that are installed (user scope). Re-running is harmless."""
-    if os.environ.get("KROUTER_NO_MCP") == "1":
+    if os.environ.get("LMEMORY_NO_MCP") == "1":
         return []
-    skill = Path(os.environ.get("KROUTER_SKILL_HOME") or Path.home() / ".agents/skills/krouter")
+    skill = Path(os.environ.get("LMEMORY_SKILL_HOME") or Path.home() / ".agents/skills/lmemory")
     # python3 on PATH outlives a versioned interpreter path (a Homebrew upgrade moves python@3.x)
     py = sys.executable if WINDOWS else (shutil.which("python3") or sys.executable)
     server = [py, str(skill / "scripts" / "mcp_server.py")]
     done = []
-    for cli, argv in (("claude", ["mcp", "add", "--scope", "user", "krouter", "--"]),
-                      ("codex", ["mcp", "add", "krouter", "--"])):
+    for cli, argv in (("claude", ["mcp", "add", "--scope", "user", "lmemory", "--"]),
+                      ("codex", ["mcp", "add", "lmemory", "--"])):
         exe = shutil.which(cli)
         if not exe or not wanted(cli, apps):
             continue
         if dry:
             print("  " + " ".join([cli, *argv, *server]))
-            if cli == "claude" and plugin and os.environ.get("KROUTER_NO_PLUGIN") != "1" \
+            if cli == "claude" and plugin and os.environ.get("LMEMORY_NO_PLUGIN") != "1" \
                     and (ROOT / ".claude-plugin" / "marketplace.json").is_file():
                 print(f"  claude plugin marketplace add {ROOT}   (writes extraKnownMarketplaces in ~/.claude/settings.json)")
-                print("  claude plugin install krouter@krouter   (enables its session hooks: SessionStart, "
+                print("  claude plugin install lmemory@lmemory   (enables its session hooks: SessionStart, "
                       "UserPromptSubmit, Stop, SessionEnd)")
             continue
         if cli == "claude":
             backup(Path.home() / ".claude.json")  # claude mcp add --scope user 写这里
-            probe([exe, "mcp", "remove", "--scope", "user", "krouter"], timeout=60)
+            probe([exe, "mcp", "remove", "--scope", "user", "lmemory"], timeout=60)
         else:
             backup(codex_home() / "config.toml")  # codex mcp add 写这里
-            probe([exe, "mcp", "remove", "krouter"], timeout=60)
+            probe([exe, "mcp", "remove", "lmemory"], timeout=60)
         try:
             ok = subprocess.run([exe, *argv, *server], capture_output=True, text=True, timeout=60).returncode == 0
         except (OSError, subprocess.TimeoutExpired):
@@ -1140,7 +1140,7 @@ def open_in_obsidian(vault: Path) -> bool:
 
 def interactive() -> bool:
     """Run by a person at a terminal (the one-line install's output goes to it), not by an agent capturing output."""
-    if os.environ.get("KROUTER_NO_PROMPT") == "1":
+    if os.environ.get("LMEMORY_NO_PROMPT") == "1":
         return False
     try:
         return sys.stdout.isatty()
@@ -1154,7 +1154,7 @@ def should_open(args: argparse.Namespace) -> bool:
 
 
 def stable_root() -> Path:
-    """This copy of KRouter, by the path that survives upgrades: ~/.dsh-krouter/current when it points here."""
+    """This copy of Lmemory, by the path that survives upgrades: ~/.dsh-lmemory/current when it points here."""
     current = ROOT.parent / "current"
     try:
         if current.is_symlink() and current.resolve() == ROOT:
@@ -1165,14 +1165,14 @@ def stable_root() -> Path:
 
 
 def cli_path() -> str:
-    """How to call `krouter` right now: on PATH when pipx / uvx put it there, else this copy's own launcher."""
-    if shutil.which("krouter"):
-        return "krouter"
+    """How to call `lmemory` right now: on PATH when pipx / uvx put it there, else this copy's own launcher."""
+    if shutil.which("lmemory"):
+        return "lmemory"
     if WINDOWS:
         # One command, no `&&` and no `set`: the same line runs in cmd, PowerShell 5.1 and PowerShell 7. The launcher puts
-        # sdk/ on the path itself (the old `set "PYTHONPATH=…" && python -m krouter.cli` failed in all three but cmd).
-        return f'python "{stable_root() / "scripts" / "krouter_run.py"}"'
-    return str(stable_root() / "scripts" / "krouter")
+        # sdk/ on the path itself (the old `set "PYTHONPATH=…" && python -m lmemory.cli` failed in all three but cmd).
+        return f'python "{stable_root() / "scripts" / "lmemory_run.py"}"'
+    return str(stable_root() / "scripts" / "lmemory")
 
 
 def cli_line(t: dict) -> str:
@@ -1186,22 +1186,22 @@ def cli_line(t: dict) -> str:
 def remembering_timer() -> bool:
     """A nightly job installed on this machine (launchd / systemd / crontab / Windows task)."""
     if WINDOWS:
-        res = probe(["schtasks", "/Query", "/TN", "KRouter daily evolution"])
+        res = probe(["schtasks", "/Query", "/TN", "Lmemory daily evolution"])
         return bool(res and res.returncode == 0)
     home = Path.home()
-    if (home / "Library/LaunchAgents/local.dsh-krouter.daily-evolution.plist").is_file():
+    if (home / "Library/LaunchAgents/local.dsh-lmemory.daily-evolution.plist").is_file():
         return True
-    if (home / ".config/systemd/user/dsh-krouter-daily.timer").is_file():
+    if (home / ".config/systemd/user/dsh-lmemory-daily.timer").is_file():
         return True
     res = probe(["crontab", "-l"]) if shutil.which("crontab") else None  # 能找到却不能执行（沙箱）也当没有
-    return bool(res and res.returncode == 0 and "# dsh-krouter-daily" in (res.stdout or ""))
+    return bool(res and res.returncode == 0 and "# dsh-lmemory-daily" in (res.stdout or ""))
 
 
 def timer_took(t: dict) -> bool:
     """After `--timer` asked the installer for a nightly job: is one really there? A machine with no scheduler (a
     container, a minimal server) gets no job, and the summary, the health page and `doctor` must not say it did.
-    KROUTER_SKIP_TIMER=1 is the tests' and CI's explicit "do not load it": trusted as before."""
-    if os.environ.get("KROUTER_SKIP_TIMER") == "1" or remembering_timer():
+    LMEMORY_SKIP_TIMER=1 is the tests' and CI's explicit "do not load it": trusted as before."""
+    if os.environ.get("LMEMORY_SKIP_TIMER") == "1" or remembering_timer():
         return True
     print(t["timer_failed"])
     return False
@@ -1270,12 +1270,12 @@ def main() -> int:
     if args.minimal:
         args.no_import, args.no_timer, args.ask = True, True, False
         if apps is not None and "cursor" not in apps:
-            os.environ["KROUTER_NO_CURSOR_RULES"] = "1"
-        os.environ["KROUTER_NO_PLUGIN"] = "1"
+            os.environ["LMEMORY_NO_CURSOR_RULES"] = "1"
+        os.environ["LMEMORY_NO_PLUGIN"] = "1"
     if sys.version_info < (3, 9):
         print(t["py_old"].format(v=platform.python_version()))
         return 1
-    vault = Path(args.vault or os.environ.get("OBSIDIAN_VAULT") or recorded_vault() or default_vault(lang)).expanduser().resolve()
+    vault = Path(args.vault or os.environ.get("LMEMORY_VAULT") or os.environ.get("OBSIDIAN_VAULT") or recorded_vault() or default_vault(lang)).expanduser().resolve()
     state = vault_state(vault)
     template = template_for(lang)
     print(f"{t['plan']}: {t['vault_' + state]} → {vault}")
@@ -1283,15 +1283,15 @@ def main() -> int:
     planned = layout_for(vault, lang)
     if args.dry_run and planned is not None and not (vault / zones.ZONES_FILE).is_file():
         # 预演时库还没建：打出来的路径按它将要用的名字（英文库是 90 System/…），不按默认的中文名
-        os.environ["KROUTER_ZONES"] = str(planned)
+        os.environ["LMEMORY_ZONES"] = str(planned)
     if added and (state != "new" or args.dry_run):
         shown = added if args.dry_run else added[:12]  # 预演把每个文件都列出来
         print(f"  {t['added']}: {len(added)}" + "".join(f"\n    {a}" for a in shown) + ("\n    …" if len(added) > len(shown) else ""))
     had_skill = skill_home().exists()
-    rule_files = [Path(os.environ.get("KROUTER_CURSOR_RULE") or Path.home() / ".cursor/rules/krouter.mdc"),
-                  Path(os.environ.get("KROUTER_ASK_RULE") or Path.home() / ".cursor/rules/ask-product.mdc")]
+    rule_files = [Path(os.environ.get("LMEMORY_CURSOR_RULE") or Path.home() / ".cursor/rules/lmemory.mdc"),
+                  Path(os.environ.get("LMEMORY_ASK_RULE") or Path.home() / ".cursor/rules/lmemory-ask-product.mdc")]
     had_rules = [f.exists() for f in rule_files]
-    os.environ["KROUTER_NO_TIMER"] = "1"  # 先只装只读部分：库、路由、规则；夜间任务等宿主点头再装
+    os.environ["LMEMORY_NO_TIMER"] = "1"  # 先只装只读部分：库、路由、规则；夜间任务等宿主点头再装
     rc = install_windows(vault, args.dry_run, False) if WINDOWS else install_posix(vault, args.dry_run)
     if rc != 0:
         return rc
@@ -1308,18 +1308,18 @@ def main() -> int:
                                         else "only if run from a terminal and Obsidian is installed" if state == "new"
                                         else "no (existing vault)"))
         return 0
-    sys.path.insert(0, str(ROOT / "skill/krouter/scripts"))
-    from krouter_home import remember
+    sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
+    from lmemory_home import remember
 
     vf = remember(vault)  # agent、MCP、插件不用先 export 变量也找得到这个记忆文件夹
     if state == "new":
         CREATED.append(f"{vault}{os.sep} ({len(added)} files)")
     CREATED.append(f"{skill_home()}{os.sep}" + (" (replaced: upgrade)" if had_skill else ""))
-    if os.environ.get("KROUTER_NO_CURSOR_RULES") != "1":
+    if os.environ.get("LMEMORY_NO_CURSOR_RULES") != "1":
         CREATED.extend(f"{f}" + (" (replaced)" if had else "") for f, had in zip(rule_files, had_rules))
     CREATED.append(str(vf))
     mcp = register_mcp(t, False, apps, not args.minimal)
-    os.environ.pop("KROUTER_NO_TIMER", None)
+    os.environ.pop("LMEMORY_NO_TIMER", None)
     timer, asked = decide_timer(args, vault, t)
     if not timer and not args.no_timer and legacy_timer():
         timer = True  # 2.0 以前装过的夜间任务：宿主当时同意过，只把它重新登记到新路径
@@ -1333,10 +1333,10 @@ def main() -> int:
         cmd = f"{'python' if WINDOWS else 'python3'} \"{ROOT / 'scripts' / 'bootstrap.py'}\" --timer --vault \"{vault}\""
         print((t["timer_off"] if asked else t["timer_skip_noninteractive"]).format(cmd=cmd))
     lane = model_lane(vault)
-    keys = os.environ.get("KROUTER_KEYS_ENV") or str(Path.home() / ".dsh-krouter-keys.env")
+    keys = os.environ.get("LMEMORY_KEYS_ENV") or str(Path.home() / ".dsh-lmemory-keys.env")
     print(f"{t['model_ok']}: {lane}" if lane else t["model_none"].format(keys=keys))
     lane_kind = "" if not lane else ("key" if lane == "API key" else lane.split(" ")[0])
-    capture_only = not (args.no_import or os.environ.get("KROUTER_NO_IMPORT") == "1" or args.ask or args.import_sessions
+    capture_only = not (args.no_import or os.environ.get("LMEMORY_NO_IMPORT") == "1" or args.ask or args.import_sessions
                         or args.import_distill)
     do_import, do_distill, tell_later = decide_import(args, vault, t, lane_kind)
     imported = {}
@@ -1382,7 +1382,7 @@ def main() -> int:
         print(t["lookup_only"].format(cmd=cmd))
     if "claude" in mcp and "claude-plugin" not in mcp and not args.minimal:
         print(t["plugin_hint"])
-    skill = Path(os.environ.get("KROUTER_SKILL_HOME") or Path.home() / ".agents/skills/krouter")
+    skill = Path(os.environ.get("LMEMORY_SKILL_HOME") or Path.home() / ".agents/skills/lmemory")
     router = skill / "scripts" / ("route_knowledge.py" if WINDOWS else "route_knowledge.sh")
     if CREATED:
         print(t["created"] + "".join(f"\n  {p}" for p in CREATED))

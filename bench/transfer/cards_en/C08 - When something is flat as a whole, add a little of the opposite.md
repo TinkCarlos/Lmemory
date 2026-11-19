@@ -6,7 +6,7 @@ card_id: C08
 when: flat; bland; missing something; lacks depth
 source_ref: "[[05 时间日志/会话摘录/example C08]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When something is flat as a whole, add a little of the opposite

@@ -6,7 +6,7 @@ card_id: C12
 when: cannot say what they want; vague request; it just feels off
 source_ref: "[[05 时间日志/会话摘录/example C12]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When the requirement is vague, ask for one concrete example

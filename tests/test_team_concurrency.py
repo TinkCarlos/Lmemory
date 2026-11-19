@@ -46,7 +46,7 @@ def test_ten_concurrent_agents_lose_nothing_and_converge(run):
 
 
 def test_every_person_was_seen_and_no_token_was_logged(run):
-    whos = {r["who"] for r in run["results"] if r["ok"] and r["tool"] != "krouter_ask"}
+    whos = {r["who"] for r in run["results"] if r["ok"] and r["tool"] != "lmemory_ask"}
     assert whos == {p["name"] for p in run["people"]}
     assert not any(p["token"] in run["log"] for p in run["people"])
     assert '"who": "dev00"' in run["log"]  # the access log names the person instead

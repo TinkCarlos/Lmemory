@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Prototype: dense retrieval on the memory honesty bench, alone and combined with KRouter. Not part of the product.
+"""Prototype: dense retrieval on the memory honesty bench, alone and combined with Lmemory. Not part of the product.
 
 Embeddings run locally (fastembed, ONNX; the model is downloaded once), so questions never leave the machine. Model:
 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (English and Chinese), or any fastembed model through
-`KROUTER_DENSE_MODEL`; `BAAI/bge-m3` is registered here from the ONNX export in its own repository (CLS pooling). Pages are embedded as title +
-body without frontmatter; vectors are cached under `KROUTER_CACHE_DIR` (or a temp dir) by model and page hash.
+`LMEMORY_DENSE_MODEL`; `BAAI/bge-m3` is registered here from the ONNX export in its own repository (CLS pooling). Pages are embedded as title +
+body without frontmatter; vectors are cached under `LMEMORY_CACHE_DIR` (or a temp dir) by model and page hash.
 
-Variants, each with superseded pages handled like KRouter does:
+Variants, each with superseded pages handled like Lmemory does:
 - `dense`:  cosine top hit, superseded pages left out, refuse below a floor picked on the dev set (`run.pick_floor`).
-- `rescue`: KRouter first; when KRouter refuses, answer with its own best page if the dense top hit is that same page
-            and the dense score clears a floor picked on the dev set. KRouter's off-vault checks still apply first.
-- `gate`:   dense ranking, KRouter's refusal decision (refuse when KRouter refuses), superseded links followed.
+- `rescue`: Lmemory first; when Lmemory refuses, answer with its own best page if the dense top hit is that same page
+            and the dense score clears a floor picked on the dev set. Lmemory's off-vault checks still apply first.
+- `gate`:   dense ranking, Lmemory's refusal decision (refuse when Lmemory refuses), superseded links followed.
 
 Floors are always picked on a dev set of another vault when the run's vault has none: dev3 (vault2) for vault3, as
-`run.py`'s `bm25-floor` does. `--ci` adds 95% bootstrap intervals and paired ones against KRouter's default (same
+`run.py`'s `bm25-floor` does. `--ci` adds 95% bootstrap intervals and paired ones against Lmemory's default (same
 resamples and seed as `run.py`); on held-out sets only aggregates are printed.
 
     python3 bench/memory_honesty/dense.py --set dev3
-    KROUTER_DENSE_MODEL=BAAI/bge-m3 python3 bench/memory_honesty/dense.py --set heldout3 --variant agree --ci
+    LMEMORY_DENSE_MODEL=BAAI/bge-m3 python3 bench/memory_honesty/dense.py --set heldout3 --variant agree --ci
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ REPO = HERE.parents[1]
 spec = importlib.util.spec_from_file_location("mh_bench_dense", HERE / "run.py")
 bench = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bench)
-MODEL = os.environ.get("KROUTER_DENSE_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+MODEL = os.environ.get("LMEMORY_DENSE_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 _EMB = None
 
 
@@ -92,7 +92,7 @@ def pages() -> list[tuple[str, str, dict]]:
 
 
 def page_vectors() -> dict[str, list[float]]:
-    cache = Path(os.environ.get("KROUTER_DENSE_CACHE") or os.environ.get("KROUTER_CACHE_DIR") or tempfile.gettempdir()) / "krouter-dense"
+    cache = Path(os.environ.get("LMEMORY_DENSE_CACHE") or os.environ.get("LMEMORY_CACHE_DIR") or tempfile.gettempdir()) / "lmemory-dense"
     cache.mkdir(parents=True, exist_ok=True)
     ps = pages()
     key = hashlib.sha1((MODEL + "".join(r + t for r, t, _ in ps)).encode("utf-8")).hexdigest()[:16]
@@ -151,12 +151,12 @@ def dense_answers(rows: list[dict]) -> list[dict]:
     return bench.floor_answers(dense_scored(rows), floor)
 
 
-def _krouter_raw(rows: list[dict], src: Path | None = None) -> list[dict]:
-    """KRouter's recall with its decision and its best page even when it refuses."""
-    sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
-    with tempfile.TemporaryDirectory(prefix="krouter-dense-", ignore_cleanup_errors=True) as tmp:
-        os.environ["KROUTER_CACHE_DIR"] = str(Path(tmp) / "cache")
+def _lmemory_raw(rows: list[dict], src: Path | None = None) -> list[dict]:
+    """Lmemory's recall with its decision and its best page even when it refuses."""
+    sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
+    with tempfile.TemporaryDirectory(prefix="lmemory-dense-", ignore_cleanup_errors=True) as tmp:
+        os.environ["LMEMORY_CACHE_DIR"] = str(Path(tmp) / "cache")
         vault = Path(tmp) / "vault"
         shutil.copytree(src or VAULT, vault)
         import recall_index as ri
@@ -174,7 +174,7 @@ def rescue_floor(dn_name: str | None = None) -> float:
     dn_name = dn_name or dev_name()
     dev = bench.questions(dn_name)
     with on_vault(bench.vault_of(dn_name)):
-        kd, dd = _krouter_raw(dev), dict(dense_scored(dev))
+        kd, dd = _lmemory_raw(dev), dict(dense_scored(dev))
     cands = sorted({h[0][1] for h in dd.values() if h})
     best, floor = None, 1.0
     for f in cands:
@@ -188,7 +188,7 @@ def rescue_floor(dn_name: str | None = None) -> float:
 def rescue_answers(rows: list[dict], floor: float | None = None) -> list[dict]:
     if floor is None:
         floor = rescue_floor()
-    return _rescue(_krouter_raw(rows), dict(dense_scored(rows)), floor)
+    return _rescue(_lmemory_raw(rows), dict(dense_scored(rows)), floor)
 
 
 def _rescue(kr: list[dict], dd: dict, floor: float) -> list[dict]:
@@ -263,7 +263,7 @@ def chunk_scored(vault: Path, rows: list[dict], k: int = 3) -> list[tuple[str, l
     piece. Superseded pages are left out. The first piece carries the title, as in `page_text`."""
     import numpy as np
 
-    cache = Path(os.environ.get("KROUTER_DENSE_CACHE") or tempfile.gettempdir()) / "krouter-dense-chunks"
+    cache = Path(os.environ.get("LMEMORY_DENSE_CACHE") or tempfile.gettempdir()) / "lmemory-dense-chunks"
     cache.mkdir(parents=True, exist_ok=True)
     rels, pieces = [], []
     for path in sorted(vault.rglob("*.md")):
@@ -296,7 +296,7 @@ def chunk_scored(vault: Path, rows: list[dict], k: int = 3) -> list[tuple[str, l
 def session_answers(system: str, vault: Path, rows: list[dict], floors: dict) -> list[dict]:
     """The dense systems on a vault of long pages (LongMemEval, LoCoMo), floors picked on dev3 beforehand:
     `dense` (top 3, no floor: ranking only), `dense-floor`, `agree` (BM25 and dense top page agree, both above their
-    dev3 floors), `rescue` (KRouter, plus its refusals answered when dense puts KRouter's best page first above the
+    dev3 floors), `rescue` (Lmemory, plus its refusals answered when dense puts Lmemory's best page first above the
     dev3 floor)."""
     dn = dict(chunk_scored(vault, rows))
     if system == "dense":
@@ -307,7 +307,7 @@ def session_answers(system: str, vault: Path, rows: list[dict], floors: dict) ->
         lx = dict(bench.bm25_scored(rows, vault_src=vault, cjk=True))
         return _agree(rows, lx, dn, *floors["agree"])
     if system == "rescue":
-        return _rescue(_krouter_raw(rows, vault), dn, floors["rescue"])
+        return _rescue(_lmemory_raw(rows, vault), dn, floors["rescue"])
     raise ValueError(system)
 
 
@@ -331,12 +331,12 @@ def _agree(rows, lx, dn, lf, df):
 
 
 def vote_answers(rows: list[dict]) -> list[dict]:
-    """`agree`, plus KRouter's own answers that the dense retriever confirms (same top page). Two pairs of independent
+    """`agree`, plus Lmemory's own answers that the dense retriever confirms (same top page). Two pairs of independent
     signals; an answer needs one pair to agree. Floors for the lexical/dense pair come from `agree` (picked on dev)."""
     base = {a["id"]: a for a in agree_answers(rows)}
     dn = dict(dense_scored(rows))
     out = []
-    for k in _krouter_raw(rows):
+    for k in _lmemory_raw(rows):
         a = base[k["id"]]
         hits = dn.get(k["id"]) or []
         if a["refused"] and not k["refused"] and hits and k["top"] == hits[0][0]:
@@ -346,7 +346,7 @@ def vote_answers(rows: list[dict]) -> list[dict]:
 
 
 def gate_answers(rows: list[dict]) -> list[dict]:
-    kr = {a["id"]: a for a in _krouter_raw(rows)}
+    kr = {a["id"]: a for a in _lmemory_raw(rows)}
     out = []
     for qid, hits in dense_scored(rows):
         refused = kr[qid]["refused"] or not hits
@@ -371,14 +371,14 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--set", default="dev")
     ap.add_argument("--variant", choices=["dense", "rescue", "gate", "agree", "vote", "all"], default="all")
-    ap.add_argument("--ci", action="store_true", help="95%% bootstrap intervals, and paired ones against KRouter's default")
+    ap.add_argument("--ci", action="store_true", help="95%% bootstrap intervals, and paired ones against Lmemory's default")
     ap.add_argument("--by-lang", action="store_true", help="also the aggregates on the Chinese and the English questions apart")
     args = ap.parse_args()
     global VAULT
     VAULT = bench.vault_of(args.set)
     rows = bench.questions(args.set)
     variants = ["dense", "rescue", "gate", "agree", "vote"] if args.variant == "all" else [args.variant]
-    base = bench.krouter_answers(rows, VAULT) if args.ci else None
+    base = bench.lmemory_answers(rows, VAULT) if args.ci else None
     for v in variants:
         ans = {"dense": dense_answers, "rescue": rescue_answers, "gate": gate_answers, "agree": agree_answers, "vote": vote_answers}[v](rows)
         res = bench.score(rows, ans)
@@ -389,12 +389,12 @@ def main() -> int:
                 "wrong_rate": res["wrong_citation_rate"], "refused": res["refused"], "right": right,
                 "corr": res["correction_hit"], "cur": res["current_hit"]}
         if base is not None:
-            line["ci95"] = bench.bootstrap(rows, ans, base)  # delta_* = this variant minus KRouter's default
+            line["ci95"] = bench.bootstrap(rows, ans, base)  # delta_* = this variant minus Lmemory's default
         if args.by_lang:
             line["by_lang"] = by_lang(rows, ans, base)
         print(json.dumps(line, ensure_ascii=False))
     if args.by_lang and base is not None:
-        print(json.dumps({"variant": "krouter-default", "by_lang": by_lang(rows, base, None)}, ensure_ascii=False))
+        print(json.dumps({"variant": "lmemory-default", "by_lang": by_lang(rows, base, None)}, ensure_ascii=False))
     return 0
 
 

@@ -9,7 +9,7 @@ Own pages: rules and decisions in project folders, meeting notes with decisions 
 English notes in the Chinese vault (and Chinese in the English one), and the hard cases — long essays you wrote
 yourself, and excerpts you copied and annotated. Outside pages: plain-text articles with no frontmatter (some with a
 source line, some with nothing), clippings with a source in the frontmatter, research excerpts, translations, minutes of
-someone else's meeting or talk, a library's README copied in. KRouter's own folders (`05 时间日志`, `02 经验与方法`)
+someone else's meeting or talk, a library's README copied in. Lmemory's own folders (`05 时间日志`, `02 经验与方法`)
 hold some own pages too; they are recognised by where they are, and counted.
 
     python3 bench/kb_auto/make.py DIR        # writes DIR/zh, DIR/en, DIR/labels.jsonl
@@ -211,7 +211,7 @@ def build(base: Path) -> list[dict]:
             shutil.rmtree(root)
         root.mkdir(parents=True)
         if name == "en":
-            (root / "krouter-zones.psv").write_text("@lang|en\n", encoding="utf-8")
+            (root / "lmemory-zones.psv").write_text("@lang|en\n", encoding="utf-8")
         for rel, text, label, kind in pages:
             p = root / rel
             p.parent.mkdir(parents=True, exist_ok=True)

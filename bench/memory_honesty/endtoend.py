@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set 41 (bench/memory_honesty/HELDOUT.md): "dares to say it does not know", the whole chain — KRouter's receipt and pages,
+"""Set 41 (bench/memory_honesty/HELDOUT.md): "dares to say it does not know", the whole chain — Lmemory's receipt and pages,
 then a reader model that answers.
 
 No API key is used: reader and judge are Claude Code subagents on named models, given prompt batches as files (the way
@@ -8,12 +8,12 @@ bench/transfer/host.py ran its hosts). This script draws the questions, writes t
     python3 bench/memory_honesty/endtoend.py sample          # draw and seal the questions (seed 20261111)
     python3 bench/memory_honesty/endtoend.py prepare         # run the engine once per question, write the prompt batches
     (every STATE/batches/<cond>/batch_*.jsonl {id, prompt} answered by a subagent into STATE/replies/<cond>/batch_*.jsonl
-     {id, response}; cond = krouter-haiku | krouter-sonnet | nothing-haiku)
+     {id, response}; cond = lmemory-haiku | lmemory-sonnet | nothing-haiku)
     python3 bench/memory_honesty/endtoend.py mech            # mechanical scoring; writes the judge batches for the rest
     (judge batches answered into STATE/judged/<cond>/batch_*.jsonl {id, verdict})
     python3 bench/memory_honesty/endtoend.py score           # the tables
 
-State: `~/.local/state/krouter-eval/endtoend41` (`KROUTER_E2E_STATE`). The engine is this checkout's, unchanged; the query
+State: `~/.local/state/lmemory-eval/endtoend41` (`LMEMORY_E2E_STATE`). The engine is this checkout's, unchanged; the query
 log is off, cache and state directories are the study's own, `*_API_KEY` variables are removed from the environment.
 """
 
@@ -36,20 +36,20 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-STATE = Path(os.environ.get("KROUTER_E2E_STATE") or Path.home() / ".local/state/krouter-eval/endtoend41")
+STATE = Path(os.environ.get("LMEMORY_E2E_STATE") or Path.home() / ".local/state/lmemory-eval/endtoend41")
 RESULTS = HERE / "results" / "set41"
 SEED = 20261111
-LME_DATA = Path.home() / ".cache/krouter-eval/lme-data/longmemeval_s_cleaned.json"
-LOCOMO_DATA = Path.home() / ".cache/krouter-eval/locomo-data/locomo10.json"
+LME_DATA = Path.home() / ".cache/lmemory-eval/lme-data/longmemeval_s_cleaned.json"
+LOCOMO_DATA = Path.home() / ".cache/lmemory-eval/locomo-data/locomo10.json"
 PAGES = 3          # pages whose text is handed to the reader: the first three of the receipt's `recall:` list
 PAGE_CHARS = 14000  # one page's text is cut here (a LongMemEval session is 10 700 characters at the median)
 BATCH_PROMPTS = 10
 BATCH_CHARS = 150000
-CONDS = {"krouter-haiku": "haiku", "krouter-sonnet": "sonnet", "nothing-haiku": "haiku", "krouter-opus": "opus",
-         "krouter-deepseek": "deepseek", "nothing-deepseek": "deepseek"}
+CONDS = {"lmemory-haiku": "haiku", "lmemory-sonnet": "sonnet", "nothing-haiku": "haiku", "lmemory-opus": "opus",
+         "lmemory-deepseek": "deepseek", "nothing-deepseek": "deepseek"}
 JUDGE_OF = {"haiku": "sonnet", "sonnet": "haiku", "opus": "sonnet", "deepseek": "sonnet"}  # never the model that wrote the reply
 # DeepSeek 行（HELDOUT 第 41 套追加）：读的是和别的行同一批提示词文件；读题由脚本直调 deepseek-flash，不经子代理
-DEEPSEEK_SRC = {"krouter-deepseek": "krouter-sonnet", "nothing-deepseek": "nothing-haiku"}
+DEEPSEEK_SRC = {"lmemory-deepseek": "lmemory-sonnet", "nothing-deepseek": "nothing-haiku"}
 
 
 def _refusal_study():
@@ -62,9 +62,9 @@ def _refusal_study():
 
 # ---------- prompts (verbatim in HELDOUT.md, set 41) ----------
 
-FRAME_KROUTER = """You are the assistant of a user. Before replying you looked in the user's memory (a folder of notes) with KRouter, a local memory tool. Its result is below, followed by the user's message.{date}
+FRAME_LMEMORY = """You are the assistant of a user. Before replying you looked in the user's memory (a folder of notes) with Lmemory, a local memory tool. Its result is below, followed by the user's message.{date}
 
-[KRouter result]
+[Lmemory result]
 {receipt}
 {pages}
 [User message]
@@ -184,12 +184,12 @@ def golds(ids: list[str]) -> dict[str, str]:
 
 def _env(vault: Path, day: str) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    env.update(KROUTER_NO_QUERY_LOG="1", KROUTER_CACHE_DIR=str(STATE / "cache"), KROUTER_STATE_DIR=str(STATE / "state"),
-               KROUTER_VAULT=str(vault))
-    for k in ("KROUTER_MAP", "KROUTER_STRICT", "KROUTER_TODAY", "KROUTER_EVIDENCE_STUDY", "OBSIDIAN_VAULT"):
+    env.update(LMEMORY_NO_QUERY_LOG="1", LMEMORY_CACHE_DIR=str(STATE / "cache"), LMEMORY_STATE_DIR=str(STATE / "state"),
+               LMEMORY_VAULT=str(vault))
+    for k in ("LMEMORY_MAP", "LMEMORY_STRICT", "LMEMORY_TODAY", "LMEMORY_EVIDENCE_STUDY", "OBSIDIAN_VAULT"):
         env.pop(k, None)
     if day:
-        env["KROUTER_TODAY"] = day
+        env["LMEMORY_TODAY"] = day
     return env
 
 
@@ -199,13 +199,13 @@ def query_engine(it: dict) -> tuple[str, list[str]]:
     copy = STATE / "vaults" / hashlib.sha1(str(src).encode()).hexdigest()[:10]
     if not copy.exists():
         shutil.copytree(src, copy)
-    p = subprocess.run([sys.executable, str(REPO / "skill/krouter/scripts/route_knowledge.py"), "search", it["q"]],
+    p = subprocess.run([sys.executable, str(REPO / "skill/lmemory/scripts/route_knowledge.py"), "search", it["q"]],
                        env=_env(copy, it["date"]), capture_output=True, text=True, timeout=300)
     text = p.stdout
     if not text.strip():
         raise RuntimeError(f"no receipt for {it['id']}: {p.stderr[:300]}")
     text = text.replace(str(copy), "/home/user/memory").replace(str(src), "/home/user/memory")
-    text = text.replace(str(REPO / "skill/krouter/scripts"), "/opt/krouter/scripts")
+    text = text.replace(str(REPO / "skill/lmemory/scripts"), "/opt/lmemory/scripts")
     if it["date"]:  # the clock the receipt shows is the question's own day, as in the engine runs of sets 14 and 37–39
         text = re.sub(r"(?m)^observed_at: .*$", f"observed_at: {it['date']}T12:00:00Z", text)
     pages = []
@@ -249,7 +249,7 @@ def build_prompt(it: dict, receipt: str | None, pages: list[str]) -> str:
             if len(text) > PAGE_CHARS:
                 text = text[:PAGE_CHARS] + "\n[… page cut here]"
             blocks += f"\n--- {clean(rel)} ---\n{text}\n"
-    return clean(FRAME_KROUTER.format(date=date, receipt=clean(receipt.rstrip()), pages=blocks, q=it["q"]))
+    return clean(FRAME_LMEMORY.format(date=date, receipt=clean(receipt.rstrip()), pages=blocks, q=it["q"]))
 
 
 def write_batches(cond: str, rows: list[dict]) -> int:
@@ -287,23 +287,23 @@ def prepare() -> None:
     s = load_sample()
     items = items_all()
     meta: dict[str, dict] = {}
-    krouter_rows: dict[str, dict] = {}
+    lmemory_rows: dict[str, dict] = {}
     for qid, it in sorted(items.items()):
         receipt, pages = query_engine(it)
-        krouter_rows[qid] = {"receipt": receipt, "pages": pages, "state": state_of(receipt)}
+        lmemory_rows[qid] = {"receipt": receipt, "pages": pages, "state": state_of(receipt)}
         meta[qid] = {k: it[k] for k in ("id", "group", "source", "type", "date")}
-        meta[qid].update(state=krouter_rows[qid]["state"], pages_listed=len(pages),
+        meta[qid].update(state=lmemory_rows[qid]["state"], pages_listed=len(pages),
                          page_chars=sum(min(len(Path(p).read_text(encoding="utf-8", errors="replace")), PAGE_CHARS)
                                         for p in pages[:PAGES]))
     nothing_ids = s["nothing_A"] + s["nothing_B"]
-    plan = {"krouter-haiku": list(items), "krouter-sonnet": list(items), "nothing-haiku": nothing_ids}
+    plan = {"lmemory-haiku": list(items), "lmemory-sonnet": list(items), "nothing-haiku": nothing_ids}
     index: dict[str, dict] = {}
     counts = {}
     for cond, ids in plan.items():
         rows = []
         for qid in ids:
             it = items[qid]
-            r = krouter_rows[qid]
+            r = lmemory_rows[qid]
             prompt = build_prompt(it, None if cond.startswith("nothing") else r["receipt"], r["pages"])
             pid = opaque(cond, qid)
             rows.append({"id": pid, "prompt": prompt})
@@ -536,17 +536,17 @@ def posthoc_prepare() -> None:
 
 def opus_prepare() -> None:
     """Set 41, Opus row: the very same prompt files as the Sonnet condition (same ids, same batches), read by Opus; nothing is
-    generated again. Only the index gets `krouter-opus/<id>` entries and the replies get their own folder."""
+    generated again. Only the index gets `lmemory-opus/<id>` entries and the replies get their own folder."""
     idx = json.loads((STATE / "index.json").read_text(encoding="utf-8"))
     for k, v in list(idx.items()):
-        if v["cond"] == "krouter-sonnet":
-            idx["krouter-opus/" + k.split("/", 1)[1]] = {"cond": "krouter-opus", "qid": v["qid"]}
+        if v["cond"] == "lmemory-sonnet":
+            idx["lmemory-opus/" + k.split("/", 1)[1]] = {"cond": "lmemory-opus", "qid": v["qid"]}
     (STATE / "index.json").write_text(json.dumps(idx, indent=0), encoding="utf-8")
-    print(json.dumps({"krouter-opus": sum(1 for v in idx.values() if v["cond"] == "krouter-opus")}))
+    print(json.dumps({"lmemory-opus": sum(1 for v in idx.values() if v["cond"] == "lmemory-opus")}))
 
 
 def deepseek_prepare() -> None:
-    """The DeepSeek rows: the very same prompt files as the Sonnet condition (KRouter) and as the Haiku nothing-given
+    """The DeepSeek rows: the very same prompt files as the Sonnet condition (Lmemory) and as the Haiku nothing-given
     condition (the same 40 questions); only index entries are added, nothing is generated again."""
     idx = json.loads((STATE / "index.json").read_text(encoding="utf-8"))
     for cond, src in DEEPSEEK_SRC.items():

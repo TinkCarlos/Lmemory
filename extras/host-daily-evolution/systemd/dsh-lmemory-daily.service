@@ -1,0 +1,10 @@
+[Unit]
+Description=Lmemory daily evolution (seal yesterday, then nightly upkeep)
+
+[Service]
+Type=oneshot
+Environment=OBSIDIAN_VAULT=__VAULT__
+Environment=LMEMORY_ROUTER=__ROUTER__
+Environment=LMEMORY_WRITER=__WRITER__
+Environment=LMEMORY_KEYS_ENV=__KEYS_ENV__
+ExecStart=/bin/sh __RUN_SH__

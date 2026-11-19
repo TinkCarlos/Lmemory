@@ -9,8 +9,8 @@ a page existed, 2 when it did not; any citation scores 0 when it did not. A cite
 existed before the ask (in a vault backup older than the ask, or its own date is earlier) and is not a session excerpt
 or time log from the ask's day or later. Every pair is judged twice, the second time with X and Y swapped.
 
-    KROUTER_EVAL_KEY=… python3 bench/real_questions/judge_real.py --vault ~/Vault --vault-commit 57b6019 \\
-        --a krouter.no-learning --b bm25-floor --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
+    LMEMORY_EVAL_KEY=… python3 bench/real_questions/judge_real.py --vault ~/Vault --vault-commit 57b6019 \\
+        --a lmemory.no-learning --b bm25-floor --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
 
 Writes per-question scores to a private file; prints aggregates only (means, paired bootstrap interval, by month).
 """
@@ -31,9 +31,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[1] / "skill/krouter/scripts"))
+sys.path.insert(0, str(HERE.parents[1] / "skill/lmemory/scripts"))
 import classify_asks as ca  # noqa: E402
-from krouter_redact import redact  # noqa: E402
+from lmemory_redact import redact  # noqa: E402
 
 STATE = ca.STATE
 BACKUPS = Path.home() / "KnowledgeArchive/backups"
@@ -132,7 +132,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--vault", required=True)
     ap.add_argument("--vault-commit", required=True)
-    ap.add_argument("--a", required=True, help="system A's outputs name (e.g. krouter.no-learning)")
+    ap.add_argument("--a", required=True, help="system A's outputs name (e.g. lmemory.no-learning)")
     ap.add_argument("--b", required=True)
     ap.add_argument("--pool-from", default="", help="comma-separated extra output names whose pages join the pool")
     ap.add_argument("--openai-base", default="")
@@ -148,7 +148,7 @@ def main() -> int:
         keep = set(json.loads(Path(args.ids).read_text(encoding="utf-8")))
         questions = [q for q in questions if q["id"] in keep]
     outs = {k: load(k) for k in {args.a, args.b, *filter(None, args.pool_from.split(","))}}
-    tmp = Path(tempfile.mkdtemp(prefix="krouter-judge-"))
+    tmp = Path(tempfile.mkdtemp(prefix="lmemory-judge-"))
     snapshot(Path(args.vault), args.vault_commit, tmp / "vault")
     pages = Pages(tmp / "vault")
     call = ca.ask_api if args.openai_base else ca.ask_cli

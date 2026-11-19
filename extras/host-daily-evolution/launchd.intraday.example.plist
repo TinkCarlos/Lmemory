@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>local.krouter.intraday-capture</string>
+  <string>local.lmemory.intraday-capture</string>
   <key>ProgramArguments</key>
   <array>
     <string>__PYTHON__</string>
@@ -15,16 +15,16 @@
   <key>RunAtLoad</key>
   <false/>
   <key>StandardOutPath</key>
-  <string>__HOME__/Library/Logs/krouter-intraday.log</string>
+  <string>__HOME__/Library/Logs/lmemory-intraday.log</string>
   <key>StandardErrorPath</key>
-  <string>__HOME__/Library/Logs/krouter-intraday.log</string>
+  <string>__HOME__/Library/Logs/lmemory-intraday.log</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>OBSIDIAN_VAULT</key>
     <string>__VAULT__</string>
-    <key>KROUTER_ROUTER</key>
+    <key>LMEMORY_ROUTER</key>
     <string>__ROUTER__</string>
-    <key>KROUTER_KEYS_ENV</key>
+    <key>LMEMORY_KEYS_ENV</key>
     <string>__KEYS_ENV__</string>
     <key>HOME</key>
     <string>__HOME__</string>

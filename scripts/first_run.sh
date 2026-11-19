@@ -1,36 +1,36 @@
 #!/bin/sh
 set -eu
 # 演示跑在模板上，不是宿主的真实流量：不写查询日志（夜间学习读它）
-export KROUTER_NO_QUERY_LOG=1
+export LMEMORY_NO_QUERY_LOG=1
 
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
-SCRIPTS="$ROOT/skill/krouter/scripts"
+SCRIPTS="$ROOT/skill/lmemory/scripts"
 ROUTER="$SCRIPTS/route_knowledge.sh"
 
 if ! command -v python3 >/dev/null 2>&1; then
   printf '%s\n' "python3 required" >&2
   exit 1
 fi
-# 语言：KROUTER_LANG（en|zh）优先，其次 LC_ALL / LC_MESSAGES / LANG，没有就按系统（同 bootstrap.py）
-LANG_PICK=${KROUTER_LANG:-$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import bootstrap; print(bootstrap.system_lang())" "$ROOT/scripts")}
+# 语言：LMEMORY_LANG（en|zh）优先，其次 LC_ALL / LC_MESSAGES / LANG，没有就按系统（同 bootstrap.py）
+LANG_PICK=${LMEMORY_LANG:-$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import bootstrap; print(bootstrap.system_lang())" "$ROOT/scripts")}
 # The bundled template unless the host names another vault for this script; in English it is laid down in a
 # throwaway folder with English names, as the one-line install would. Do not inherit OBSIDIAN_VAULT: it may point at
 # an unrelated live library.
 TMP_VAULT=""
-if [ -n "${KROUTER_FIRST_RUN_VAULT:-}" ]; then
-  OBSIDIAN_VAULT=$KROUTER_FIRST_RUN_VAULT
+if [ -n "${LMEMORY_FIRST_RUN_VAULT:-}" ]; then
+  OBSIDIAN_VAULT=$LMEMORY_FIRST_RUN_VAULT
 elif [ "$LANG_PICK" = zh ]; then
   OBSIDIAN_VAULT=$ROOT/template-zh
 else
   _tmp=${TMPDIR:-/tmp}
-  TMP_VAULT=$(mktemp -d "${_tmp%/}/krouter-first-run.XXXXXX")  # macOS 的 TMPDIR 以 / 结尾：去掉，免得路径里出现 //
+  TMP_VAULT=$(mktemp -d "${_tmp%/}/lmemory-first-run.XXXXXX")  # macOS 的 TMPDIR 以 / 结尾：去掉，免得路径里出现 //
   OBSIDIAN_VAULT=$TMP_VAULT/vault
   python3 -c "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import zones; zones.lay_out(Path(sys.argv[2]), Path(sys.argv[3]), alias_sample=Path(sys.argv[1]) / 'canonical_sources.psv')" \
     "$SCRIPTS" "$ROOT/template" "$OBSIDIAN_VAULT"
   trap 'rm -rf "$TMP_VAULT"' EXIT
 fi
 export OBSIDIAN_VAULT
-export KROUTER_CACHE_DIR="${KROUTER_CACHE_DIR:-${TMP_VAULT:-${TMPDIR:-/tmp}}/krouter-first-run-cache}"
+export LMEMORY_CACHE_DIR="${LMEMORY_CACHE_DIR:-${TMP_VAULT:-${TMPDIR:-/tmp}}/lmemory-first-run-cache}"
 zname() { basename "$(python3 "$SCRIPTS/zones.py" real "$OBSIDIAN_VAULT" "$1")"; }
 if ! command -v rg >/dev/null 2>&1; then
   printf '%s\n' "note: ripgrep (rg) not found; literal search uses the built-in fallback (slower on large vaults, same answers)"
@@ -96,7 +96,7 @@ printf '%s\n' "$suggest" | grep -q "canonical_match: true" && {
 printf '%s\n' "ok suggest homz -> Q01 hint"
 
 printf '%s\n' "== ask matcher =="
-ask_out=$(OBSIDIAN_VAULT="$OBSIDIAN_VAULT" python3 "$ROOT/skill/krouter/scripts/ask_product.py" coverage) || {
+ask_out=$(OBSIDIAN_VAULT="$OBSIDIAN_VAULT" python3 "$ROOT/skill/lmemory/scripts/ask_product.py" coverage) || {
   printf '%s\n' "FAIL ask coverage" >&2
   printf '%s\n' "$ask_out" >&2
   fail=1

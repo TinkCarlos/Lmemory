@@ -6,7 +6,7 @@ card_id: C06
 when: delete it; overwrite; wipe; cannot undo
 source_ref: "[[05 时间日志/会话摘录/example C06]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: Before an action you cannot undo, keep a copy you can restore

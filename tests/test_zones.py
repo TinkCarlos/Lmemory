@@ -1,4 +1,4 @@
-"""A vault with its own folder names: krouter-zones.psv maps the default layout onto it."""
+"""A vault with its own folder names: lmemory-zones.psv maps the default layout onto it."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 import zones  # noqa: E402
 
@@ -53,9 +53,9 @@ def test_real_and_canon_round_trip(english_vault):
 
 
 def _route(vault: Path, sh_only: str, *args: str) -> str:
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_SH_ONLY": sh_only,
-           "KROUTER_CACHE_DIR": str(vault.parent / "cache"), "KROUTER_NO_QUERY_LOG": "1"}
-    env.pop("KROUTER_MAP", None)
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_SH_ONLY": sh_only,
+           "LMEMORY_CACHE_DIR": str(vault.parent / "cache"), "LMEMORY_NO_QUERY_LOG": "1"}
+    env.pop("LMEMORY_MAP", None)
     return subprocess.run(["/bin/sh", str(SCRIPTS / "route_knowledge.sh"), *args], env=env,
                           capture_output=True, text=True, timeout=60).stdout
 
@@ -74,7 +74,7 @@ def test_router_follows_the_mapping(english_vault, sh_only):
 
 def test_recall_tiers_and_nightly_outputs_use_the_mapping(english_vault, monkeypatch, tmp_path):
     v = english_vault
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache2"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache2"))
     import recall_index as ri
 
     con = ri.connect(ri.cache_path(v))
@@ -84,10 +84,10 @@ def test_recall_tiers_and_nightly_outputs_use_the_mapping(english_vault, monkeyp
     assert tier["Home.md"] == "rule"
     assert any(t == "log" for r, t in tier.items() if r.startswith("Journal/"))
     env = {k: val for k, val in os.environ.items() if not k.endswith(("_API_KEY", "_BASE_URL", "_MODEL"))}
-    env.update({"OBSIDIAN_VAULT": str(v), "HOME": str(tmp_path), "KROUTER_KEYS_ENV": str(tmp_path / "none"),
-                "KROUTER_WRITER": "/nonexistent/grok", "KROUTER_CACHE_DIR": str(tmp_path / "cache3"),
-                "KROUTER_NO_QUERY_LOG": "1"})
-    env.pop("KROUTER_LEARN_CLI", None)
+    env.update({"OBSIDIAN_VAULT": str(v), "HOME": str(tmp_path), "LMEMORY_KEYS_ENV": str(tmp_path / "none"),
+                "LMEMORY_WRITER": "/nonexistent/grok", "LMEMORY_CACHE_DIR": str(tmp_path / "cache3"),
+                "LMEMORY_NO_QUERY_LOG": "1"})
+    env.pop("LMEMORY_LEARN_CLI", None)
     res = subprocess.run([sys.executable, str(SCRIPTS / "nightly.py"), "--vault", str(v)], env=env,
                          capture_output=True, text=True, timeout=600)
     assert res.returncode == 0, res.stderr

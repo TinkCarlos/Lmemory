@@ -4,7 +4,7 @@
 Checks format and facts only, the same soundness rules as set 3: each answerable question's `evidence` sentence is on
 its answer page, the page is live, a `correction` page has a replaced `(old)` / `（旧）` page next to it, each neighbour
 question's `absent` term is in both wordings and on no page of vault3 (logs included, English plurals counted), and no
-question repeats one from another set. Never runs KRouter or any other system and prints no answers.
+question repeats one from another set. Never runs Lmemory or any other system and prints no answers.
 
     python3 bench/memory_honesty/human_set/check_human_set.py my_questions.csv [--out human_pairs.jsonl.gz]
 

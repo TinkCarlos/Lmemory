@@ -106,7 +106,7 @@ def test_timer_router_skips_live_skill(monkeypatch, tmp_path):
     live = tmp_path / "obsidian-knowledge-router" / "scripts" / "route_knowledge.sh"
     live.parent.mkdir(parents=True)
     live.write_text("#!/bin/sh\n", encoding="utf-8")
-    monkeypatch.setenv("KROUTER_ROUTER", str(live))
+    monkeypatch.setenv("LMEMORY_ROUTER", str(live))
     from resolve import bundled_router, timer_router
 
     got = timer_router()
@@ -152,7 +152,7 @@ def test_collect_keys_reads_install_keys_file(tmp_path, monkeypatch):
     vault.mkdir()
     keys_file = tmp_path / "keys.env"
     keys_file.write_text('export DEEPSEEK_API_KEY="sk-live-looking"\n', encoding="utf-8")
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(keys_file))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(keys_file))
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
     assert collect_keys(vault)["DEEPSEEK_API_KEY"] == "sk-live-looking"
@@ -167,7 +167,7 @@ def test_pasted_page_key_moves_into_the_keys_file(tmp_path, monkeypatch):
     page.write_text("```env\nDEEPSEEK_API_KEY=sk-live-page\n```\n", encoding="utf-8")
     keys_file = tmp_path / "keys.env"
     keys_file.write_text("DEEPSEEK_API_KEY=sk-live-file\n", encoding="utf-8")
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(keys_file))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(keys_file))
 
     assert collect_keys(vault)["DEEPSEEK_API_KEY"] == "sk-live-page"  # a newly pasted key still wins
     # …but it no longer lives in the vault: it moved into the keys file, which only the host can read
@@ -185,7 +185,7 @@ def test_collect_keys_ignores_placeholders(tmp_path, monkeypatch):
     vault.mkdir()
     keys_file = tmp_path / "keys.env"
     keys_file.write_text("DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY\n", encoding="utf-8")
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(keys_file))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(keys_file))
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
     assert "DEEPSEEK_API_KEY" not in collect_keys(vault)
@@ -242,9 +242,9 @@ def test_cli_writers_are_confined(tmp_path, monkeypatch):
     router = tmp_path / "skill/scripts/route_knowledge.sh"
     router.parent.mkdir(parents=True)
     router.write_text("#!/bin/sh\n", encoding="utf-8")
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    prompt = vault / ".krouter/runtime-prompt.md"
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    prompt = vault / ".lmemory/runtime-prompt.md"
     prompt.parent.mkdir()
     prompt.write_text("x", encoding="utf-8")
     grok = writer_invoke("/Users/x/.grok/bin/grok", prompt, vault, router)

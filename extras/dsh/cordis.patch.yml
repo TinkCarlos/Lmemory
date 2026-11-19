@@ -1,5 +1,5 @@
-# Host-realm insert. Read-only KRouter tools.
+# Host-realm insert. Read-only Lmemory tools.
 # Uninstalling this plugin must not delete the Obsidian vault.
 - insert:
-    - id: krouter
-      name: dsh-krouter
+    - id: lmemory
+      name: dsh-lmemory

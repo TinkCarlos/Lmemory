@@ -1,4 +1,4 @@
-"""The host lane (llm.py): with no key, KRouter borrows the agent the user already has through its official CLI,
+"""The host lane (llm.py): with no key, Lmemory borrows the agent the user already has through its official CLI,
 at most so many calls a day, each one recorded where the user can see it, and off with one switch. A shell-script
 stand-in plays the CLI: no test spends a subscription."""
 
@@ -18,11 +18,11 @@ def lane(monkeypatch, tmp_path):
     import llm
 
     for k in list(os.environ):
-        if k.endswith(("_API_KEY", "_BASE_URL", "_MODEL")) or k in ("KROUTER_LEARN_CLI", "KROUTER_WRITER",
-                                                                       "KROUTER_HOST_CLI", "KROUTER_HOST_CLI_MAX"):
+        if k.endswith(("_API_KEY", "_BASE_URL", "_MODEL")) or k in ("LMEMORY_LEARN_CLI", "LMEMORY_WRITER",
+                                                                       "LMEMORY_HOST_CLI", "LMEMORY_HOST_CLI_MAX"):
             monkeypatch.delenv(k, raising=False)
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(tmp_path / "none.env"))
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(tmp_path / "none.env"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
     cli = tmp_path / "bin/claude"
     cli.parent.mkdir()
     cli.write_text("#!/bin/sh\necho \"reply from the stand-in\"\n")
@@ -48,22 +48,22 @@ def test_no_key_borrows_the_logged_in_cli_and_records_every_call(lane):
 
 def test_daily_cap_stops_the_borrowing_quietly(lane, monkeypatch):
     llm, vault, _ = lane
-    monkeypatch.setenv("KROUTER_HOST_CLI_MAX", "1")
+    monkeypatch.setenv("LMEMORY_HOST_CLI_MAX", "1")
     llm.complete("one", vault)
     with pytest.raises(llm.HostCapReached) as e:  # a NoModel: callers skip the step, as with no model
         llm.complete("two", vault)
-    assert isinstance(e.value, llm.NoModel) and "KROUTER_HOST_CLI_MAX" in str(e.value)
+    assert isinstance(e.value, llm.NoModel) and "LMEMORY_HOST_CLI_MAX" in str(e.value)
 
 
 def test_one_switch_turns_it_off_and_says_what_is_off(lane, monkeypatch):
     llm, vault, _ = lane
-    monkeypatch.setenv("KROUTER_HOST_CLI", "0")
+    monkeypatch.setenv("LMEMORY_HOST_CLI", "0")
     assert llm.plan(vault) == []
     with pytest.raises(llm.NoModel):
         llm.complete("x", vault)
     rep = llm.channel_report(vault)
     assert rep["lane"] == "none" and rep["host_cli"].startswith("off") and "问答卡" in rep["off_without_model"]
-    monkeypatch.setenv("KROUTER_LEARN_CLI", str(llm.detect_candidates()[0]))  # 点名的 CLI 也一样关
+    monkeypatch.setenv("LMEMORY_LEARN_CLI", str(llm.detect_candidates()[0]))  # 点名的 CLI 也一样关
     assert llm.plan(vault) == []
 
 
@@ -77,6 +77,6 @@ def test_nightly_report_says_what_is_off_without_a_lane(lane, monkeypatch):
     llm, vault, _ = lane
     import nightly
 
-    monkeypatch.setenv("KROUTER_HOST_CLI", "0")
+    monkeypatch.setenv("LMEMORY_HOST_CLI", "0")
     text = "\n".join(nightly.channel_lines(vault))
     assert "off" in text and "这些功能没开" in text and "会话提炼" in text

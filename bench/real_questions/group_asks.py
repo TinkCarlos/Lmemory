@@ -6,7 +6,7 @@ different agents) lands in one group; per-batch topics cannot be merged afterwar
 (would a stranger, or a memory, know what is being asked without the conversation around it?) and a `group` key.
 Writes a private file; prints counts only. Same endpoint options as classify_asks.py.
 
-    KROUTER_EVAL_KEY=… python3 bench/real_questions/group_asks.py --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
+    LMEMORY_EVAL_KEY=… python3 bench/real_questions/group_asks.py --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
 """
 
 from __future__ import annotations

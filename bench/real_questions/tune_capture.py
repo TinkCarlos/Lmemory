@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tune the distill step on sessions that are not the set-6 measurement sessions, and compare variants side by side.
 
-Same machinery as capture_bench.py, in its own state folder (`~/.local/state/krouter-eval/capture-tune/`): 10 other
+Same machinery as capture_bench.py, in its own state folder (`~/.local/state/lmemory-eval/capture-tune/`): 10 other
 sessions (seed 20261017, set 6's sessions excluded), a reference proposed by Grok and checked by GPT under the
 maintainer's own definition (what the maintainer said, or went along with when the agent proposed it, counts; steps
 and discussion do not), and three distill variants scored on missed rate, wrong rate and changes of mind captured,
@@ -11,7 +11,7 @@ together, because they trade against each other:
 - `segmented`: the session-day cut into segments of about SEGMENT_CHARS, each distilled, changes of mind first, merged;
 - `segmented+strict`: the same, with a prompt that says what is not a decision.
 
-    KROUTER_EVAL_KEY=… tune_capture.py --cli /opt/homebrew/bin/claude --openai-base http://127.0.0.1:8317/v1
+    LMEMORY_EVAL_KEY=… tune_capture.py --cli /opt/homebrew/bin/claude --openai-base http://127.0.0.1:8317/v1
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ def pick(exclude: set[str]) -> None:
                 continue
             s = {"claude-code": imp.read_claude, "codex": imp.read_codex, "cursor": imp.read_cursor}[agent](p)
             n, answered = len(s["turns"]), sum(1 for t in s["turns"] if t["answer"])
-            if 8 <= n <= 60 and answered >= 0.7 * n and "DSH-KRouter" not in s.get("cwd", ""):
+            if 8 <= n <= 60 and answered >= 0.7 * n and "DSH-Lmemory" not in s.get("cwd", ""):
                 pool[agent].append(str(p))
     chosen = [{"agent": a, "path": p, "first_day": ""} for a, k in cb.QUOTA.items() for p in rng.sample(sorted(pool[a]), k)]
     cb.STATE.mkdir(parents=True, exist_ok=True)
@@ -129,9 +129,9 @@ def main() -> int:
     ap.add_argument("--variants", default="current,segmented,segmented+strict")
     args = ap.parse_args()
     measured = {s["path"] for s in json.loads((cb.STATE / "sessions.json").read_text(encoding="utf-8"))}
-    cb.STATE = Path.home() / ".local/state/krouter-eval/capture-tune"
+    cb.STATE = Path.home() / ".local/state/lmemory-eval/capture-tune"
     if args.cli:
-        os.environ["KROUTER_LEARN_CLI"] = args.cli
+        os.environ["LMEMORY_LEARN_CLI"] = args.cli
     if not (cb.STATE / "sessions.json").is_file():
         pick(measured)
     units = cb.units()

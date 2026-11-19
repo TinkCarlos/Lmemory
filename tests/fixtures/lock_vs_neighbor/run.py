@@ -24,7 +24,7 @@ from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(ROOT / "skill/krouter/scripts"))
+sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
 
 from canonical_lookup import in_force, live_rows, load_rows, lookup, parse_frontmatter  # noqa: E402
 
@@ -187,7 +187,7 @@ def load_gold(path: Path) -> list[dict]:
     return rows
 
 
-def krouter_predict(query: str, rows, vault: Path) -> str | None:
+def lmemory_predict(query: str, rows, vault: Path) -> str | None:
     hit = lookup(query, rows, vault=vault, today=TODAY)
     if hit is None:
         return MISS
@@ -605,7 +605,7 @@ def run(
     mid_map = dense_mid["docs_map"]
 
     systems = {
-        "krouter": [],
+        "lmemory": [],
         "lexical": [],
         "tfidf": [],
         "hybrid": [],
@@ -624,8 +624,8 @@ def run(
 
     for item in gold:
         q = item["query"]
-        systems["krouter"].append(
-            score_one(timed(latencies_ms["krouter"], lambda: krouter_predict(q, rows, vault)), item)
+        systems["lmemory"].append(
+            score_one(timed(latencies_ms["lmemory"], lambda: lmemory_predict(q, rows, vault)), item)
         )
         systems["lexical"].append(
             score_one(timed(latencies_ms["lexical"], lambda: lexical_predict(q, files, vault)), item)
@@ -768,8 +768,8 @@ def run(
 
 
 def print_table(result: dict) -> None:
-    n = result["systems"]["krouter"]["n"]
-    slices = result["systems"]["krouter"]["slices"]
+    n = result["systems"]["lmemory"]["n"]
+    slices = result["systems"]["lmemory"]["slices"]
     counts = " ".join(f"{name}={block['n']}" for name, block in slices.items())
     print(f"today={result['today']}  N={n} ({counts})")
     print(
@@ -919,9 +919,9 @@ def main() -> int:
         print_table(result)
         first = run()
         second = run()
-        same = first["systems"]["krouter"]["cases"] == second["systems"]["krouter"]["cases"]
+        same = first["systems"]["lmemory"]["cases"] == second["systems"]["lmemory"]["cases"]
         print()
-        print("krouter determinism (two runs, same preds):", same)
+        print("lmemory determinism (two runs, same preds):", same)
     return 0
 
 

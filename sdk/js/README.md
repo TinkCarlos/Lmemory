@@ -1,20 +1,20 @@
-# krouter (JavaScript / TypeScript)
+# lmemory (JavaScript / TypeScript)
 
-Ask your [KRouter](https://github.com/398894496-arch/KRouter) memory from Node 18+: the page that answers, its
-one-line answer, or "not in the vault". No dependencies; it speaks MCP to KRouter's own server.
+Ask your [Lmemory](https://github.com/TinkCarlos/Lmemory) memory from Node 18+: the page that answers, its
+one-line answer, or "not in the vault". No dependencies; it speaks MCP to Lmemory's own server.
 
 ```js
-import { KRouter } from "krouter";
+import { Lmemory } from "lmemory";
 
-const kr = KRouter.local();                     // starts the local server over stdio (after the one-line install)
+const kr = Lmemory.local();                     // starts the local server over stdio (after the one-line install)
 const a = await kr.ask("how do we ship a release?");
 a.page;      // the page it came from
 a.how;       // the one-line answer
 a.refused;   // true when the memory does not know
 await kr.close();
 
-const team = KRouter.remote("https://krouter.example/mcp/team", { token: process.env.KROUTER_TOKEN });
+const team = Lmemory.remote("https://lmemory.example/mcp/team", { token: process.env.LMEMORY_TOKEN });
 ```
 
-`KRouter.local({ vault, python, server })` picks another vault, interpreter or server path. Tests:
-`node --test test/krouter.test.js` (runs the real server over stdio and HTTP). Not published to npm yet.
+`Lmemory.local({ vault, python, server })` picks another vault, interpreter or server path. Tests:
+`node --test test/lmemory.test.js` (runs the real server over stdio and HTTP). Not published to npm yet.

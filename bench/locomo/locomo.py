@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""LoCoMo (Maharana et al., ACL 2024): KRouter, BM25 and the dense prototype on someone else's long conversations.
+"""LoCoMo (Maharana et al., ACL 2024): Lmemory, BM25 and the dense prototype on someone else's long conversations.
 
 LoCoMo gives 10 conversations between two people, 19 to 32 dated sessions each, and 1 986 questions with the
 authors' evidence labels (`D3:5` = session 3, turn 5) and a category. Category 5 (446 questions) is adversarial: it
 asks about something the conversation does not say (often what one speaker did, asked of the other), and the right
-answer is "not mentioned". Each conversation becomes one vault, one Markdown page per session, as KRouter's own
+answer is "not mentioned". Each conversation becomes one vault, one Markdown page per session, as Lmemory's own
 session import would write it; each system answers with up to three cited pages or a refusal. Scoring needs no model:
 
 - evidence first (categories 1-4): the first cited page is an evidence session;
@@ -20,12 +20,12 @@ The dataset is not in this repository and this script downloads nothing; pass th
 (`github.com/snap-research/locomo`, `data/locomo10.json`, CC BY-NC 4.0):
 
     python3 bench/locomo/locomo.py convert --data locomo10.json
-    python3 bench/locomo/locomo.py run --system krouter          # also bm25, bm25-floor
-    KROUTER_DENSE_MODEL=BAAI/bge-m3 python3 bench/locomo/locomo.py run --system agree   # dense, dense-floor, rescue
+    python3 bench/locomo/locomo.py run --system lmemory          # also bm25, bm25-floor
+    LMEMORY_DENSE_MODEL=BAAI/bge-m3 python3 bench/locomo/locomo.py run --system agree   # dense, dense-floor, rescue
     python3 bench/locomo/locomo.py score
 
 Floors (`bm25-floor`, `dense-floor`, `agree`, `rescue`) are picked on dev3 (vault2), as everywhere else: nothing is
-tuned on LoCoMo. State lives in `~/.local/state/krouter-eval/locomo/` (`KROUTER_LOCOMO_STATE` to move it).
+tuned on LoCoMo. State lives in `~/.local/state/lmemory-eval/locomo/` (`LMEMORY_LOCOMO_STATE` to move it).
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-STATE = Path(os.environ.get("KROUTER_LOCOMO_STATE") or Path.home() / ".local/state/krouter-eval/locomo")
-SESSIONS = "05 时间日志/会话摘录"  # KRouter 自己导入会话时放的位置
+STATE = Path(os.environ.get("LMEMORY_LOCOMO_STATE") or Path.home() / ".local/state/lmemory-eval/locomo")
+SESSIONS = "05 时间日志/会话摘录"  # Lmemory 自己导入会话时放的位置
 SEED = 20261030
 RESAMPLES = 10_000
 DENSE_SYSTEMS = {"dense", "dense-floor", "agree", "rescue"}
@@ -66,7 +66,7 @@ def dense():
 
 
 def model_tag() -> str:
-    from_env = os.environ.get("KROUTER_DENSE_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+    from_env = os.environ.get("LMEMORY_DENSE_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
     return re.sub(r"[^A-Za-z0-9]+", "-", from_env.split("/")[-1]).strip("-").lower()
 
 
@@ -142,10 +142,10 @@ def run(system: str, limit: int) -> None:
                 out.append({"id": a["id"], "cited": a["cited"][:3], "refused": a["refused"]})
         name = f"{system}.{model_tag()}"
         print(json.dumps({"floors": floors}), file=sys.stderr)
-    elif system == "krouter":
+    elif system == "lmemory":
         d = dense()
         for vault, items in by_vault(rows).items():
-            for a in d._krouter_raw(items, Path(vault)):
+            for a in d._lmemory_raw(items, Path(vault)):
                 cited = [] if a["refused"] else a["cited"][:3]
                 out.append({"id": a["id"], "cited": cited, "refused": a["refused"]})
         name = system
@@ -212,13 +212,13 @@ def score() -> None:
                                                            sum(1 for o in outs if o["category"] == c))
                                     for c in (1, 2, 3, 4)}
         report["systems"][name] = row
-    if "krouter" in systems:
-        report["paired_vs_krouter"] = {}
+    if "lmemory" in systems:
+        report["paired_vs_lmemory"] = {}
         for name, res in systems.items():
-            if name == "krouter":
+            if name == "lmemory":
                 continue
             rng = random.Random(SEED)
-            report["paired_vs_krouter"][name] = {m: paired(res, systems["krouter"], *spec, rng)
+            report["paired_vs_lmemory"][name] = {m: paired(res, systems["lmemory"], *spec, rng)
                                                  for m, spec in METRICS.items()}
     report["scored_at"] = datetime.now().isoformat(timespec="seconds")
     (STATE / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -231,11 +231,11 @@ def main() -> int:
     c = sub.add_parser("convert")
     c.add_argument("--data", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--system", choices=["krouter", "bm25", "bm25-floor", *sorted(DENSE_SYSTEMS)], required=True)
+    r.add_argument("--system", choices=["lmemory", "bm25", "bm25-floor", *sorted(DENSE_SYSTEMS)], required=True)
     r.add_argument("--limit", type=int, default=0)
     sub.add_parser("score")
     args = ap.parse_args()
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
     STATE.mkdir(parents=True, exist_ok=True)
     if args.cmd == "convert":
         convert(Path(args.data))

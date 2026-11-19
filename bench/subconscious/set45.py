@@ -6,11 +6,11 @@
     python3 bench/subconscious/set45.py compare BASE.jsonl NEW.jsonl CASES
 
 `CASES` is one of set32dev, set32held, set35dev, set35held, set45dev, set45held. `run` calls `recollect.recollect()` on
-each message exactly as `session_hook.py prompt` does, on a temporary copy of vault3 with the overlay laid into
+each message exactly as `lmemory_capture.py prompt` does, on a temporary copy of vault3 with the overlay laid into
 `90 系统文件/` (and with `--crowd N` the set 35 distractor topics added). Nothing is sent anywhere and no model is called.
 `--sealed` (for a held-out half) saves the pages brought, prints only how many rows and the file's SHA-256, and prints no
 score, so a baseline can be stored without anyone reading it. `SET45_SCRIPTS` points at another copy of
-`skill/krouter/scripts` (the new configuration being compared with C0).
+`skill/lmemory/scripts` (the new configuration being compared with C0).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SCRIPTS = Path(os.environ.get("SET45_SCRIPTS") or REPO / "skill/krouter/scripts")
+SCRIPTS = Path(os.environ.get("SET45_SCRIPTS") or REPO / "skill/lmemory/scripts")
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(HERE))
 import recollect  # noqa: E402
@@ -203,9 +203,9 @@ def split(raw_zh: Path, raw_en: Path) -> int:
 
 def run_cases(rows: list[dict], use: tuple[str, ...], crowd: int) -> dict[str, list[dict]]:
     with tempfile.TemporaryDirectory() as tmp:
-        os.environ["KROUTER_CACHE_DIR"] = str(Path(tmp) / "cache")
-        os.environ["KROUTER_STATE_DIR"] = str(Path(tmp) / "state")
-        os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+        os.environ["LMEMORY_CACHE_DIR"] = str(Path(tmp) / "cache")
+        os.environ["LMEMORY_STATE_DIR"] = str(Path(tmp) / "state")
+        os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
         v = set32.make_vault(Path(tmp))
         if crowd:
             import both

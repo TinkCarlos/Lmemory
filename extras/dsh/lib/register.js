@@ -40,59 +40,59 @@ const QUERY = {
 
 const TOOLS = [
   {
-    name: "krouter_status",
+    name: "lmemory_status",
     route: "status",
     needsQuery: false,
     description:
       "Agent second brain home / vault status. Includes lamp and self-evolution key. If host_action is present, tell the host (vault-page key or CLI login). Read-only. Cite the receipt source.",
   },
   {
-    name: "krouter_preference",
+    name: "lmemory_preference",
     route: "preference",
     needsQuery: true,
     description:
       "Memory system: host preferences and constraints. Short noun. If canonical_match is true, open canonical_source.",
   },
   {
-    name: "krouter_correction",
+    name: "lmemory_correction",
     route: "correction",
     needsQuery: true,
     description:
       "Memory system: corrections and supersedes. Short noun. If canonical_match is true, open canonical_source.",
   },
   {
-    name: "krouter_memory",
+    name: "lmemory_memory",
     route: "memory",
     needsQuery: true,
     description:
       "Memory system: high-trust memory index. Short noun. Not a vector search. If canonical_match is true, open canonical_source.",
   },
   {
-    name: "krouter_project",
+    name: "lmemory_project",
     route: "project",
     needsQuery: true,
     description:
       "Knowledge base: literal search under 01 项目. Short noun. If canonical_match is true, open canonical_source.",
   },
   {
-    name: "krouter_search",
+    name: "lmemory_search",
     route: "search",
     needsQuery: true,
     description:
       "Knowledge base search: alias table first, then literal rg. Not a vector search. If canonical_match is true, open canonical_source.",
   },
   {
-    name: "krouter_suggest",
+    name: "lmemory_suggest",
     route: "suggest",
     needsQuery: true,
     description:
-      "Nearest alias hints on a miss. Hints are not hits. Retry one alias with krouter_search.",
+      "Nearest alias hints on a miss. Hints are not hits. Retry one alias with lmemory_search.",
   },
 ];
 
-export const KROUTER_TOOL_NAMES = TOOLS.map((t) => t.name);
+export const LMEMORY_TOOL_NAMES = TOOLS.map((t) => t.name);
 
-export function registerKrouterTools(ctx, config, defineTool) {
+export function registerLmemoryTools(ctx, config, defineTool) {
   const vault = config.vaultPath || "";
   const router = config.routerScript || "";
 

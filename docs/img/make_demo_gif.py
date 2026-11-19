@@ -53,7 +53,7 @@ def frame(title, day_color, lines, footer=True):
         draw_text(d, X0, y, text, color, bold)
         y += LH
     if footer:
-        d.text((X0, H - 28), "Real output: Claude Code + KRouter plugin on a demo vault (github.com/398894496-arch/KRouter)",
+        d.text((X0, H - 28), "Real output: Claude Code + Lmemory plugin on a demo vault (github.com/TinkCarlos/Lmemory)",
                font=SMALL, fill=DIM)
     return im
 
@@ -84,17 +84,17 @@ a1 = ("You ship only from a tag on `main`, and CI builds and publishes the relea
       "2026-10-07). Source: `02 经验与方法/Release/Release process.md` in your vault.")
 for i in range(0, len(q1) + 1, 3):
     add(frame("Thursday · any agent asks", OK, [("> " + q1[:i] + "▌", FG, True)]), 70)
-base = [("> " + q1, FG, True), ("", FG, False), ("  krouter_ask(\"How do we ship a release?\")", DIM, False),
+base = [("> " + q1, FG, True), ("", FG, False), ("  lmemory_ask(\"How do we ship a release?\")", DIM, False),
         ("  → 02 经验与方法/Release/Release process.md  tier=rule status=active", DIM, False), ("", FG, False)]
 add(frame("Thursday · any agent asks", OK, base), 1400)
 add(frame("Thursday · any agent asks", OK, base + [(ln, FG, False) for ln in wrap(a1, 70)]), 4200)
 
 q2 = "What is our Kubernetes autoscaling policy?"
-a2 = ("Your KRouter vault has no page on a Kubernetes autoscaling policy, so I can't tell you what it is without "
+a2 = ("Your Lmemory vault has no page on a Kubernetes autoscaling policy, so I can't tell you what it is without "
       "guessing. If it's written down somewhere else, like a repo, a doc or a link, point me to it and I'll look.")
 for i in range(0, len(q2) + 1, 3):
     add(frame("And when the vault does not know", ACC, [("> " + q2[:i] + "▌", FG, True)]), 70)
-base2 = [("> " + q2, FG, True), ("", FG, False), ("  krouter_ask(\"What is our Kubernetes autoscaling policy?\")", DIM, False),
+base2 = [("> " + q2, FG, True), ("", FG, False), ("  lmemory_ask(\"What is our Kubernetes autoscaling policy?\")", DIM, False),
          ("  → recall: none (no page covers enough of the question; do not guess)", WARN, False), ("", FG, False)]
 add(frame("And when the vault does not know", ACC, base2), 1400)
 add(frame("And when the vault does not know", ACC, base2 + [(ln, FG, False) for ln in wrap(a2, 70)]), 4500)

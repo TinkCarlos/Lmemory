@@ -1,13 +1,13 @@
-// KRouter from JavaScript / TypeScript. No dependencies: it speaks MCP (JSON-RPC) to KRouter's own server, either a
+// Lmemory from JavaScript / TypeScript. No dependencies: it speaks MCP (JSON-RPC) to Lmemory's own server, either a
 // local one it starts over stdio, or a team server over Streamable HTTP.
 //
-//   import { KRouter } from "krouter";
-//   const kr = KRouter.local();                                  // the vault the one-line install recorded
+//   import { Lmemory } from "lmemory";
+//   const kr = Lmemory.local();                                  // the vault the one-line install recorded
 //   const a = await kr.ask("how do we ship a release?");
 //   a.page, a.how, a.refused                                     // source page, one-line answer, true = not in the vault
 //   await kr.close();
 //
-//   const team = KRouter.remote("https://krouter.example/mcp/team", { token: process.env.KROUTER_TOKEN });
+//   const team = Lmemory.remote("https://lmemory.example/mcp/team", { token: process.env.LMEMORY_TOKEN });
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
@@ -15,9 +15,9 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 const PROTOCOL = "2025-06-18";
-// 2.0 起装在 ~/.agents/skills/krouter；还没升级的旧安装在 krouter-obsidian
-const INSTALLED = join(homedir(), ".agents", "skills", "krouter", "scripts", "mcp_server.py");
-const LEGACY = join(homedir(), ".agents", "skills", "krouter-obsidian", "scripts", "mcp_server.py");
+// 2.0 起装在 ~/.agents/skills/lmemory；还没升级的旧安装在 lmemory-obsidian
+const INSTALLED = join(homedir(), ".agents", "skills", "lmemory", "scripts", "mcp_server.py");
+const LEGACY = join(homedir(), ".agents", "skills", "lmemory-obsidian", "scripts", "mcp_server.py");
 const DEFAULT_SERVER = !existsSync(INSTALLED) && existsSync(LEGACY) ? LEGACY : INSTALLED;
 
 /** One receipt, read the same way as the Python SDK's `Answer`. */
@@ -88,7 +88,7 @@ class StdioTransport {
       if (w) { this.waiting.delete(msg.id); w(msg); }
     });
     this.proc.on("exit", () => {
-      for (const w of this.waiting.values()) w({ error: { message: "KRouter server exited" } });
+      for (const w of this.waiting.values()) w({ error: { message: "Lmemory server exited" } });
       this.waiting.clear();
     });
   }
@@ -127,27 +127,27 @@ class HttpTransport {
   async close() {}
 }
 
-export class KRouter {
-  /** A local KRouter: starts its MCP server over stdio. `vault` defaults to the one the install recorded. */
+export class Lmemory {
+  /** A local Lmemory: starts its MCP server over stdio. `vault` defaults to the one the install recorded. */
   static local({ vault, python = process.platform === "win32" ? "python" : "python3", server = DEFAULT_SERVER } = {}) {
-    return new KRouter(new StdioTransport(python, [server], vault ? { KROUTER_VAULT: String(vault), OBSIDIAN_VAULT: String(vault) } : {}));
+    return new Lmemory(new StdioTransport(python, [server], vault ? { LMEMORY_VAULT: String(vault), OBSIDIAN_VAULT: String(vault) } : {}));
   }
 
-  /** A team server over Streamable HTTP, e.g. https://krouter.example/mcp/team. */
-  static remote(url, { token } = {}) { return new KRouter(new HttpTransport(url, token)); }
+  /** A team server over Streamable HTTP, e.g. https://lmemory.example/mcp/team. */
+  static remote(url, { token } = {}) { return new Lmemory(new HttpTransport(url, token)); }
 
   constructor(transport) { this.t = transport; this.nextId = 1; this.ready = null; }
 
   async #call(method, params) {
     const reply = await this.t.send({ jsonrpc: "2.0", id: this.nextId++, method, params });
-    if (reply.error) throw new Error(reply.error.message || "KRouter error");
+    if (reply.error) throw new Error(reply.error.message || "Lmemory error");
     return reply.result;
   }
 
   #init() {
     this.ready ??= (async () => {
       const r = await this.#call("initialize", { protocolVersion: PROTOCOL, capabilities: {},
-        clientInfo: { name: "krouter-js", version: "2.1.2" } });
+        clientInfo: { name: "lmemory-js", version: "2.1.2" } });
       await this.t.send({ jsonrpc: "2.0", method: "notifications/initialized" });
       return r;
     })();
@@ -161,12 +161,12 @@ export class KRouter {
   }
 
   /** Ask the memory one question. `route`: search (default), preference, correction, memory, project, suggest. */
-  ask(query, { route = "search" } = {}) { return this.#tool("krouter_ask", { query, route }); }
+  ask(query, { route = "search" } = {}) { return this.#tool("lmemory_ask", { query, route }); }
 
-  status() { return this.#tool("krouter_status", {}); }
+  status() { return this.#tool("lmemory_status", {}); }
 
   /** One line into the memory (a local server, or a team server started with --allow-write). */
-  async note(text, { kind = "note" } = {}) { return (await this.#tool("krouter_note", { text, kind })).text; }
+  async note(text, { kind = "note" } = {}) { return (await this.#tool("lmemory_note", { text, kind })).text; }
 
   async tools() { await this.#init(); return (await this.#call("tools/list", {})).tools.map((t) => t.name); }
 

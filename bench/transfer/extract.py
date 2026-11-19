@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Set 17 (bench/memory_honesty/HELDOUT.md): when the host agent writes experience cards itself, are they any good?
 
-The zero-key path: no model lane, the agent that ran the session records the lesson with `krouter_learn` (MCP) or
+The zero-key path: no model lane, the agent that ran the session records the lesson with `lmemory_learn` (MCP) or
 `experience.py learn`. Twelve synthetic sessions (`set17_sessions.jsonl`, written for this check, never a real one):
 7 with a lesson, 3 whose lesson is already a card in the vault, 2 with none. Each prompt gives the host what it would
 have at the end of such a session: the session-start digest, the session, and `experience.LEARN_HELP` (the tool's own
-description); the host says with what arguments it would call `krouter_learn`. Every proposed card then goes through
+description); the host says with what arguments it would call `lmemory_learn`. Every proposed card then goes through
 `experience.learn()` on a fresh copy of the vault, exactly as the tool would, and is scored mechanically against the
 session's gold: subject words absent from title, lesson and `when` (subject-free); the action and result holding a
 gold term (faithful); nothing written for a duplicate or a session with no lesson.
@@ -32,7 +32,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
 import experience  # noqa: E402
 
 VAULTS = {"zh": ("template-zh", "cards"), "en": ("template", "cards_en")}
@@ -43,10 +43,10 @@ PROMPT = {
 【这段会话】
 {session}
 
-【工具 krouter_learn 的说明】
+【工具 lmemory_learn 的说明】
 {help}
 
-【评测说明，不是用户说的】这段会话现在要结束了。如果你会调用 krouter_learn，把每次调用的参数（工具说明里列的那些字段）写成一个
+【评测说明，不是用户说的】这段会话现在要结束了。如果你会调用 lmemory_learn，把每次调用的参数（工具说明里列的那些字段）写成一个
 JSON 数组，0 到 2 个对象；不会调用就写 []。只输出这个 JSON 数组。""",
     "en": """[Context the system injected at session start]
 {digest}
@@ -54,10 +54,10 @@ JSON 数组，0 到 2 个对象；不会调用就写 []。只输出这个 JSON �
 [This session]
 {session}
 
-[Description of the tool krouter_learn]
+[Description of the tool lmemory_learn]
 {help}
 
-[Bench note, not from the user] This session is about to end. If you would call krouter_learn, write the arguments of
+[Bench note, not from the user] This session is about to end. If you would call lmemory_learn, write the arguments of
 each call (the fields the tool description lists) as one JSON array of 0 to 2 objects; if you would not call it,
 write []. Output only that JSON array.""",
 }
@@ -133,8 +133,8 @@ def has_any(text: str, terms: list[str]) -> bool:
     return any(t.lower() in low for t in terms)
 
 
-RETRY = {"zh": "\n\n【工具 krouter_learn 返回】{why}\n\n【评测说明，不是用户说的】按工具返回的原因改写这次调用，把改好的参数写成同样的 JSON 数组（不再调用就写 []）。只输出这个 JSON 数组。",
-         "en": "\n\n[Tool krouter_learn returned] {why}\n\n[Bench note, not from the user] Rewrite this call for the reason the tool gave and write the corrected arguments as the same JSON array ([] if you would not call it again). Output only that JSON array."}
+RETRY = {"zh": "\n\n【工具 lmemory_learn 返回】{why}\n\n【评测说明，不是用户说的】按工具返回的原因改写这次调用，把改好的参数写成同样的 JSON 数组（不再调用就写 []）。只输出这个 JSON 数组。",
+         "en": "\n\n[Tool lmemory_learn returned] {why}\n\n[Bench note, not from the user] Rewrite this call for the reason the tool gave and write the corrected arguments as the same JSON array ([] if you would not call it again). Output only that JSON array."}
 
 
 def score_one(s: dict, reply: str, retry: str | None = None) -> dict:

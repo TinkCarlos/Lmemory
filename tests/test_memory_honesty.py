@@ -15,9 +15,9 @@ bench = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bench)
 
 
-def test_krouter_on_memory_honesty_bench():
+def test_lmemory_on_memory_honesty_bench():
     rows = bench.questions()
-    res = bench.score(rows, bench.krouter_answers(rows))
+    res = bench.score(rows, bench.lmemory_answers(rows))
     assert res["wrong_citations"] == 0, res["misses"]
     assert res["refused"] == "10/10", res["misses"]
     assert int(res["correction_hit"].split("/")[0]) >= 8, res["misses"]

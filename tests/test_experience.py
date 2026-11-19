@@ -1,4 +1,4 @@
-"""Experience cards (experimental, `KROUTER_EXPERIENCE=1`): written next to the distill, given to the host model as one
+"""Experience cards (experimental, `LMEMORY_EXPERIENCE=1`): written next to the distill, given to the host model as one
 digest at session start, never among the facts, off by default. Sets 13 and 15's files are pinned (HELDOUT.md)."""
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 BENCH = REPO / "bench/transfer"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(BENCH))
@@ -61,7 +61,7 @@ def test_quiet_on_the_cards_own_subject_and_on_unrelated_tasks(bench_vault):
 def test_cards_never_come_back_as_facts(bench_vault, tmp_path):
     import recall_index as ri
 
-    os.environ.setdefault("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    os.environ.setdefault("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     res = ri.recall(bench_vault, "红烧肉炖好了吃着发平，加一小勺糖")
     assert not any("经验卡" in h["rel"] for h in res["hits"])
     own = ri.recall(bench_vault, "红烧肉炖好了吃着发平，加一小勺糖", scope=experience.FOLDER)
@@ -102,27 +102,27 @@ def test_digest_is_one_subject_free_line_per_card_with_its_id_and_a_cap(bench_va
 
 
 def _start(vault: Path, tmp_path: Path, agent: str = "claude", **env) -> subprocess.CompletedProcess:
-    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(tmp_path / "no-consent"),
-         "KROUTER_NO_QUERY_LOG": "1", **env}
-    for k in ("KROUTER_EXPERIENCE", "KROUTER_INJECT"):
+    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(tmp_path / "no-consent"),
+         "LMEMORY_NO_QUERY_LOG": "1", **env}
+    for k in ("LMEMORY_EXPERIENCE", "LMEMORY_INJECT"):
         if k not in env:
             e.pop(k, None)
-    return subprocess.run([sys.executable, str(SCRIPTS / "session_hook.py"), "start", "--agent", agent],
+    return subprocess.run([sys.executable, str(SCRIPTS / "lmemory_capture.py"), "start", "--agent", agent],
                           input=json.dumps({"cwd": str(tmp_path), "session_id": "s1"}), env=e, capture_output=True,
                           text=True, timeout=60)
 
 
 def test_session_start_gives_the_digest_by_default_and_not_when_off(bench_vault, tmp_path):
     default = json.loads(_start(bench_vault, tmp_path).stdout)["hookSpecificOutput"]["additionalContext"]
-    assert default.startswith("KRouter 经验摘要")  # 第 23 套过线后：库里有卡就默认给
+    assert default.startswith("Lmemory 经验摘要")  # 第 23 套过线后：库里有卡就默认给
     # 2.0 起会话开始还带下意识索引（模板库自带别名表）；这里只看经验摘要的开关，索引另关
-    assert _start(bench_vault, tmp_path, KROUTER_EXPERIENCE="0", KROUTER_RECALL_INDEX="0").stdout == ""
-    assert "KRouter 经验摘要" not in _start(bench_vault, tmp_path, KROUTER_EXPERIENCE="0").stdout
-    ctx = json.loads(_start(bench_vault, tmp_path, KROUTER_EXPERIENCE="1").stdout)["hookSpecificOutput"]
-    assert ctx["hookEventName"] == "SessionStart" and ctx["additionalContext"].startswith("KRouter 经验摘要")
-    cursor = json.loads(_start(bench_vault, tmp_path, "cursor", KROUTER_EXPERIENCE="1").stdout)
+    assert _start(bench_vault, tmp_path, LMEMORY_EXPERIENCE="0", LMEMORY_RECALL_INDEX="0").stdout == ""
+    assert "Lmemory 经验摘要" not in _start(bench_vault, tmp_path, LMEMORY_EXPERIENCE="0").stdout
+    ctx = json.loads(_start(bench_vault, tmp_path, LMEMORY_EXPERIENCE="1").stdout)["hookSpecificOutput"]
+    assert ctx["hookEventName"] == "SessionStart" and ctx["additionalContext"].startswith("Lmemory 经验摘要")
+    cursor = json.loads(_start(bench_vault, tmp_path, "cursor", LMEMORY_EXPERIENCE="1").stdout)
     assert "〔C08〕" in cursor["additional_context"]
-    assert _start(bench_vault, tmp_path, KROUTER_EXPERIENCE="1", KROUTER_INJECT="0").stdout == ""
+    assert _start(bench_vault, tmp_path, LMEMORY_EXPERIENCE="1", LMEMORY_INJECT="0").stdout == ""
 
 
 def test_host_scoring_reads_cited_ids_and_never_shows_the_answer():
@@ -205,17 +205,17 @@ def test_distill_writes_an_experience_card_only_when_switched_on(env, monkeypatc
         return "- 发版只从 main 打 tag（10:05）"
 
     monkeypatch.setattr(llm, "complete", fake)
-    for k in ("OBSIDIAN_VAULT", "KROUTER_CLAUDE_PROJECTS", "KROUTER_CODEX_SESSIONS", "KROUTER_CURSOR_PROJECTS",
-              "KROUTER_STATE_DIR"):
+    for k in ("OBSIDIAN_VAULT", "LMEMORY_CLAUDE_PROJECTS", "LMEMORY_CODEX_SESSIONS", "LMEMORY_CURSOR_PROJECTS",
+              "LMEMORY_STATE_DIR"):
         monkeypatch.setenv(k, env["env"][k])
-    monkeypatch.delenv("KROUTER_EXPERIENCE", raising=False)
+    monkeypatch.delenv("LMEMORY_EXPERIENCE", raising=False)
     monkeypatch.setattr(sys, "argv", ["import_sessions.py", "--distill"])
     assert imp.main() == 0
     folder = env["vault"] / experience.FOLDER
     assert len(sent) == 2 and not folder.exists()  # 默认关：不多发一次，也不写卡
     shutil.rmtree(env["vault"] / "05 时间日志/会话摘录")
     sent.clear()
-    monkeypatch.setenv("KROUTER_EXPERIENCE", "1")
+    monkeypatch.setenv("LMEMORY_EXPERIENCE", "1")
     monkeypatch.setattr(sys, "argv", ["import_sessions.py", "--distill"])
     assert imp.main() == 0
     assert len(sent) == 3 and "经验卡" in sent[-1]
@@ -281,7 +281,7 @@ def test_host_written_card_needs_no_model_and_reads_back_in_english(tmp_path):
     card = experience.load_cards(vault)[0]
     assert card["lesson"].startswith("When a change") and len(card["when"]) == 2
     d = experience.digest(vault)
-    assert d.startswith("KRouter experience digest") and "How to use:" in d
+    assert d.startswith("Lmemory experience digest") and "How to use:" in d
     assert f"- When a change has no effect, first check that the system reads the copy you changed [{card['id']}]" in d
     assert experience.learn(vault, EN_CARD, "x") == (None, f"again: {card['id']}")  # 字面兜底：记成又遇到一次
     assert experience.usage(vault)[card["id"]]["again"] == 1
@@ -308,17 +308,17 @@ def _mcp(env: dict, *msgs: dict) -> list[dict]:
 def test_mcp_learn_writes_a_card_into_the_ledger(tmp_path):
     vault = tmp_path / "vault"
     shutil.copytree(REPO / "template", vault)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1", "KROUTER_CACHE_DIR": str(tmp_path / "c"),
-           "KROUTER_EXPERIENCE": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1", "LMEMORY_CACHE_DIR": str(tmp_path / "c"),
+           "LMEMORY_EXPERIENCE": "1"}
     out = _mcp(env, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
                {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-               {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "krouter_learn", "arguments": EN_CARD}})
-    assert "krouter_learn" in out[0]["result"]["instructions"]
-    assert "krouter_learn" in [t["name"] for t in out[1]["result"]["tools"]]
+               {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "lmemory_learn", "arguments": EN_CARD}})
+    assert "lmemory_learn" in out[0]["result"]["instructions"]
+    assert "lmemory_learn" in [t["name"] for t in out[1]["result"]["tools"]]
     assert out[2]["result"]["isError"] is False and "learned: 02 经验与方法/经验卡/Lesson - " in out[2]["result"]["content"][0]["text"]
     assert "经验卡：" in (vault / "90 系统文件/自动化/记忆变更记录.md").read_text(encoding="utf-8")
-    off = _mcp({**env, "KROUTER_EXPERIENCE": "0"}, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-    assert "krouter_learn" not in [t["name"] for t in off[0]["result"]["tools"]]
+    off = _mcp({**env, "LMEMORY_EXPERIENCE": "0"}, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    assert "lmemory_learn" not in [t["name"] for t in off[0]["result"]["tools"]]
 
 
 def test_session_import_records_uses_without_a_model(env, tmp_path):  # noqa: F811
@@ -336,7 +336,7 @@ def test_session_import_records_uses_without_a_model(env, tmp_path):  # noqa: F8
              "message": {"role": "user", "content": "按你说的加了缓存，管用"}},
             {"type": "assistant", "timestamp": _ts(1, 11), "message": {"content": [{"type": "text", "text": "好。"}]}}]
     _jsonl(env["claude"] / "-work-shop" / "s1.jsonl", rows)
-    env["env"]["KROUTER_EXPERIENCE"] = "1"
+    env["env"]["LMEMORY_EXPERIENCE"] = "1"
     out = _run(env)
     assert out["experience_uses"] == 2
     u = experience.usage(env["vault"])
@@ -376,8 +376,8 @@ def test_english_vault_gets_an_english_digest_at_session_start(tmp_path):
         vault = host.build_vault(tmp_path)
     finally:
         host.SET = "15"
-    ctx = json.loads(_start(vault, tmp_path, KROUTER_EXPERIENCE="1").stdout)["hookSpecificOutput"]["additionalContext"]
-    assert ctx.startswith("KRouter experience digest") and "[C08]" in ctx and "How to use:" in ctx and "经验" not in ctx.split("\n", 1)[1]
+    ctx = json.loads(_start(vault, tmp_path, LMEMORY_EXPERIENCE="1").stdout)["hookSpecificOutput"]["additionalContext"]
+    assert ctx.startswith("Lmemory experience digest") and "[C08]" in ctx and "How to use:" in ctx and "经验" not in ctx.split("\n", 1)[1]
 
 
 def test_extraction_scorer_counts_written_subject_free_and_duplicates():

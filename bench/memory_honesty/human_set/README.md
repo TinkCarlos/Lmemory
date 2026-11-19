@@ -4,15 +4,15 @@
 说话的方式问。它有两个用处：
 
 1. 一套和模型无关的留出题，用来判断本地向量检索能不能作为可选功能发布；
-2. 「越用越准」测评：同一件事问两次，第一次的问法交给 KRouter 的夜间学习，看第二次换个说法问时，它有没有学会。
+2. 「越用越准」测评：同一件事问两次，第一次的问法交给 Lmemory 的夜间学习，看第二次换个说法问时，它有没有学会。
 
 The first three held-out sets were written by Claude Opus in separate claude.ai sessions. This one should be written
 by a person, in their own words. It serves as a model-independent held-out set, and as the "learns from use" bench:
-each thing is asked twice, the first wording goes through KRouter's nightly learning, and the second is scored.
+each thing is asked twice, the first wording goes through Lmemory's nightly learning, and the second is scored.
 
 ## 谁来写
 
-最好是没看过 KRouter 代码、也没看过前三套题的人。维护者本人写也可以，但要在日志里注明。写之前不要运行 KRouter，
+最好是没看过 Lmemory 代码、也没看过前三套题的人。维护者本人写也可以，但要在日志里注明。写之前不要运行 Lmemory，
 也不要用任何检索工具试问题：只读 `../vault3/` 里的页面。
 
 ## 写什么
@@ -46,7 +46,7 @@ python3 bench/memory_honesty/human_set/check_human_set.py my_questions.csv
 ```
 
 它只检查格式和事实（答案页存在且没被取代、`evidence` 原句在答案页上、`absent` 词在问题里且不在任何页上），不运行
-KRouter，也不打印任何系统的答案。全部通过后，它会写出 `human_pairs.jsonl.gz`。把这个文件交给维护者，维护者先在
+Lmemory，也不打印任何系统的答案。全部通过后，它会写出 `human_pairs.jsonl.gz`。把这个文件交给维护者，维护者先在
 `../HELDOUT.md` 里登记怎么用，再跑。
 
-The checker only checks format and facts; it never runs KRouter or prints any system's answers.
+The checker only checks format and facts; it never runs Lmemory or prints any system's answers.

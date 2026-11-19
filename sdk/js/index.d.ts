@@ -17,9 +17,9 @@ export declare class Answer {
 
 export type Route = "search" | "preference" | "correction" | "memory" | "project" | "suggest";
 
-export declare class KRouter {
-  static local(options?: { vault?: string; python?: string; server?: string }): KRouter;
-  static remote(url: string, options?: { token?: string }): KRouter;
+export declare class Lmemory {
+  static local(options?: { vault?: string; python?: string; server?: string }): Lmemory;
+  static remote(url: string, options?: { token?: string }): Lmemory;
   ask(query: string, options?: { route?: Route }): Promise<Answer>;
   status(): Promise<Answer>;
   note(text: string, options?: { kind?: "note" | "decision" | "correction" }): Promise<string>;

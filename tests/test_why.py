@@ -1,4 +1,4 @@
-"""`krouter why`: how a lookup came out, in words. The four ways a question can end (an answer, pages brought along a
+"""`lmemory why`: how a lookup came out, in words. The four ways a question can end (an answer, pages brought along a
 connection, an old page and the new one that changed it, and "the memory does not know"), plus the lock, both
 languages, and that none of it writes anything."""
 
@@ -14,18 +14,18 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "sdk"))
-from krouter import sample, why  # noqa: E402
+from lmemory import sample, why  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def vaults(tmp_path_factory):
     mp = pytest.MonkeyPatch()
     root = tmp_path_factory.mktemp("why")
-    mp.setenv("KROUTER_NO_QUERY_LOG", "1")
-    mp.setenv("KROUTER_CACHE_DIR", str(root / "cache"))
-    mp.setenv("KROUTER_STATE_DIR", str(root / "state"))
+    mp.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    mp.setenv("LMEMORY_CACHE_DIR", str(root / "cache"))
+    mp.setenv("LMEMORY_STATE_DIR", str(root / "state"))
     mp.delenv("OBSIDIAN_VAULT", raising=False)
-    mp.delenv("KROUTER_VAULT", raising=False)
+    mp.delenv("LMEMORY_VAULT", raising=False)
     en = sample.build(root / "en", "en")
     zh = sample.build(root / "zh", "zh")
     yield {"en": en, "zh": zh, "root": root}
@@ -158,10 +158,10 @@ def test_the_language_follows_the_memory_and_can_be_overridden(vaults):
 
 
 def test_it_writes_nothing_into_the_memory_and_no_query_log(vaults, monkeypatch, capsys):
-    from krouter import cli
+    from lmemory import cli
 
     log = vaults["root"] / "state" / "queries.jsonl"
-    monkeypatch.delenv("KROUTER_NO_QUERY_LOG", raising=False)  # even with the log switched on, why must not use it
+    monkeypatch.delenv("LMEMORY_NO_QUERY_LOG", raising=False)  # even with the log switched on, why must not use it
     before = tree_hash(vaults["en"])
     for q in ("how do we deploy to production", "what is our on-call rotation", "deploy checklist"):
         assert cli.main(["--vault", str(vaults["en"]), "why", q]) == 0
@@ -172,7 +172,7 @@ def test_it_writes_nothing_into_the_memory_and_no_query_log(vaults, monkeypatch,
 
 
 def test_json_output_is_the_structure(vaults, capsys):
-    from krouter import cli
+    from lmemory import cli
 
     assert cli.main(["--vault", str(vaults["en"]), "why", "--json", "how do we deploy to production"]) == 0
     e = json.loads(capsys.readouterr().out)

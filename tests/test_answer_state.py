@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(REPO / "bench/refusal"))
 import recall_index as ri  # noqa: E402
@@ -26,10 +26,10 @@ LOCK_ALIAS = "发版流程"
 
 @pytest.fixture()
 def vault(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.delenv("KROUTER_STRICT", raising=False)
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_STRICT", raising=False)
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
     v = tmp_path / "v"
     synthetic.lay_out(v)
     table = v / "90 系统文件/canonical_sources.psv"
@@ -40,7 +40,7 @@ def vault(tmp_path, monkeypatch):
 
 def _receipt(v: Path, q: str, **env) -> str:
     e = {k: val for k, val in os.environ.items() if not k.endswith("_API_KEY")}
-    e.update(KROUTER_VAULT=str(v), OBSIDIAN_VAULT=str(v), **env)
+    e.update(LMEMORY_VAULT=str(v), OBSIDIAN_VAULT=str(v), **env)
     out = subprocess.run([sys.executable, str(SCRIPTS / "route_knowledge.py"), "search", q], env=e, capture_output=True,
                          text=True, timeout=120)
     assert out.returncode == 0, out.stderr
@@ -82,12 +82,12 @@ def test_the_pages_after_the_first_line_are_the_same_as_before(vault):
 
 
 def test_strict_mode_folds_related_into_none(vault):
-    text = _receipt(vault, RELATED_Q, KROUTER_STRICT="1")
+    text = _receipt(vault, RELATED_Q, LMEMORY_STRICT="1")
     lines = text.splitlines()
     assert lines[0].startswith("memory: none") and "严格模式" in lines[0]
     assert "recall: none" in text and "\nrecall:\n" not in text
     assert any(ln.startswith("related_pages: 02 经验与方法/值班交接.md") for ln in lines)
-    assert _receipt(vault, LOCK_ALIAS, KROUTER_STRICT="1").startswith("memory: direct")  # 锁命中照答
+    assert _receipt(vault, LOCK_ALIAS, LMEMORY_STRICT="1").startswith("memory: direct")  # 锁命中照答
 
 
 def test_strict_switch_file_and_env_priority(vault, monkeypatch):
@@ -95,9 +95,9 @@ def test_strict_switch_file_and_env_priority(vault, monkeypatch):
     (vault / ri.SETTINGS_FILE).write_text("# settings\nstrict|on\n", encoding="utf-8")
     assert ri.strict_on(vault) is True
     assert _receipt(vault, RELATED_Q).startswith("memory: none")
-    monkeypatch.setenv("KROUTER_STRICT", "0")  # 环境变量优先
+    monkeypatch.setenv("LMEMORY_STRICT", "0")  # 环境变量优先
     assert ri.strict_on(vault) is False
-    assert _receipt(vault, RELATED_Q, KROUTER_STRICT="0").startswith("memory: related")
+    assert _receipt(vault, RELATED_Q, LMEMORY_STRICT="0").startswith("memory: related")
 
 
 def test_strict_mode_keeps_the_prompt_hook_to_direct_pages(vault, monkeypatch):
@@ -106,14 +106,14 @@ def test_strict_mode_keeps_the_prompt_hook_to_direct_pages(vault, monkeypatch):
     res = {"hits": [{"rel": "02 经验与方法/值班交接.md", "tier": "rule"}], "confidence": "medium", "margin": 9.9,
            "query_tokens": ["值班"]}
     assert recollect._recall_hits(vault, res, date.today(), set())
-    monkeypatch.setenv("KROUTER_STRICT", "1")
+    monkeypatch.setenv("LMEMORY_STRICT", "1")
     assert recollect._recall_hits(vault, res, date.today(), set()) == []
 
 
 def test_sdk_reads_the_state(vault):
     sys.path.insert(0, str(REPO / "sdk"))
-    import krouter
+    import lmemory
 
     for q, want in ((LOCK_ALIAS, "direct"), (RELATED_Q, "related"), (NONE_Q, "none")):
         text = _receipt(vault, q)
-        assert krouter.Answer(text, krouter._parse(text)).state == want, q
+        assert lmemory.Answer(text, lmemory._parse(text)).state == want, q

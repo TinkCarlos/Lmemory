@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 ROUTE = SCRIPTS / "route_knowledge.py"
 
 sys.path.insert(0, str(SCRIPTS))
@@ -28,16 +28,16 @@ def _write(root: Path, rel: str, text: str) -> None:
 
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.delenv("KROUTER_ZONES", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_ZONES", raising=False)
     return tmp_path
 
 
 def _en_vault(tmp: Path) -> Path:
     v = tmp / "en"
     (v).mkdir()
-    _write(v, "krouter-zones.psv", "@lang|en\n")
+    _write(v, "lmemory-zones.psv", "@lang|en\n")
     _write(v, "Releases.md", "---\ntitle: Releases\nstatus: active\n---\n\nWe ship releases every other Thursday, "
                               "after the staging deploy has been green for a day.\n")
     _write(v, "Billing.md", "---\ntitle: Billing\nstatus: active\n---\n\nInvoices go out on the first of the month "
@@ -57,7 +57,7 @@ def _zh_vault(tmp: Path) -> Path:
 
 
 def _receipt(vault: Path, query: str) -> str:
-    env = {**os.environ, "KROUTER_VAULT": str(vault), "OBSIDIAN_VAULT": str(vault)}
+    env = {**os.environ, "LMEMORY_VAULT": str(vault), "OBSIDIAN_VAULT": str(vault)}
     out = subprocess.run([sys.executable, str(SCRIPTS / "recall_index.py"), "--vault", str(vault), "--query", query],
                          capture_output=True, text=True, env=env, check=True)
     return out.stdout

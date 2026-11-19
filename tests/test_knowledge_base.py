@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(REPO / "sdk"))
 import kb  # noqa: E402
@@ -55,12 +55,12 @@ def _write(root: Path, rel: str, text: str) -> None:
 
 @pytest.fixture()
 def vault(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.delenv("KROUTER_ZONES", raising=False)
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_ZONES", raising=False)
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
     v = tmp_path / "v"
-    _write(v, "krouter-zones.psv", "@lang|en\n")
+    _write(v, "lmemory-zones.psv", "@lang|en\n")
     for name, text in RULES.items():
         _write(v, f"Rules/{name}.md", f"---\nstatus: active\n---\n# {name}\n\n**{text}**\n")
     _write(v, f"{RESEARCH}/Billing outage at a fintech.md", ARTICLE)
@@ -70,7 +70,7 @@ def vault(tmp_path, monkeypatch):
 
 
 def _receipt(v: Path, q: str, route: str = "search") -> str:
-    env = {**os.environ, "KROUTER_VAULT": str(v), "OBSIDIAN_VAULT": str(v)}
+    env = {**os.environ, "LMEMORY_VAULT": str(v), "OBSIDIAN_VAULT": str(v)}
     out = subprocess.run([sys.executable, str(SCRIPTS / "route_knowledge.py"), route, q], env=env, capture_output=True,
                          text=True, timeout=120)
     assert out.returncode == 0, out.stderr
@@ -81,7 +81,7 @@ Q_ARTICLE = "How did the billing service outage happen?"
 
 
 def test_undeclared_research_is_memory_when_automatic_recognition_is_off(vault, monkeypatch):
-    monkeypatch.setenv("KROUTER_KB_AUTO", "0")
+    monkeypatch.setenv("LMEMORY_KB_AUTO", "0")
     res = ri.recall(vault, Q_ARTICLE)
     assert "kb" not in res
     assert res["hits"] and res["hits"][0]["rel"].startswith(RESEARCH)
@@ -165,7 +165,7 @@ def test_clipper_frontmatter_counts_without_declaring(vault):
 
 def test_mixed_language_vault_english_question_about_nothing(tmp_path, monkeypatch):
     """A Chinese memory with an English article in a research folder; an English question the memory cannot answer."""
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     v = tmp_path / "zh"
     for i, (name, text) in enumerate({"发版流程": "发版前先跑全量测试，打 tag 后由 CI 发布。",
                                       "数据库备份": "数据库每天凌晨三点备份到对象存储，保留三十天。",
@@ -233,7 +233,7 @@ def test_import_without_a_converter_says_what_to_install(vault, monkeypatch):
         with pytest.raises(kb.ImportFailed) as e:
             kb.import_file(vault, src, RESEARCH)
         assert "markitdown" in str(e.value) and want in str(e.value)
-    env = {**os.environ, "KROUTER_VAULT": str(vault), "PATH": str(vault.parent / "empty")}
+    env = {**os.environ, "LMEMORY_VAULT": str(vault), "PATH": str(vault.parent / "empty")}
     out = subprocess.run([sys.executable, "-S", str(SCRIPTS / "kb.py"), "import", str(vault.parent / "doc.pdf")],
                          env=env, capture_output=True, text=True, timeout=60)
     assert out.returncode == 1 and "Traceback" not in out.stderr and "Install" in out.stderr
@@ -249,18 +249,18 @@ def test_prompt_hook_and_standing_index_leave_reference_out(vault, monkeypatch):
 
 
 def test_sdk_answer_reads_the_block(vault):
-    import krouter
+    import lmemory
 
     kb.add(vault, [RESEARCH])
-    a = krouter.Answer(_receipt(vault, Q_ARTICLE))
-    a.fields = krouter._parse(a.text)
+    a = lmemory.Answer(_receipt(vault, Q_ARTICLE))
+    a.fields = lmemory._parse(a.text)
     assert a.refused and a.memory_none and a.page == ""
     assert a.references[0]["page"] == f"{RESEARCH}/Billing outage at a fintech.md"
     assert a.references[0]["kb"] == "declared"
 
 
 def test_why_lists_reference_apart(vault):
-    from krouter import why
+    from lmemory import why
 
     kb.add(vault, [RESEARCH])
     e = why.explain(vault, Q_ARTICLE, "en")
@@ -278,20 +278,20 @@ def test_langgraph_and_scoped_lookups_ignore_the_layer(vault):
 
 def test_mcp_server_hands_over_the_block_and_counts_the_refusal(vault, tmp_path):
     """The MCP server (stdio, the same code the team server runs per request) passes the receipt on unchanged: the
-    `memory: none` line, the block, and `recall: none`; its instructions and `krouter_ask`'s description explain them."""
+    `memory: none` line, the block, and `recall: none`; its instructions and `lmemory_ask`'s description explain them."""
     kb.add(vault, [RESEARCH])
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    env.update(KROUTER_VAULT=str(vault), OBSIDIAN_VAULT=str(vault), KROUTER_NO_QUERY_LOG="1",
-               KROUTER_CACHE_DIR=str(tmp_path / "mcp-cache"))
+    env.update(LMEMORY_VAULT=str(vault), OBSIDIAN_VAULT=str(vault), LMEMORY_NO_QUERY_LOG="1",
+               LMEMORY_CACHE_DIR=str(tmp_path / "mcp-cache"))
     msgs = [{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
             {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-             "params": {"name": "krouter_ask", "arguments": {"query": Q_ARTICLE}}}]
+             "params": {"name": "lmemory_ask", "arguments": {"query": Q_ARTICLE}}}]
     out = subprocess.run([sys.executable, str(SCRIPTS / "mcp_server.py")], env=env, capture_output=True, text=True,
                          input="\n".join(json.dumps(m) for m in msgs) + "\n", timeout=120)
     replies = [json.loads(x) for x in out.stdout.splitlines() if x.strip()]
     assert "knowledge_base:" in replies[0]["result"]["instructions"]
-    ask_tool = next(t for t in replies[1]["result"]["tools"] if t["name"] == "krouter_ask")
+    ask_tool = next(t for t in replies[1]["result"]["tools"] if t["name"] == "lmemory_ask")
     assert "knowledge_base:" in ask_tool["description"]
     text = replies[2]["result"]["content"][0]["text"]
     assert "memory: none" in text and "knowledge_base:" in text and "recall: none" in text
@@ -313,7 +313,7 @@ def test_standing_index_lists_memory_topics_only(vault):
 
 
 def test_nightly_counts_recognised_reference_pages(vault, tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
     import nightly
 
     allp, new = kb.auto_news(vault)

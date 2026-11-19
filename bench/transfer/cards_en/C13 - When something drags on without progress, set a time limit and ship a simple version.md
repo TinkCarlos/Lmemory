@@ -6,7 +6,7 @@ card_id: C13
 when: been at it for days; still not done; no progress
 source_ref: "[[05 时间日志/会话摘录/example C13]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When something drags on without progress, set a time limit and ship a simple version

@@ -1,5 +1,7 @@
 # KRouter next to MemOS and Hindsight
 
+> Historical KRouter measurements and evaluation context, preserved from upstream. See the [Lmemory README](../README.md) for the current build.
+
 Ten projects side by side (page-quoted, no ranking): [`COMPARE-ALL.md`](COMPARE-ALL.md).
 
 中文：[`COMPARE.zh.md`](COMPARE.zh.md) · back to the [README](../README.md)

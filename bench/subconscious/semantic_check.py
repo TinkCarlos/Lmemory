@@ -3,7 +3,7 @@
 page from one that should be left alone, where the hook's word matching cannot? A one-off mechanical check on the
 development half. Not a product path: nothing here is imported by the engine.
 
-    python3 -m pip install fastembed numpy            # in an environment of its own; not a KRouter dependency
+    python3 -m pip install fastembed numpy            # in an environment of its own; not a Lmemory dependency
     python3 bench/subconscious/semantic_check.py --model sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 \
         --save bench/subconscious/results/set45/semantic/dev-minilm.json
 
@@ -30,9 +30,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
 sys.path.insert(0, str(HERE))
-os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
 
 QUIET_MAX, WRONG_MAX = 3, 1
 TS = [round(0.20 + 0.01 * i, 2) for i in range(71)]
@@ -63,7 +63,7 @@ def main() -> int:
 
     rows = set45.case_file("set45dev")
     tmp = Path(tempfile.mkdtemp())
-    os.environ.update(KROUTER_CACHE_DIR=str(tmp / "cache"), KROUTER_STATE_DIR=str(tmp / "state"))
+    os.environ.update(LMEMORY_CACHE_DIR=str(tmp / "cache"), LMEMORY_STATE_DIR=str(tmp / "state"))
     v = set32.make_vault(tmp)
     import recall_index as ri
 

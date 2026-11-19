@@ -3,7 +3,7 @@ import os
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "skill/krouter/scripts"
+SCRIPTS = ROOT / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from ask_product import (  # noqa: E402

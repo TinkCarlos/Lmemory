@@ -22,7 +22,7 @@ POS_ZH_TOP1_MIN = 9  # the same 12 asked in Chinese (0.9.3: 9, 0.10.1: 5 — a s
 def test_recall_bench(tmp_path, monkeypatch):
     vault = tmp_path / "vault"
     shutil.copytree(REPO / "template", vault)
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     rows = [json.loads(x) for x in BENCH.read_text(encoding="utf-8").splitlines() if x.strip()]
     pos_ok, pos_zh_ok, wrong_answers = 0, 0, []
     for it in rows:
@@ -47,8 +47,8 @@ def test_recall_bench_chinese_template(tmp_path, monkeypatch):
     """The Chinese template is what a Chinese-speaking host starts with: a small vault, Chinese questions."""
     vault = tmp_path / "vault"
     shutil.copytree(REPO / "template-zh", vault)
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
     rows = [json.loads(x) for x in ZH_BENCH.read_text(encoding="utf-8").splitlines() if x.strip()]
     pos_ok, semi_refused, off_answered = 0, 0, []
     for it in rows:

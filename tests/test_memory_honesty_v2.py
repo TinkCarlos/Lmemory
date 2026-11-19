@@ -7,7 +7,7 @@ floor on the held-out score. What is checked:
 - every answerable question's `evidence` sentence is on its gold page, every replaced page says superseded, and every
   neighbour question's `absent` term is on no page of vault2, so it cannot be answered by accident;
 - no question repeats another set's question;
-- the plain baseline is what the bench is for (it cites wrong pages and old decisions), and KRouter clears a sanity
+- the plain baseline is what the bench is for (it cites wrong pages and old decisions), and Lmemory clears a sanity
   guard far from any target: fewer wrong citations and more refusals than plain BM25 on heldout2.
 
 Messages carry aggregates only, never a held-out question.
@@ -105,9 +105,9 @@ def test_plain_bm25_is_what_the_bench_is_for_on_vault2():
 def test_heldout2_sanity_guard_against_plain_bm25():
     rows = bench.questions("heldout2")
     src = bench.vault_of("heldout2")
-    kr = bench.aggregate(bench.score(rows, bench.krouter_answers(rows, src)))
+    kr = bench.aggregate(bench.score(rows, bench.lmemory_answers(rows, src)))
     bm = bench.aggregate(bench.score(rows, bench.bm25_answers(rows, src, cjk=True)))
-    msg = f"heldout2 aggregates: krouter={kr} bm25={bm}"
+    msg = f"heldout2 aggregates: lmemory={kr} bm25={bm}"
     assert kr["wrong_citation_rate"] < bm["wrong_citation_rate"], msg
     assert int(kr["refused"].split("/")[0]) > int(bm["refused"].split("/")[0]), msg
     print(msg)

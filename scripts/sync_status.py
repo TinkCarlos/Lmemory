@@ -16,11 +16,11 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-START, END = "<!-- krouter-status:start (source: docs/STATUS{lang}.md; run scripts/sync_status.py) -->", "<!-- krouter-status:end -->"
+START, END = "<!-- lmemory-status:start (source: docs/STATUS{lang}.md; run scripts/sync_status.py) -->", "<!-- lmemory-status:end -->"
 TARGETS = {"": ["PROTOCOL.md", "SECURITY.md", "docs/VERIFY.md", "docs/ARCHITECTURE.md", "docs/BENCHMARK.md",
                 "docs/DETAILS.md", "docs/FOR-AGENTS.md"],
            ".zh": ["docs/DETAILS.zh.md"]}
-BLOCK = re.compile(r"<!-- krouter-status:start[^>]*-->.*?<!-- krouter-status:end -->\n*", re.S)
+BLOCK = re.compile(r"<!-- lmemory-status:start[^>]*-->.*?<!-- lmemory-status:end -->\n*", re.S)
 
 
 def block(lang: str) -> str:

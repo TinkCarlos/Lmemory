@@ -2,15 +2,15 @@
 # home directory (claude-mem, run under a separate HOME on macOS, still looked up the host's Claude Code login in the
 # keychain). Build and run from the repository root:
 #
-#   docker build -f bench/memory_honesty/adapters/Dockerfile -t krouter-bench .
-#   docker run --rm -v "$PWD/bench-out:/out" krouter-bench
+#   docker build -f bench/memory_honesty/adapters/Dockerfile -t lmemory-bench .
+#   docker run --rm -v "$PWD/bench-out:/out" lmemory-bench
 #
 # basic-memory 0.23 turns on semantic search by default and downloads its embedding model on first use. To run
 # offline (`--network none`), download `BAAI/bge-small-en-v1.5` with fastembed on the host and mount the cache:
 #   -e HF_HUB_OFFLINE=1 -v "$CACHE:/tmp/home/.basic-memory/fastembed_cache"
 #
 # It indexes each bench vault as its own basic-memory project and writes its scored answers for the sets named on
-# the command line (default `dev heldout`; e.g. `docker run … krouter-bench dev3 heldout3`) to /out; grade them with
+# the command line (default `dev heldout`; e.g. `docker run … lmemory-bench dev3 heldout3`) to /out; grade them with
 # bench/memory_honesty/run.py --answers and bench/memory_honesty/floor.py.
 FROM python:3.13-slim
 ARG BASIC_MEMORY_VERSION=0.23.2

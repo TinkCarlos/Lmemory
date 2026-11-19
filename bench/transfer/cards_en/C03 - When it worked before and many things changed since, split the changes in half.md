@@ -6,7 +6,7 @@ card_id: C03
 when: it used to work; suddenly broken; no idea which change did it
 source_ref: "[[05 时间日志/会话摘录/example C03]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When it worked before and many things changed since, split the changes in half

@@ -13,7 +13,7 @@ import pytest
 
 from test_import_sessions import FOLDER, SCRIPTS, _claude_turns, _pages, _ts, env  # noqa: F401  env 是 fixture
 
-HOOK = SCRIPTS / "session_hook.py"
+HOOK = SCRIPTS / "lmemory_capture.py"
 LEDGER = "90 系统文件/自动化/记忆变更记录.md"
 SID = "abcd1234-ledger"
 
@@ -32,14 +32,14 @@ def box(env, monkeypatch):
     _git(vault, "init", "-q")
     _git(vault, "add", "-A")
     _git(vault, "commit", "-q", "-m", "init")
-    state = env["env"]["KROUTER_STATE_DIR"]
+    state = env["env"]["LMEMORY_STATE_DIR"]
     from pathlib import Path
 
     Path(state).mkdir(parents=True, exist_ok=True)
     (Path(state) / "import.json").write_text(json.dumps({"consent": True}), encoding="utf-8")
     for text in ("不对，发版以后一律走 CI 发布。", "配色改成蓝色主题。"):
         payload = {"prompt": text, "session_id": SID, "cwd": "/work/shop", "transcript_path": ""}
-        hook_env = {k: v for k, v in env["env"].items() if k != "KROUTER_IN_DISTILL"}
+        hook_env = {k: v for k, v in env["env"].items() if k != "LMEMORY_IN_DISTILL"}
         subprocess.run([sys.executable, str(HOOK), "prompt"], input=json.dumps(payload), env=hook_env,
                        capture_output=True, text=True, check=True, timeout=60)
     t = [_ts(0, 9), _ts(0, 10)]
@@ -49,8 +49,8 @@ def box(env, monkeypatch):
     import llm
 
     monkeypatch.setattr(llm, "complete", lambda prompt, vault=None: "- 原来手动上传 → 改成 发版一律走 CI 发布（10:05）")
-    for k in ("OBSIDIAN_VAULT", "KROUTER_CLAUDE_PROJECTS", "KROUTER_CODEX_SESSIONS", "KROUTER_CURSOR_PROJECTS",
-              "KROUTER_STATE_DIR"):
+    for k in ("OBSIDIAN_VAULT", "LMEMORY_CLAUDE_PROJECTS", "LMEMORY_CODEX_SESSIONS", "LMEMORY_CURSOR_PROJECTS",
+              "LMEMORY_STATE_DIR"):
         monkeypatch.setenv(k, env["env"][k])
     return {"vault": vault, "imp": imp, "env": env, "monkeypatch": monkeypatch}
 
@@ -77,7 +77,7 @@ def test_run_settles_candidates_commits_and_logs(box):
     assert f"会话 `claude-code:{SID[:8]}`" in ledger and "取代：原来手动上传 → 改成 发版一律走 CI 发布" in ledger
     assert "纠正候选判定：成立 1，补记 1，不成立 0" in ledger and "补记：「配色改成蓝色主题。」" in ledger
     log = _git(vault, "log", "--format=%s%n%b")
-    assert re.search(r"\[krouter-run \d{8}T\d{6}\]", log) and "变更记录 run" in log
+    assert re.search(r"\[lmemory-run \d{8}T\d{6}\]", log) and "变更记录 run" in log
     page = next(iter(_pages(box["env"]).values()))
     assert "（模型提炼）" in page and "待你确认" not in page
     assert "- 你说：配色改成蓝色主题。（" in page and "当场记下的纠正，提炼里没有" in page

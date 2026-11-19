@@ -1,4 +1,4 @@
-"""A key pasted into the vault never leaves through KRouter: not to a model, not into an agent's context,
+"""A key pasted into the vault never leaves through Lmemory: not to a model, not into an agent's context,
 not into the query log or the recall cache."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 FAKE = "sk-FAKEFAKEFAKE1234567890abcdef"
 KEY_PAGE = "90 系统文件/自动化/自进化钥匙.md"
 OTHER = "90 系统文件/Agent记忆/DeepSeek 凭据.md"  # secret by its name: never sent, never quoted
@@ -39,7 +39,7 @@ def keyed_vault(tmp_path: Path) -> Path:
 
 def test_redact_keeps_placeholders_and_numbers():
     sys.path.insert(0, str(SCRIPTS))
-    from krouter_redact import redact
+    from lmemory_redact import redact
 
     assert FAKE not in redact(f"DEEPSEEK_API_KEY={FAKE}")
     assert redact("# DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY") == "# DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY"
@@ -49,7 +49,7 @@ def test_redact_keeps_placeholders_and_numbers():
 
 
 def test_cards_and_topics_never_send_a_key(keyed_vault, monkeypatch, tmp_path):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     import answer_cards as ac
     import consolidate_topics as ct
     import llm
@@ -76,8 +76,8 @@ def test_cards_and_topics_never_send_a_key(keyed_vault, monkeypatch, tmp_path):
 @pytest.mark.parametrize("sh_only", ["0", "1"])
 def test_router_never_prints_or_logs_a_key(keyed_vault, tmp_path, sh_only):
     state, cache = tmp_path / "state", tmp_path / "cache"
-    env = {**os.environ, "OBSIDIAN_VAULT": str(keyed_vault), "KROUTER_SH_ONLY": sh_only, "KROUTER_STATE_DIR": str(state),
-           "KROUTER_CACHE_DIR": str(cache), "KROUTER_NO_QUERY_LOG": "0"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(keyed_vault), "LMEMORY_SH_ONLY": sh_only, "LMEMORY_STATE_DIR": str(state),
+           "LMEMORY_CACHE_DIR": str(cache), "LMEMORY_NO_QUERY_LOG": "0"}
     for route, q in (("search", "DEEPSEEK API key 怎么填"), ("search", "DEEPSEEK_API_KEY"), ("memory", "DeepSeek 凭据"),
                      ("search", f"我的 key 是 {FAKE}"), ("search", "Mistral 密钥"), ("search", "模型服务")):
         out = subprocess.run(["/bin/sh", str(SCRIPTS / "route_knowledge.sh"), route, q], env=env,
@@ -93,7 +93,7 @@ def test_router_never_prints_or_logs_a_key(keyed_vault, tmp_path, sh_only):
 
 def test_upgrade_rebuilds_a_cache_built_before_redaction(keyed_vault, tmp_path, monkeypatch):
     """A cache written by an older version holds raw page text; the schema bump must force a full rebuild."""
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     import recall_index as ri
 
     con = ri.connect(ri.cache_path(keyed_vault))
@@ -131,7 +131,7 @@ KEEP_CASES = [
 @pytest.mark.parametrize("case", REDACT_CASES)
 def test_redact_catches_the_common_shapes(case):
     sys.path.insert(0, str(SCRIPTS))
-    from krouter_redact import redact
+    from lmemory_redact import redact
 
     out = redact(case.format(v=BARE))
     assert BARE[:12] not in out and "a1b2c3d4a1b2c3d4" not in out and "0f3e2d1c0f3e" not in out, out
@@ -140,7 +140,7 @@ def test_redact_catches_the_common_shapes(case):
 @pytest.mark.parametrize("case", KEEP_CASES)
 def test_redact_leaves_ordinary_text_alone(case):
     sys.path.insert(0, str(SCRIPTS))
-    from krouter_redact import redact
+    from lmemory_redact import redact
 
     assert redact(case) == case
 
@@ -152,7 +152,7 @@ PASTES = [  # how people paste a key on the key page (outside review, round six)
     ("DeepSeek 密钥：sk-{v}", "DEEPSEEK_API_KEY"),
     ("- DEEPSEEK_API_KEY=sk-{v}", "DEEPSEEK_API_KEY"),
     ("Gemini 的 key 是 AIza{v}{v}", "GEMINI_API_KEY"),
-    ("sk-{v}", "KROUTER_PENDING_KEY_1"),  # no provider word, ambiguous prefix: held, not guessed
+    ("sk-{v}", "LMEMORY_PENDING_KEY_1"),  # no provider word, ambiguous prefix: held, not guessed
 ]
 
 
@@ -162,20 +162,20 @@ def test_any_pasted_key_leaves_the_vault(keyed_vault, tmp_path, monkeypatch, pas
     import llm
 
     keys = tmp_path / "keys.env"
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(keys))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(keys))
     page = keyed_vault / KEY_PAGE
     page.write_text("# 自进化钥匙\n\n" + paste.format(v=BARE) + "\n", encoding="utf-8")
     assert llm.move_page_keys(keyed_vault) == [name]
     assert BARE not in page.read_text(encoding="utf-8")  # gone from the vault
     assert f"{name}=" in keys.read_text(encoding="utf-8") and BARE in keys.read_text(encoding="utf-8")
-    if name.startswith("KROUTER_PENDING"):
+    if name.startswith("LMEMORY_PENDING"):
         assert "DEEPSEEK_API_KEY" in page.read_text(encoding="utf-8")  # the note says how to name it
         assert llm.pending_keys() == [name]
 
 
 def test_hashes_in_notes_survive_redaction():
     sys.path.insert(0, str(SCRIPTS))
-    from krouter_redact import redact
+    from lmemory_redact import redact
 
     for text in ("根因在 commit 3f6c4a7da8b6ff65c51203b9d4813653bb84ef90，回滚时 revert 它",
                  "sha256 d8c1d5af1234567890abcdef1234567890abcdef1234567890abcdef12345678",
@@ -189,7 +189,7 @@ def test_two_keys_on_one_line_are_both_kept(keyed_vault, tmp_path, monkeypatch):
     import llm
 
     keys = tmp_path / "keys.env"
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(keys))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(keys))
     page = keyed_vault / KEY_PAGE
     other = "Zy9xWv8uTs7rQp6oNm5lKj4i"
     page.write_text(f"DeepSeek: sk-{BARE} OpenAI: sk-proj-{other}\n", encoding="utf-8")
@@ -212,14 +212,14 @@ PATHS = [
 @pytest.mark.parametrize("text", PATHS)
 def test_paths_and_urls_survive_redaction(text):
     sys.path.insert(0, str(SCRIPTS))
-    from krouter_redact import redact
+    from lmemory_redact import redact
 
     assert redact(text) == text
 
 
 def test_keys_inside_urls_are_still_masked():
     sys.path.insert(0, str(SCRIPTS))
-    from krouter_redact import redact
+    from lmemory_redact import redact
 
     assert BARE not in redact(f"https://api.x.com/v1?key={BARE}")
     assert "sk-abcdefghijklmnop1234" not in redact("https://hooks.example.com/sk-abcdefghijklmnop1234")
@@ -232,13 +232,13 @@ def test_rewiring_keys_keeps_lines_it_does_not_manage(tmp_path):
     import wire_keys
 
     path = tmp_path / "keys.env"
-    path.write_text("# mine\nKROUTER_CLI_LOGIN=/old/claude\nDEEPSEEK_API_KEY=old\nCLAUDE_CODE_OAUTH_TOKEN=tok\n"
-                    "KROUTER_PENDING_KEY_1=p\nGROQ_API_KEY=dead\n", encoding="utf-8")
+    path.write_text("# mine\nLMEMORY_CLI_LOGIN=/old/claude\nDEEPSEEK_API_KEY=old\nCLAUDE_CODE_OAUTH_TOKEN=tok\n"
+                    "LMEMORY_PENDING_KEY_1=p\nGROQ_API_KEY=dead\n", encoding="utf-8")
     wire_keys.write_keys(path, {"DEEPSEEK_API_KEY": "new", "OPENAI_API_KEY": "o"}, "/opt/claude")
     lines = path.read_text(encoding="utf-8").splitlines()
-    assert lines == ["# mine", "KROUTER_CLI_LOGIN=/opt/claude", "DEEPSEEK_API_KEY=new", "CLAUDE_CODE_OAUTH_TOKEN=tok",
-                     "KROUTER_PENDING_KEY_1=p", "GROQ_API_KEY=dead", "OPENAI_API_KEY=o"]
+    assert lines == ["# mine", "LMEMORY_CLI_LOGIN=/opt/claude", "DEEPSEEK_API_KEY=new", "CLAUDE_CODE_OAUTH_TOKEN=tok",
+                     "LMEMORY_PENDING_KEY_1=p", "GROQ_API_KEY=dead", "OPENAI_API_KEY=o"]
     assert oct(path.stat().st_mode & 0o777) == "0o600" or os.name == "nt"
     wire_keys.write_keys(path, {}, "")
-    assert "KROUTER_CLI_LOGIN" not in path.read_text(encoding="utf-8")
+    assert "LMEMORY_CLI_LOGIN" not in path.read_text(encoding="utf-8")
     assert "CLAUDE_CODE_OAUTH_TOKEN=tok" in path.read_text(encoding="utf-8")

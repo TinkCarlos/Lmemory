@@ -1,21 +1,21 @@
 {
   "manifest_version": "0.3",
-  "name": "krouter",
-  "display_name": "KRouter",
+  "name": "lmemory",
+  "display_name": "Lmemory",
   "version": "__VERSION__",
   "description": "Your AI remembers what you decided, and what you changed your mind about, from a folder of plain Markdown on this machine.",
   "long_description": "Ask what you decided and the answer comes with the page it came from; a correction replaces the old answer; when the memory does not know, Claude is told so instead of being handed a guess. Lookups run on this machine with no model and no network. The memory folder is plain Markdown: open it in any editor, or in Obsidian. Needs Python 3.9 or newer.",
   "author": {
-    "name": "KRouter contributors",
-    "url": "https://github.com/398894496-arch/KRouter"
+    "name": "Tink",
+    "url": "https://github.com/TinkCarlos/Lmemory"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/398894496-arch/KRouter"
+    "url": "https://github.com/TinkCarlos/Lmemory"
   },
-  "homepage": "https://github.com/398894496-arch/KRouter",
-  "documentation": "https://github.com/398894496-arch/KRouter#install",
-  "support": "https://github.com/398894496-arch/KRouter/issues",
+  "homepage": "https://github.com/TinkCarlos/Lmemory",
+  "documentation": "https://github.com/TinkCarlos/Lmemory#install",
+  "support": "https://github.com/TinkCarlos/Lmemory/issues",
   "license": "MIT",
   "keywords": [
     "memory",
@@ -26,11 +26,11 @@
   ],
   "server": {
     "type": "python",
-    "entry_point": "server/krouter_desktop.py",
+    "entry_point": "server/lmemory_desktop.py",
     "mcp_config": {
       "command": "python3",
       "args": [
-        "${__dirname}/server/krouter_desktop.py",
+        "${__dirname}/server/lmemory_desktop.py",
         "--vault",
         "${user_config.memory_folder}"
       ],
@@ -43,27 +43,27 @@
   },
   "tools": [
     {
-      "name": "krouter_ask",
+      "name": "lmemory_ask",
       "description": "Look a question up in the memory: the answer, the page it came from, or 'not in the memory'."
     },
     {
-      "name": "krouter_status",
+      "name": "lmemory_status",
       "description": "Health of the memory folder and what, if anything, needs doing."
     },
     {
-      "name": "krouter_note",
+      "name": "lmemory_note",
       "description": "Write one line down (a decision, a correction, a fact) as a clue on today's notes page."
     },
     {
-      "name": "krouter_correct",
+      "name": "lmemory_correct",
       "description": "Make a correction hold now: the new decision supersedes the page that gave the old answer."
     },
     {
-      "name": "krouter_learn",
+      "name": "lmemory_learn",
       "description": "Record a lesson from this session as an experience card, offered later on tasks in the same situation."
     },
     {
-      "name": "krouter_skill",
+      "name": "lmemory_skill",
       "description": "Fetch the steps of a skill grown from the user's own lessons, when the task is the situation it is for."
     }
   ],
@@ -71,7 +71,7 @@
     "memory_folder": {
       "type": "directory",
       "title": "Memory folder",
-      "description": "The KRouter memory folder (plain Markdown). Leave empty to use the one the KRouter install recorded.",
+      "description": "The Lmemory memory folder (plain Markdown). Leave empty to use the one the Lmemory install recorded.",
       "required": false
     }
   },

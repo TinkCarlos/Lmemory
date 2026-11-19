@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Does KRouter get better with use? The "learns from use" bench.
+"""Does Lmemory get better with use? The "learns from use" bench.
 
 Each thing is asked twice, a week apart, in different words. Week 1's wordings go through the router as a host's
 agent would send them (`route_knowledge.py search`, into a private query log); then the real nightly learner runs
@@ -34,7 +34,7 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SCRIPTS = HERE.parents[1] / "skill/krouter/scripts"
+SCRIPTS = HERE.parents[1] / "skill/lmemory/scripts"
 spec = importlib.util.spec_from_file_location("mh_bench_learn", HERE / "run.py")
 bench = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bench)
@@ -70,11 +70,11 @@ def dev_pairs(vault: str) -> list[dict]:
 
 
 def env_for(vault: Path, state: Path, cache: Path, cli: str) -> dict[str, str]:
-    env = {k: v for k, v in os.environ.items() if k != "KROUTER_NO_QUERY_LOG"}  # 第一周的提问要进（私有的）查询日志
-    env.update({"OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(state), "KROUTER_CACHE_DIR": str(cache),
-                "KROUTER_DENSE": "0", "KROUTER_NOTIFY": "0"})
+    env = {k: v for k, v in os.environ.items() if k != "LMEMORY_NO_QUERY_LOG"}  # 第一周的提问要进（私有的）查询日志
+    env.update({"OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(state), "LMEMORY_CACHE_DIR": str(cache),
+                "LMEMORY_DENSE": "0", "LMEMORY_NOTIFY": "0"})
     if cli:
-        env["KROUTER_LEARN_CLI"] = cli
+        env["LMEMORY_LEARN_CLI"] = cli
     return env
 
 
@@ -91,7 +91,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--pairs", default="")
     ap.add_argument("--from-dev", choices=sorted(DEV_VAULTS), default="")
-    ap.add_argument("--scripts", default=str(SCRIPTS), help="KRouter scripts to run (e.g. an older checkout)")
+    ap.add_argument("--scripts", default=str(SCRIPTS), help="Lmemory scripts to run (e.g. an older checkout)")
     ap.add_argument("--set", default="", help="bench set for the vault and the BM25 floor (heldout3 / dev3)")
     ap.add_argument("--cli", default="", help="the learner's model: a logged-in CLI (default: the model lane)")
     ap.add_argument("--route", default="search")
@@ -107,7 +107,7 @@ def main() -> int:
     w1 = [p for p in pairs if p["week"] == 1]
     w2 = [p for p in pairs if p["week"] == 2]
     src = bench.vault_of(qset)
-    tmp = Path(tempfile.mkdtemp(prefix="krouter-learn-"))
+    tmp = Path(tempfile.mkdtemp(prefix="lmemory-learn-"))
     try:
         vault = tmp / "vault"
         shutil.copytree(src, vault)
@@ -129,14 +129,14 @@ def main() -> int:
                 ap.error("--show-learned is for dev sets only")
             for f in (vault / "90 系统文件").rglob("*自学习*.psv"):
                 print(f.read_text(encoding="utf-8"), file=sys.stderr)
-        os.environ["KROUTER_DENSE"] = "0"
-        before = bench.krouter_answers(w2, src)
-        after = bench.krouter_answers(w2, vault)
+        os.environ["LMEMORY_DENSE"] = "0"
+        before = bench.lmemory_answers(w2, src)
+        after = bench.lmemory_answers(w2, vault)
         floor = bench.bm25_floor_answers(w2, qset)
         report = {
             "set": qset, "intents": len({p["intent"] for p in pairs}), "week1_logged": logged, "night": learned,
-            "week2": {"krouter_before": summary(bench.score(w2, before)),
-                      "krouter_after_one_night": summary(bench.score(w2, after)),
+            "week2": {"lmemory_before": summary(bench.score(w2, before)),
+                      "lmemory_after_one_night": summary(bench.score(w2, after)),
                       "bm25_two_rules": summary(bench.score(w2, floor))},
             "after_minus_before_ci95": {k: v for k, v in bench.bootstrap(w2, after, before).items()
                                         if k.startswith("delta")},

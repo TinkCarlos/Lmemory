@@ -8,7 +8,7 @@ walk the vault to check file times and update nothing. Peak memory is the larges
     python3 bench/scale/gen.py 10000 /tmp/v10000            # a synthetic vault (template + N pages)
     python3 bench/scale/run.py /tmp/v10000 --queries 30
 
-Nothing is sent anywhere; the cache goes to a temporary folder unless KROUTER_CACHE_DIR is set.
+Nothing is sent anywhere; the cache goes to a temporary folder unless LMEMORY_CACHE_DIR is set.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-ROUTER = REPO / "skill/krouter/scripts/route_knowledge.py"
+ROUTER = REPO / "skill/lmemory/scripts/route_knowledge.py"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen import EN, ZH  # noqa: E402
 
@@ -67,15 +67,15 @@ def main() -> int:
             questions.append(f"{rnd.choice(ZH)}{rnd.choice(ZH)} {rnd.choice(EN)} 是怎么定的？")
     with tempfile.TemporaryDirectory() as tmp:
         env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-        env.update(KROUTER_NO_QUERY_LOG="1", KROUTER_CACHE_DIR=os.environ.get("KROUTER_CACHE_DIR") or tmp,
-                   KROUTER_STATE_DIR=str(Path(tmp) / "state"))
+        env.update(LMEMORY_NO_QUERY_LOG="1", LMEMORY_CACHE_DIR=os.environ.get("LMEMORY_CACHE_DIR") or tmp,
+                   LMEMORY_STATE_DIR=str(Path(tmp) / "state"))
         first, _ = lookup(vault, env, questions[0])
         times, statuses = [], []
         for q in questions:
             dt, st = lookup(vault, env, q)
             times.append(dt)
             statuses.append(st)
-        cache_mb = sum(p.stat().st_size for p in Path(env["KROUTER_CACHE_DIR"]).rglob("*") if p.is_file()) / 1e6
+        cache_mb = sum(p.stat().st_size for p in Path(env["LMEMORY_CACHE_DIR"]).rglob("*") if p.is_file()) / 1e6
     times.sort()
     p95 = times[min(len(times) - 1, int(round(0.95 * len(times))) - 1)]
     print(json.dumps({"pages": pages, "vault_mb": round(sum(p.stat().st_size for p in vault.rglob("*.md")) / 1e6, 1),

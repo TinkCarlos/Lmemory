@@ -6,7 +6,7 @@ card_id: C11
 when: a wall of errors; hundreds of errors; error after error
 source_ref: "[[05 时间日志/会话摘录/example C11]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When there are piles of errors, fix the first one

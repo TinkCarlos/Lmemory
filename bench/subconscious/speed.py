@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-HOOK = REPO / "skill/krouter/scripts/session_hook.py"
+HOOK = REPO / "skill/lmemory/scripts/lmemory_capture.py"
 
 
 def pct(xs: list[float], p: float) -> float:
@@ -47,10 +47,10 @@ def main() -> int:
     a = ap.parse_args()
     tmp = Path(tempfile.mkdtemp())
     base = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    base.update(KROUTER_VAULT=a.vault, KROUTER_CACHE_DIR=str(tmp / "cache"), KROUTER_NO_QUERY_LOG="1",
-                KROUTER_RECALL_PROMPT=os.environ.get("ROUTES", "1"))
+    base.update(LMEMORY_VAULT=a.vault, LMEMORY_CACHE_DIR=str(tmp / "cache"), LMEMORY_NO_QUERY_LOG="1",
+                LMEMORY_RECALL_PROMPT=os.environ.get("ROUTES", "1"))
     t = time.perf_counter()
-    subprocess.run([sys.executable, str(REPO / "skill/krouter/scripts/recall_index.py"), "--vault", a.vault, "--stats"],
+    subprocess.run([sys.executable, str(REPO / "skill/lmemory/scripts/recall_index.py"), "--vault", a.vault, "--stats"],
                    env=base, capture_output=True, check=True)
     print(f"index build: {(time.perf_counter() - t):.1f} s")
     for name, text in (("hit", a.hit), ("miss", a.miss)):
@@ -62,10 +62,10 @@ def main() -> int:
             shutil.rmtree(HOOK.parent / "__pycache__", ignore_errors=True)
             for f in glob.glob(str(tmp / "cache" / "mentions-*")):
                 os.unlink(f)
-            env = {**base, "KROUTER_STATE_DIR": str(tmp / f"cold-{name}-{i}")}
+            env = {**base, "LMEMORY_STATE_DIR": str(tmp / f"cold-{name}-{i}")}
             ms, out = once(env, text, f"c{i}")
             cold.append(ms)
-        env = {**base, "KROUTER_STATE_DIR": str(tmp / f"warm-{name}")}
+        env = {**base, "LMEMORY_STATE_DIR": str(tmp / f"warm-{name}")}
         once(env, text, "prime")
         warm, outs = [], set()
         for i in range(a.warm):

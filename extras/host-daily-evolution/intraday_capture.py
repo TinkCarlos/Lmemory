@@ -13,7 +13,7 @@ lane and the distill choice are the ones recorded then, and only turns added sin
     python3 intraday_capture.py --dry-run        # is a slot due, and what would the import send (sends nothing)
     python3 intraday_capture.py                  # what the timer runs
 
-State and log: `~/.local/state/krouter/intraday.json` and `intraday.log` (or `KROUTER_STATE_DIR`). The log holds the
+State and log: `~/.local/state/lmemory/intraday.json` and `intraday.log` (or `LMEMORY_STATE_DIR`). The log holds the
 importer's one-line summary per run (counts, page names), never session text.
 """
 
@@ -49,7 +49,7 @@ def zone(name: str):
 
 
 def state_dir() -> Path:
-    return Path(os.environ.get("KROUTER_STATE_DIR") or Path.home() / ".local/state/krouter")
+    return Path(os.environ.get("LMEMORY_STATE_DIR") or Path.home() / ".local/state/lmemory")
 
 
 def load(path: Path) -> dict:
@@ -94,18 +94,18 @@ def decide(now: datetime, slots: list[tuple[int, int]], st: dict) -> tuple[datet
 def router_dir(arg: str) -> Path:
     if arg:
         return Path(arg).expanduser()
-    env = os.environ.get("KROUTER_ROUTER")
+    env = os.environ.get("LMEMORY_ROUTER")
     if env:
         return Path(env).expanduser()
-    return Path.home() / ".agents/skills/krouter/scripts"
+    return Path.home() / ".agents/skills/lmemory/scripts"
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--slots", default=os.environ.get("KROUTER_INTRADAY_SLOTS", SLOTS), help=f"default {SLOTS}")
-    ap.add_argument("--tz", default=os.environ.get("KROUTER_INTRADAY_TZ", TZ), help=f"default {TZ}")
-    ap.add_argument("--vault", default=os.environ.get("KROUTER_VAULT") or os.environ.get("OBSIDIAN_VAULT", ""))
-    ap.add_argument("--router", default="", help="the krouter scripts folder (default: the installed skill)")
+    ap.add_argument("--slots", default=os.environ.get("LMEMORY_INTRADAY_SLOTS", SLOTS), help=f"default {SLOTS}")
+    ap.add_argument("--tz", default=os.environ.get("LMEMORY_INTRADAY_TZ", TZ), help=f"default {TZ}")
+    ap.add_argument("--vault", default=os.environ.get("LMEMORY_VAULT") or os.environ.get("OBSIDIAN_VAULT", ""))
+    ap.add_argument("--router", default="", help="the lmemory scripts folder (default: the installed skill)")
     ap.add_argument("--dry-run", action="store_true", help="say whether a slot is due and what the import would send")
     ap.add_argument("--force", action="store_true", help="run now even when no slot is due")
     args = ap.parse_args()
@@ -128,7 +128,7 @@ def main() -> int:
         argv.append("--dry-run")
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=RUN_TIMEOUT, stdin=subprocess.DEVNULL,
-                              env={**os.environ, "KROUTER_NO_QUERY_LOG": "1"})
+                              env={**os.environ, "LMEMORY_NO_QUERY_LOG": "1"})
         ok = proc.returncode == 0
         last = (proc.stdout.strip().splitlines() or [""])[-1]
         try:

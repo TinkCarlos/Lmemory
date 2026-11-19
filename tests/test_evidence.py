@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
 
 import evidence as ev  # noqa: E402
 import recall_index as ri  # noqa: E402
@@ -39,6 +39,19 @@ def test_answer_types_and_their_text():
     assert ev.has_type("花了 300 元", "money") and ev.tags_have(ev.type_tags("every Sunday"), "freq")
 
 
+@pytest.mark.parametrize(("text", "tags"), [
+    ("前weekly后，前for a while后，code_2026x", "ca"),
+    ("前 weekly 后", "f"),
+    ("SİNCE MARCH", "dt"),
+    ("٢ HOURS", "cda"),
+    ("from ٩:٣٠", "cta"),
+    ("２０２６年１１月，每两周三次", "cdtfa"),
+    ("多年以后，隔天", "df"),
+])
+def test_type_tags_preserve_mixed_script_boundaries(text, tags):
+    assert ev.type_tags(text) == tags
+
+
 def test_time_window():
     now = dt.date(2023, 5, 30)
     assert ev.time_window("What did I bake in the past two weeks?", now) == (dt.date(2023, 5, 16), now)
@@ -63,11 +76,11 @@ def _write(root: Path, rel: str, text: str) -> None:
 
 @pytest.fixture()
 def chat(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
     v = tmp_path / "v"
-    _write(v, "krouter-zones.psv", "@lang|en\n")
+    _write(v, "lmemory-zones.psv", "@lang|en\n")
     turns = []
     for i in range(12):
         turns.append(f"**Caroline:** I went hiking with my sister on day {i}, the trail was steep.")
@@ -89,19 +102,19 @@ def test_paragraph_index_and_evidence(chat):
 
 
 def test_paragraph_refusals_are_off_by_default(chat, monkeypatch):
-    monkeypatch.delenv("KROUTER_EVIDENCE", raising=False)
+    monkeypatch.delenv("LMEMORY_EVIDENCE", raising=False)
     assert not ev.enabled(chat)
     res = ri.recall(chat, "What sunset over the lake was painted by Caroline?")
     assert "evidence_none" not in res
-    (chat / "krouter-settings.psv").write_text("evidence|on\n", encoding="utf-8")
+    (chat / "lmemory-settings.psv").write_text("evidence|on\n", encoding="utf-8")
     assert ev.enabled(chat)
-    monkeypatch.setenv("KROUTER_EVIDENCE", "0")
+    monkeypatch.setenv("LMEMORY_EVIDENCE", "0")
     assert not ev.enabled(chat)
 
 
 def test_question_about_the_other_speaker_is_refused(chat, monkeypatch):
     """LoCoMo's adversarial questions: the thing was said by the other person. Caroline never painted."""
-    monkeypatch.setenv("KROUTER_EVIDENCE", "1")
+    monkeypatch.setenv("LMEMORY_EVIDENCE", "1")
     res = ri.recall(chat, "What sunset over the lake was painted by Caroline?")
     assert res["confidence"] == "none" and res.get("evidence_none") == "other-speaker"
     ok = ri.recall(chat, "What did Caroline say about hiking with her sister on the trail?")

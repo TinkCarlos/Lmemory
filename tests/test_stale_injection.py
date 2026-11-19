@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-HOOK = REPO / "skill/krouter/scripts/session_hook.py"
+HOOK = REPO / "skill/lmemory/scripts/lmemory_capture.py"
 
 
 @pytest.fixture()
@@ -25,8 +25,8 @@ def world(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
-    from krouter_home import project_root
+    sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
+    from lmemory_home import project_root
 
     root = project_root(str(repo))  # 和 hook 用同一个函数：Windows 上 git 输出的路径写法和它解析出的不一样
     vault = tmp_path / "vault"
@@ -39,11 +39,11 @@ def world(tmp_path):
         day = (date.today() - timedelta(days=days_ago)).isoformat()
         body = "\n".join(f"- {ln}" for ln in lines)
         (vault / "05 时间日志/会话摘录" / f"{name}.md").write_text(
-            f"---\ntype: session-excerpt\nsource: krouter-import\nstatus: {status}\ndate: {day}\nproject_root: {root}\n---\n\n"
+            f"---\ntype: session-excerpt\nsource: lmemory-import\nstatus: {status}\ndate: {day}\nproject_root: {root}\n---\n\n"
             f"# {name}\n\n## 定了什么、改了什么（模型提炼，待你确认）\n\n{body}\n", encoding="utf-8")
 
     def inject() -> str:
-        env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(state)}
+        env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(state)}
         res = subprocess.run([sys.executable, str(HOOK), "start"], input=json.dumps({"cwd": str(repo)}), env=env,
                              capture_output=True, text=True, timeout=60)
         out = res.stdout.strip()

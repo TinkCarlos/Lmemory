@@ -3,7 +3,7 @@
 
 The memory honesty bench compares systems at their defaults, and most have no refusal at all, so "neighbours refused
 0 / 10" is decided before the first question. This puts every system that reports a score on the same footing as
-KRouter: pages whose frontmatter says `status: superseded` are dropped from its results, and a score floor is picked
+Lmemory: pages whose frontmatter says `status: superseded` are dropped from its results, and a score floor is picked
 on the dev set with one fixed rule (most right answers minus wrong citations; on a tie, the lower floor) and applied
 unchanged to the target set. For the held-out set only aggregates are printed (HELDOUT.md rule 3).
 

@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 import bootstrap  # noqa: E402
 
-SERVER = ["/usr/bin/python3", "/home/u/.agents/skills/krouter/scripts/mcp_server.py"]
+SERVER = ["/usr/bin/python3", "/home/u/.agents/skills/lmemory/scripts/mcp_server.py"]
 APPS = {a["id"]: a for a in bootstrap.MCP_APPS}
 # 各家官方文档里的写法（2026-11-09 核对）
 EXPECT = {
@@ -30,7 +30,7 @@ EXPECT = {
 
 
 def env_name(app_id: str) -> str:
-    return "KROUTER_MCP_CONFIG_" + app_id.upper().replace("-", "_")
+    return "LMEMORY_MCP_CONFIG_" + app_id.upper().replace("-", "_")
 
 
 @pytest.fixture()
@@ -41,7 +41,7 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
     monkeypatch.delenv("COPILOT_HOME", raising=False)
     monkeypatch.delenv("CLINE_MCP_SETTINGS_PATH", raising=False)
-    monkeypatch.delenv("KROUTER_CLAUDE_DESKTOP_CONFIG", raising=False)
+    monkeypatch.delenv("LMEMORY_CLAUDE_DESKTOP_CONFIG", raising=False)
     for a in APPS:
         monkeypatch.delenv(env_name(a), raising=False)
     return tmp_path
@@ -68,16 +68,16 @@ def test_installed_app_gets_its_own_format_and_keeps_the_rest(home, app_id):
     cfg.write_text(json.dumps({key: {"other": {"command": "x"}}, "theme": "dark"}), encoding="utf-8")
     assert bootstrap.register_app(app, SERVER, dry=False)
     data = json.loads(cfg.read_text(encoding="utf-8"))
-    assert data[key]["krouter"] == entry
+    assert data[key]["lmemory"] == entry
     assert data[key]["other"] == {"command": "x"} and data["theme"] == "dark"
-    assert cfg.with_name(cfg.name + ".krouter-bak").exists()
+    assert cfg.with_name(cfg.name + ".lmemory-bak").exists()
     assert bootstrap.register_app(app, SERVER, dry=False)  # 再跑一次不重复
     assert bootstrap.unregister_apps(dry=False) == [app_id]
     data = json.loads(cfg.read_text(encoding="utf-8"))
-    assert "krouter" not in data[key] and data[key]["other"] == {"command": "x"}
+    assert "lmemory" not in data[key] and data[key]["other"] == {"command": "x"}
 
 
-def test_a_file_with_comments_or_someone_elses_krouter_is_not_touched(home, capsys):
+def test_a_file_with_comments_or_someone_elses_lmemory_is_not_touched(home, capsys):
     app = APPS["zed"]
     app["dir"]().mkdir(parents=True)
     cfg = bootstrap.app_config(app)
@@ -90,7 +90,7 @@ def test_a_file_with_comments_or_someone_elses_krouter_is_not_touched(home, caps
     cur["dir"]().mkdir(parents=True)
     path = bootstrap.app_config(cur)
     path.parent.mkdir(parents=True, exist_ok=True)
-    foreign = {"mcpServers": {"krouter": {"command": "some-other-krouter"}}}
+    foreign = {"mcpServers": {"lmemory": {"command": "some-other-lmemory"}}}
     path.write_text(json.dumps(foreign), encoding="utf-8")
     assert not bootstrap.register_app(cur, SERVER, dry=False)
     assert bootstrap.unregister_apps(dry=False) == []
@@ -106,29 +106,29 @@ def test_uninstall_sh_takes_our_entries_out_of_every_app(home):
         assert bootstrap.register_app(app, SERVER, dry=False)
         wired.append(bootstrap.app_config(app))
     env = {"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
-           "LANG": "en_US.UTF-8", "KROUTER_SKILL_HOME": str(home / "skill"), "KROUTER_VAULT_FILE": str(home / "vf")}
+           "LANG": "en_US.UTF-8", "LMEMORY_SKILL_HOME": str(home / "skill"), "LMEMORY_VAULT_FILE": str(home / "vf")}
     res = subprocess.run(["/bin/sh", str(REPO / "scripts/uninstall.sh")], env=env, capture_output=True, text=True, timeout=120)
     assert res.returncode == 0, res.stderr
     for name in ("Cursor", "VS Code", "Gemini CLI"):
-        assert f"removed: MCP server krouter ({name})" in res.stdout
+        assert f"removed: MCP server lmemory ({name})" in res.stdout
     for cfg in wired:
-        assert "krouter" not in cfg.read_text(encoding="utf-8")
+        assert "lmemory" not in cfg.read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="the stub is a shell script")
 def test_plugin_comes_from_this_release_not_from_main(tmp_path, monkeypatch):
-    """No krouter marketplace yet → add this release's folder as one, then install from it; already there → install."""
+    """No lmemory marketplace yet → add this release's folder as one, then install from it; already there → install."""
     log = tmp_path / "calls"
     stub = tmp_path / "claude"
     stub.write_text('#!/bin/sh\necho "$@" >> "%s"\n'
                     'if [ "$2" = install ] && ! grep -q "marketplace add" "%s"; then exit 1; fi\nexit 0\n' % (log, log),
                     encoding="utf-8")
     stub.chmod(0o755)
-    monkeypatch.delenv("KROUTER_NO_PLUGIN", raising=False)
+    monkeypatch.delenv("LMEMORY_NO_PLUGIN", raising=False)
     assert bootstrap.install_plugin(str(stub))
     calls = log.read_text(encoding="utf-8").splitlines()
-    assert calls == ["plugin install krouter@krouter", f"plugin marketplace add {bootstrap.ROOT}",
-                     "plugin install krouter@krouter"]
-    assert bootstrap.install_plugin(str(stub)) and log.read_text(encoding="utf-8").splitlines()[-1] == "plugin install krouter@krouter"
-    monkeypatch.setenv("KROUTER_NO_PLUGIN", "1")
+    assert calls == ["plugin install lmemory@lmemory", f"plugin marketplace add {bootstrap.ROOT}",
+                     "plugin install lmemory@lmemory"]
+    assert bootstrap.install_plugin(str(stub)) and log.read_text(encoding="utf-8").splitlines()[-1] == "plugin install lmemory@lmemory"
+    monkeypatch.setenv("LMEMORY_NO_PLUGIN", "1")
     assert not bootstrap.install_plugin(str(stub))

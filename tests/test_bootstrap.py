@@ -21,12 +21,12 @@ def _env(tmp: Path) -> dict:
     home.mkdir(exist_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.endswith(("_API_KEY", "_BASE_URL", "_MODEL"))}
     env.update({"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8",
-                "KROUTER_KEYS_ENV": str(tmp / "keys.env"), "KROUTER_WRITER": "/nonexistent/grok",
-                "KROUTER_SKIP_LAUNCHD": "1", "KROUTER_SKIP_TIMER": "1",
+                "LMEMORY_KEYS_ENV": str(tmp / "keys.env"), "LMEMORY_WRITER": "/nonexistent/grok",
+                "LMEMORY_SKIP_LAUNCHD": "1", "LMEMORY_SKIP_TIMER": "1",
                 # 每个测试自己的状态目录和应用设置目录：前一个测试记下的同意、真机上的应用都不串进来
-                "KROUTER_STATE_DIR": str(tmp / "state"), "XDG_CONFIG_HOME": str(home / ".config"),
+                "LMEMORY_STATE_DIR": str(tmp / "state"), "XDG_CONFIG_HOME": str(home / ".config"),
                 "APPDATA": str(home / "AppData")})
-    for k in ("OBSIDIAN_VAULT", "KROUTER_SKILL_HOME", "KROUTER_CURSOR_RULE", "KROUTER_ASK_RULE", "KROUTER_LEARN_CLI"):
+    for k in ("OBSIDIAN_VAULT", "LMEMORY_SKILL_HOME", "LMEMORY_CURSOR_RULE", "LMEMORY_ASK_RULE", "LMEMORY_LEARN_CLI"):
         env.pop(k, None)
     return env
 
@@ -40,14 +40,14 @@ def _boot(env: dict, *args: str) -> tuple[subprocess.CompletedProcess, dict]:
 
 def test_new_chinese_vault_then_upgrade_keeps_the_table(tmp_path):
     env = _env(tmp_path)
-    vault = tmp_path / "home/Documents/第二大脑"
+    vault = tmp_path / "home/Documents/Lmemory 记忆库"
     res, out = _boot(env, "--lang", "zh")
     assert res.returncode == 0, res.stdout[-1500:] + res.stderr[-1500:]
     assert out["vault"] == str(vault) and out["state"] == "new" and out["lang"] == "zh"
     assert (vault / "02 经验与方法/自动化/按日志文件判断封账.md").is_file()  # the Chinese template
     table = vault / "90 系统文件/canonical_sources.psv"
     assert "按日志文件判断封账" in table.read_text(encoding="utf-8")  # its own sample table, not the English one
-    assert (tmp_path / "home/.agents/skills/krouter/scripts/route_knowledge.sh").is_file()
+    assert (tmp_path / "home/.agents/skills/lmemory/scripts/route_knowledge.sh").is_file()
     assert "装好了" in res.stdout and "还没有可用的模型" in res.stdout  # plain-language next step, no model yet
     table.write_text(table.read_text(encoding="utf-8") + "Q99|我的名词|01 项目/项目.md|x\n", encoding="utf-8")
     res2, out2 = _boot(env, "--lang", "zh")
@@ -88,8 +88,8 @@ def test_nightly_job_needs_an_explicit_yes(tmp_path):
     """Default → local capture on (no model, no nightly job), and it says how to stop it and how to turn the nightly
     job on; `--no-import` → lookup only; `--ask` with no terminal → no nightly job; `--timer` → installed. The nightly
     job is never installed silently."""
-    env = {**_env(tmp_path), "KROUTER_NO_PROMPT": "1"}
-    plist = tmp_path / "home/Library/LaunchAgents/local.dsh-krouter.daily-evolution.plist"
+    env = {**_env(tmp_path), "LMEMORY_NO_PROMPT": "1"}
+    plist = tmp_path / "home/Library/LaunchAgents/local.dsh-lmemory.daily-evolution.plist"
     res, out = _boot(env, "--lang", "en", "--vault", str(tmp_path / "v0"), "--no-import")
     assert res.returncode == 0 and "lookup only" in res.stdout and "keeps up by itself" not in res.stdout
     res, out = _boot(env, "--lang", "en", "--vault", str(tmp_path / "v1"))
@@ -132,8 +132,8 @@ def test_bootstrap_sh_verifies_the_release_checksum(tmp_path):
     pkg_dir = tmp_path / "srv"
     pkg_dir.mkdir()
     subprocess.run(["npm", "pack", "--pack-destination", str(pkg_dir)], cwd=REPO, capture_output=True, check=True)
-    tgz = next(pkg_dir.glob("dsh-krouter-*.tgz"))
-    ver = tgz.name[len("dsh-krouter-"):-len(".tgz")]
+    tgz = next(pkg_dir.glob("dsh-lmemory-*.tgz"))
+    ver = tgz.name[len("dsh-lmemory-"):-len(".tgz")]
     digest = hashlib.sha256(tgz.read_bytes()).hexdigest()
     handler = partial(SimpleHTTPRequestHandler, directory=str(pkg_dir))
     handler.log_message = lambda *a: None
@@ -142,7 +142,7 @@ def test_bootstrap_sh_verifies_the_release_checksum(tmp_path):
     base = f"http://127.0.0.1:{server.server_address[1]}"
     script = tmp_path / "bootstrap.sh"
     sh.copy(REPO / "scripts/bootstrap.sh", script)  # run outside the clone, as `curl | sh` would
-    env = {**_env(tmp_path), "KROUTER_TAG": f"v{ver}", "KROUTER_RELEASE_BASE": base, "KROUTER_HOME": str(tmp_path / "kh"),
+    env = {**_env(tmp_path), "LMEMORY_TAG": f"v{ver}", "LMEMORY_RELEASE_BASE": base, "LMEMORY_HOME": str(tmp_path / "kh"),
            "NO_PROXY": "127.0.0.1", "no_proxy": "127.0.0.1"}
     try:
         (pkg_dir / "SHA256SUMS").write_text("0" * 64 + f"  {tgz.name}\n", encoding="utf-8")
@@ -151,7 +151,7 @@ def test_bootstrap_sh_verifies_the_release_checksum(tmp_path):
         assert not (tmp_path / "kh" / f"v{ver}").exists()
         (pkg_dir / "SHA256SUMS").unlink()  # no checksum file: stop, never fall back silently
         none = subprocess.run(["/bin/sh", str(script), "--dry-run"], env=env, capture_output=True, text=True, timeout=300)
-        assert none.returncode == 1 and "KROUTER_ALLOW_UNVERIFIED" in none.stdout
+        assert none.returncode == 1 and "LMEMORY_ALLOW_UNVERIFIED" in none.stdout
         assert not (tmp_path / "kh" / f"v{ver}").exists()
         (pkg_dir / "SHA256SUMS").write_text(f"{digest}  {tgz.name}\n", encoding="utf-8")
         good = subprocess.run(["/bin/sh", str(script), "--dry-run", "--lang", "en", "--vault", str(tmp_path / "v")],
@@ -185,8 +185,8 @@ def test_install_records_from_now_by_default_and_imports_past_sessions_only_when
     (projects / "s1.jsonl").write_text(json.dumps({"type": "user", "timestamp": ts, "cwd": "/work", "message": {
         "role": "user", "content": "缓存过期改成多少"}}, ensure_ascii=False) + "\n", encoding="utf-8")
     vf = tmp_path / "vault-file"
-    env = {**_env(tmp_path), "KROUTER_NO_PROMPT": "1", "KROUTER_CLAUDE_PROJECTS": str(tmp_path / "projects"),
-           "KROUTER_VAULT_FILE": str(vf)}
+    env = {**_env(tmp_path), "LMEMORY_NO_PROMPT": "1", "LMEMORY_CLAUDE_PROJECTS": str(tmp_path / "projects"),
+           "LMEMORY_VAULT_FILE": str(vf)}
     res, out = _boot(env, "--lang", "zh", "--vault", str(tmp_path / "v1"), "--no-timer", "--no-import")
     assert res.returncode == 0 and out["imported"] == 0 and "只查询" in res.stdout and "--ask" in res.stdout
     assert not (tmp_path / "v1/05 时间日志/会话摘录").exists()
@@ -207,8 +207,8 @@ def test_install_offers_claude_mem_and_imports_it_on_a_yes(tmp_path):
     from test_import_claude_mem import _db
 
     db = _db(tmp_path / "claude-mem.db")
-    env = {**_env(tmp_path), "KROUTER_NO_PROMPT": "1", "KROUTER_CLAUDE_MEM_DB": str(db),
-           "KROUTER_VAULT_FILE": str(tmp_path / "vf")}
+    env = {**_env(tmp_path), "LMEMORY_NO_PROMPT": "1", "LMEMORY_CLAUDE_MEM_DB": str(db),
+           "LMEMORY_VAULT_FILE": str(tmp_path / "vf")}
     res, out = _boot(env, "--lang", "zh", "--vault", str(tmp_path / "v1"), "--no-timer", "--no-import")
     assert res.returncode == 0 and out["claude_mem"] == 0  # --no-import：不导
     res, out = _boot(env, "--lang", "zh", "--vault", str(tmp_path / "v2"), "--no-timer")  # 默认：不导以前的
@@ -244,7 +244,7 @@ def test_default_install_asks_nothing_and_an_upgrade_keeps_what_is_on(tmp_path, 
     assert bs.remembering_already()
     monkeypatch.setattr(import_sessions, "load_state", lambda: {})
     assert not bs.remembering_already()
-    plist = tmp_path / "Library/LaunchAgents/local.dsh-krouter.daily-evolution.plist"
+    plist = tmp_path / "Library/LaunchAgents/local.dsh-lmemory.daily-evolution.plist"
     plist.parent.mkdir(parents=True)
     plist.write_text("", encoding="utf-8")
     assert bs.remembering_already()
@@ -258,20 +258,20 @@ def test_timer_that_did_not_install_is_not_reported_as_installed(monkeypatch, ca
     import bootstrap as bs
 
     t = bs.MSG["en"]
-    monkeypatch.delenv("KROUTER_SKIP_TIMER", raising=False)
+    monkeypatch.delenv("LMEMORY_SKIP_TIMER", raising=False)
     monkeypatch.setattr(bs, "remembering_timer", lambda: False)
     assert bs.timer_took(t) is False
     assert "NOT installed" in capsys.readouterr().out
     monkeypatch.setattr(bs, "remembering_timer", lambda: True)
     assert bs.timer_took(t) is True
     monkeypatch.setattr(bs, "remembering_timer", lambda: False)
-    monkeypatch.setenv("KROUTER_SKIP_TIMER", "1")
+    monkeypatch.setenv("LMEMORY_SKIP_TIMER", "1")
     assert bs.timer_took(t) is True
     assert bs.MSG["zh"]["timer_failed"] and bs.MSG["zh"]["capture_how_timer"]
 
 
 def test_windows_upgrade_keeps_the_table_and_falls_back_to_a_junction(tmp_path, monkeypatch):
-    """The Windows branch of the 2.0 move, run on any OS: the pre-2.0 `krouter-obsidian` folder is replaced by the new
+    """The Windows branch of the 2.0 move, run on any OS: the pre-2.0 `lmemory-obsidian` folder is replaced by the new
     skill with the user's alias table carried over, and when a symlink cannot be made (Windows without developer mode
     or admin) the old path is made a directory junction with `cmd /c mklink /J`. Not run on a real Windows machine
     (none was reachable for 2.0.0); this pins the logic, `docs/VERIFY.md` says what was and was not run there."""
@@ -279,7 +279,7 @@ def test_windows_upgrade_keeps_the_table_and_falls_back_to_a_junction(tmp_path, 
     import bootstrap as bs
 
     home = tmp_path / "home"
-    old = home / ".agents/skills/krouter-obsidian"
+    old = home / ".agents/skills/lmemory-obsidian"
     (old / "scripts").mkdir(parents=True)
     (old / "scripts/canonical_sources.psv").write_text("Q99|我的名词|01 项目/项目.md|x\n", encoding="utf-8")
     (old / "scripts/route_knowledge.py").write_text("# the 1.x router\n", encoding="utf-8")
@@ -287,9 +287,9 @@ def test_windows_upgrade_keeps_the_table_and_falls_back_to_a_junction(tmp_path, 
     (vault / "90 系统文件").mkdir(parents=True)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
-    for k in ("KROUTER_SKILL_HOME", "KROUTER_CURSOR_RULE", "KROUTER_ASK_RULE"):
+    for k in ("LMEMORY_SKILL_HOME", "LMEMORY_CURSOR_RULE", "LMEMORY_ASK_RULE"):
         monkeypatch.delenv(k, raising=False)
-    monkeypatch.setenv("KROUTER_NO_CURSOR_RULES", "1")
+    monkeypatch.setenv("LMEMORY_NO_CURSOR_RULES", "1")
     real_symlink, real_run = os.symlink, subprocess.run
     calls = []
 
@@ -307,7 +307,7 @@ def test_windows_upgrade_keeps_the_table_and_falls_back_to_a_junction(tmp_path, 
     monkeypatch.setattr(bs.subprocess, "run", fake_run)
     assert bs.legacy_skill_home() == old
     assert bs.install_windows(vault, False, False) == 0
-    new = home / ".agents/skills/krouter"
+    new = home / ".agents/skills/lmemory"
     assert (new / "SKILL.md").is_file()
     assert "Q99|我的名词" in (new / "scripts/canonical_sources.psv").read_text(encoding="utf-8")
     assert "Q99|我的名词" in (vault / "90 系统文件/canonical_sources.psv").read_text(encoding="utf-8")

@@ -6,7 +6,7 @@ on, and draft nothing where it should not? Each scenario is a small vault of exp
 prompt is exactly what `skills.draft_step` sends through the host lane (`skills.prompt`); a host model answers it, and
 the reply goes through `skills.parse` (the code's own checks) as the nightly run would.
 
-Set 25, use: given the session-start digest with skills (`skills.digest`) and the `krouter_skill` tool, does the host
+Set 25, use: given the session-start digest with skills (`skills.digest`) and the `lmemory_skill` tool, does the host
 fetch the right skill on a task it fits and follow its steps, and stay quiet on a task it does not fit? Two phases:
 the host decides whether to call the tool; where it calls, it gets the full text (`skills.show`) and replies.
 
@@ -45,9 +45,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
-os.environ.setdefault("KROUTER_SKILLS", "1")
-os.environ.setdefault("KROUTER_NO_QUERY_LOG", "1")
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
+os.environ.setdefault("LMEMORY_SKILLS", "1")
+os.environ.setdefault("LMEMORY_NO_QUERY_LOG", "1")
 import experience  # noqa: E402
 import skills  # noqa: E402
 
@@ -251,16 +251,16 @@ HOST25 = """【会话开始时，系统注入的上下文】
 {digest}
 
 【你可以调用的工具】
-krouter_skill：{tool}
+lmemory_skill：{tool}
 
 【用户消息】
 {query}
 
 【评测说明，不是用户说的】请像平时在这个会话里那样处理上面这条用户消息，不要真的去执行任何操作。如果你会先调用
-krouter_skill，只输出一行 `CALL krouter_skill {{"id": "<编号>"}}`，别的什么都不写；不调用的话，就直接写回复的开头，最多五句话。"""
+lmemory_skill，只输出一行 `CALL lmemory_skill {{"id": "<编号>"}}`，别的什么都不写；不调用的话，就直接写回复的开头，最多五句话。"""
 HOST25_2 = """{first}
 
-【你调用了 krouter_skill，工具返回】
+【你调用了 lmemory_skill，工具返回】
 {text}
 
 【评测说明，不是用户说的】现在写你给用户的回复：最多八句话，不要真的去执行任何操作。"""
@@ -308,7 +308,7 @@ def prepare25(args) -> None:
                       "skills_part_chars": len(skills.digest(build25(Path(tempfile.mkdtemp()), data)))}))
 
 
-CALL = re.compile(r"CALL\s+krouter_skill\s*(\{.*?\})", re.S)
+CALL = re.compile(r"CALL\s+lmemory_skill\s*(\{.*?\})", re.S)
 SKILL_ID = re.compile(r"(?<![A-Za-z0-9])(S[0-9a-f]{4})(?![A-Za-z0-9])")
 CARD_ID = re.compile(r"(?<![A-Za-z0-9])(C\d{2})(?!\d)")
 

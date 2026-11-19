@@ -5,8 +5,8 @@ its API (no agent in between). Only the reader changes.
     python3 bench/longmemeval/api_reader.py check   # rebuild the 500 prompts from set 22's pages; compare with the stored ones
     DEEPSEEK_API_KEY=... python3 bench/longmemeval/api_reader.py run --out bench/longmemeval/results/2026-11-14-deepseek-reader.set22.jsonl
 
-The prompt is `qa.py`'s `reader_prompt` with the pages KRouter 2.1.1 handed over in set 22
-(`~/.local/state/krouter-eval/lme-set22/outputs.krouter.jsonl`), sent as the only user message, temperature 0, one call
+The prompt is `qa.py`'s `reader_prompt` with the pages Lmemory 2.1.1 handed over in set 22
+(`~/.local/state/lmemory-eval/lme-set22/outputs.lmemory.jsonl`), sent as the only user message, temperature 0, one call
 per question. The key is read from the environment and never written. A prompt the provider rejects as too long or
 malformed (HTTP 400, 413, 422) is recorded as not answered and counted wrong; nothing is cut. A network error or a
 server error (5xx) is resumed at least 30 s later, at most 5 times; a rate-limit or authentication refusal (401, 402,
@@ -30,9 +30,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import qa  # noqa: E402
 
-DATA = Path(os.environ.get("KROUTER_LME_DATA") or Path.home() / ".cache/krouter-eval/lme-data/longmemeval_s_cleaned.json")
-OUTPUTS = Path.home() / ".local/state/krouter-eval/lme-set22/outputs.krouter.jsonl"
-STORED = Path.home() / ".cache/krouter-eval/set22/reader_jsonl"
+DATA = Path(os.environ.get("LMEMORY_LME_DATA") or Path.home() / ".cache/lmemory-eval/lme-data/longmemeval_s_cleaned.json")
+OUTPUTS = Path.home() / ".local/state/lmemory-eval/lme-set22/outputs.lmemory.jsonl"
+STORED = Path.home() / ".cache/lmemory-eval/set22/reader_jsonl"
 URL = "https://api.deepseek.com/chat/completions"
 MODEL = "deepseek-flash"  # 只用 flash，写死；返回的 model 里出现 pro 就停
 MAX_TOKENS = 8192

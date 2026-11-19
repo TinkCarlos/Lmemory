@@ -49,8 +49,8 @@ __all__ = [
 ]
 
 HEADER = (
-    "# KRouter self-evolution keys. chmod 600. Never commit. Never in the vault.\n"
-    "# Written by scripts/install.sh. KROUTER_CLI_LOGIN marks a logged-in CLI, not a secret.\n"
+    "# Lmemory self-evolution keys. chmod 600. Never commit. Never in the vault.\n"
+    "# Written by scripts/install.sh. LMEMORY_CLI_LOGIN marks a logged-in CLI, not a secret.\n"
 )
 
 
@@ -60,7 +60,7 @@ def candidate_keys() -> dict[str, str]:
     for name, val in os.environ.items():
         if (is_key_name(name) or is_config_name(name)) and usable(val):
             found[name] = val.strip().strip('"').strip("'")
-    vault = (os.environ.get("KROUTER_VAULT") or os.environ.get("OBSIDIAN_VAULT", "")).strip()
+    vault = (os.environ.get("LMEMORY_VAULT") or os.environ.get("OBSIDIAN_VAULT", "")).strip()
     if vault:
         from resolve import _lane
 
@@ -73,17 +73,17 @@ def candidate_keys() -> dict[str, str]:
 
 def write_keys(path: Path, live: dict[str, str], cli: str) -> None:
     """Update the names this probe manages and keep every other line as it was: the long-lived
-    `CLAUDE_CODE_OAUTH_TOKEN`, `KROUTER_PENDING_KEY_n`, a key that failed today's probe, the host's comments.
+    `CLAUDE_CODE_OAUTH_TOKEN`, `LMEMORY_PENDING_KEY_n`, a key that failed today's probe, the host's comments.
     Rewriting the file from the probe alone deleted those (a re-install wiped the claude token)."""
     managed = dict(live)
     if cli:
-        managed["KROUTER_CLI_LOGIN"] = cli
+        managed["LMEMORY_CLI_LOGIN"] = cli
     old = path.read_text(encoding="utf-8", errors="replace").splitlines() if path.is_file() else []
     out: list[str] = [] if old else HEADER.splitlines()
     done: set[str] = set()
     for line in old:
         name = line.split("=", 1)[0].strip() if "=" in line and not line.lstrip().startswith("#") else ""
-        if name == "KROUTER_CLI_LOGIN" and not cli:
+        if name == "LMEMORY_CLI_LOGIN" and not cli:
             continue  # 这次没探到登录的 CLI：标记作废
         if name in managed:
             if name not in done:
@@ -102,7 +102,7 @@ def write_keys(path: Path, live: dict[str, str], cli: str) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Graft the KRouter self-evolution key")
+    parser = argparse.ArgumentParser(description="Graft the Lmemory self-evolution key")
     parser.add_argument("--check", action="store_true", help="probe only, never rewrite")
     parser.add_argument("--detect", action="store_true", help="print the first logged-in CLI")
     args = parser.parse_args()

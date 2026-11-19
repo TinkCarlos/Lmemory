@@ -98,7 +98,7 @@ python3 -m pytest -q tests/test_lock_vs_neighbor.py
 
 | System | What it sees | Refuse option? |
 |---|---|---|
-| krouter | Alias table + `invalid_at` | Yes (no hit → miss) |
+| lmemory | Alias table + `invalid_at` | Yes (no hit → miss) |
 | lexical / tfidf / hybrid / dense | Every file, including expired | No (except lexical empty-token miss) |
 | `*_live` | Same `invalid_at` filter; unmapped live pages stay | No |
 | `tfidf_map` / `dense_map` / `dense_m3_map` | Live alias rows; aliases in the document text | Not until the threshold sweep |
@@ -114,7 +114,7 @@ Recorded 2026-08-28, `python3 tests/fixtures/lock_vs_neighbor/run.py`:
 
 | system | exact | false_neighbor | old_page | miss |
 |---|---|---|---|---|
-| krouter | 97.22% | **0** | **0** | 38.89% |
+| lmemory | 97.22% | **0** | **0** | 38.89% |
 | tfidf (naive) | 22.22% | 61.11% | 11.11% | 16.67% |
 | tfidf_map | 63.89% | 36.11% | 0 | 0 |
 | dense (naive MiniLM) | 41.67% | 58.33% | 8.33% | 0 |

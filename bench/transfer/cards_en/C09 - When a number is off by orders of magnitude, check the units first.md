@@ -6,7 +6,7 @@ card_id: C09
 when: off by a thousand; way too big; way too small; units
 source_ref: "[[05 时间日志/会话摘录/example C09]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When a number is off by orders of magnitude, check the units first

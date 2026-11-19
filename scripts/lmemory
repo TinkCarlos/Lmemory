@@ -1,0 +1,10 @@
+#!/bin/sh
+# Lmemory from this copy, no pip needed: `lmemory doctor|demo|ask|why|view|note|mcp` run the Python command line (sdk/),
+# anything else (`status`, `search "…"`, `preference`, …) goes to the router as before.
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+case "${1:-}" in
+  doctor|demo|ask|why|view|note|mcp|--version|-h|--help)
+    PYTHONPATH="$ROOT/sdk${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m lmemory.cli "$@" ;;
+esac
+exec "$ROOT/skill/lmemory/scripts/route_knowledge.sh" "$@"

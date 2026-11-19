@@ -8,10 +8,10 @@ apart, so a model labels them, in batches, with no tools. Input: `extract_asks.p
 output: one label per message in a private file; a re-run skips what is labelled.
 
     python3 bench/real_questions/classify_asks.py --cli ~/.grok/bin/grok --model grok-4.7 --effort high [--limit N]
-    KROUTER_EVAL_KEY=… python3 bench/real_questions/classify_asks.py --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
+    LMEMORY_EVAL_KEY=… python3 bench/real_questions/classify_asks.py --openai-base http://127.0.0.1:8317/v1 --model grok-4.7
 
 `--openai-base` calls an OpenAI-compatible endpoint (a local proxy such as CLIProxyAPI, or a provider) with the key in
-`KROUTER_EVAL_KEY`; the key is never printed or stored.
+`LMEMORY_EVAL_KEY`; the key is never printed or stored.
 
 The messages go to the CLI's provider (this is the only step that sends them anywhere). Prints counts only.
 """
@@ -27,7 +27,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-STATE = Path.home() / ".local/state/krouter-eval/real"
+STATE = Path.home() / ".local/state/lmemory-eval/real"
 PROMPT = """下面是一个人过去几个月对自己的编程/内容 agent 说过的话，每条一行，前面是编号。给每条打一个标签：
 
 - recall：在问他自己或他的 agent 以前定过、做过、配置过、记录过的东西，也就是一个记忆库/笔记库应该能回答的问题。
@@ -48,12 +48,12 @@ def ask_cli(cli: str, model: str, effort: str, prompt: str) -> str:
     if Path(cli).name in ("claude", "claude-max"):  # Claude Code：不给任何工具，提示词走标准输入
         argv = [cli, "--print", "--tools", "", "--output-format", "text", "--no-session-persistence"]
         argv += ["--model", model] if model else []
-        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skill/krouter/scripts"))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skill/lmemory/scripts"))
         import llm  # 和夜间任务一样：钥匙文件里的长期 CLI 令牌（钥匙串登录过期也能用）
 
         res = subprocess.run(argv, input=prompt, capture_output=True, text=True, timeout=1800, env=llm.cli_env())
         return res.stdout
-    with tempfile.TemporaryDirectory(prefix="krouter-classify-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="lmemory-classify-") as tmp:
         pf = Path(tmp) / "prompt.md"
         pf.write_text(prompt, encoding="utf-8")
         argv = [cli, "--model", model, "--prompt-file", str(pf), "--max-turns", "1", "--cwd", tmp,
@@ -71,7 +71,7 @@ def ask_api(base: str, model: str, effort: str, prompt: str) -> str:
     if effort:
         body["reasoning_effort"] = effort
     req = urllib.request.Request(base.rstrip("/") + "/chat/completions", data=json.dumps(body).encode("utf-8"),
-                                 headers={"Authorization": "Bearer " + os.environ.get("KROUTER_EVAL_KEY", ""),
+                                 headers={"Authorization": "Bearer " + os.environ.get("LMEMORY_EVAL_KEY", ""),
                                           "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=1800) as resp:

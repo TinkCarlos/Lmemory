@@ -1,17 +1,13 @@
-# Changelog
-
-**Release pace.** 1.1.x was held to fixes from 2026-10-15; 1.2.0 shipped on 2026-10-19, ahead of the planned
-2026-11-12, at the maintainer's call; 1.3.0 on 2026-11-09; 2.0.0 on 2026-11-10; 2.1.0 on 2026-11-11; 2.1.1 on 2026-11-12; 2.1.2 on 2026-11-13. The early weeks shipped many versions a day; that pace was development, not a
-support promise.
-
-Minor releases (new features) at most once a week; patch releases (fixes, docs, benchmark updates) when ready. 1.0.0 to
-1.0.2 went out on one day: 1.0.0 at the maintainer's call, 1.0.1 and 1.0.2 as fixes from outside reviews. From 1.0.0 the version follows
-semantic versioning; what counts as the stable surface is listed in [`docs/DETAILS.md`](docs/DETAILS.md#stability-and-versions). Each entry starts with what you will
-notice, then the details.
+# Lmemory changelog
 
 ## Unreleased
 
-One switch, off by default, for a vault whose alias table names few of its pages (set 49, `docs/NUMBERS.md`): with `KROUTER_INDEX_PAGES=1` the session-start index also lists, by title, the pages in force that the table does not name (rule and topic pages; in a vault not laid out the template's way, its other pages outside the system folder), in the same budget, with no model. On the bench, with a table that names 8 pages, recall cases right went from 18 and 22 of 48 to 43 and 42. It stays off: one registered line on the quiet side was not met (quiet messages whose reply names a vault page, 15 of 48 on the larger vault where the limit is 12). Nothing changes with the switch off.
+- Rebranded the CLI, Python and JavaScript packages, MCP names, installers and documentation to Lmemory. Tink maintains this fork.
+- Reduced regular-expression work when indexing paragraph evidence. The [public benchmark](README.md#cold-lookup-comparison) measures first-query wait on the same synthetic vault.
+
+## Upstream KRouter history
+
+The following entries record the upstream project and its own releases.
 
 **Fix: the session-start index was empty when the alias table next to the code is a link to the vault's own table.** A host that keeps its table in the vault and links the install directory's copy to it (so an upgrade never overwrites it) had its table taken for the shipped sample, by resolved path and by content, and got no standing index at all. Found on a real machine: its index had been empty since the session-start hook was connected. A linked table is now never the sample; the shipped sample and the template's table are still recognised (`tests/test_index_linked_table.py`).
 

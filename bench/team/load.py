@@ -46,8 +46,8 @@ from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SERVER = REPO / "skill/krouter/scripts/mcp_server.py"
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+SERVER = REPO / "skill/lmemory/scripts/mcp_server.py"
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
 sys.path.insert(0, str(REPO / "bench/scale"))
 
 import team  # noqa: E402
@@ -71,12 +71,12 @@ def own_line(i: int, j: int) -> str:
 
 def clean_env(work: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.endswith(("_API_KEY", "_BASE_URL"))}
-    env.update({"KROUTER_CACHE_DIR": str(work / "cache"), "KROUTER_STATE_DIR": str(work / "state"),
-                "KROUTER_VAULT_FILE": str(work / "no-vault-file"), "KROUTER_NO_QUERY_LOG": "1",
+    env.update({"LMEMORY_CACHE_DIR": str(work / "cache"), "LMEMORY_STATE_DIR": str(work / "state"),
+                "LMEMORY_VAULT_FILE": str(work / "no-vault-file"), "LMEMORY_NO_QUERY_LOG": "1",
                 "HOME": str(work / "home"), "GIT_CONFIG_GLOBAL": str(work / "home/.gitconfig"),
                 "GIT_CONFIG_NOSYSTEM": "1"})
     env.pop("OBSIDIAN_VAULT", None)
-    env.pop("KROUTER_VAULT", None)
+    env.pop("LMEMORY_VAULT", None)
     (work / "home").mkdir(parents=True, exist_ok=True)
     return env
 
@@ -99,7 +99,7 @@ def prepare(work: Path, source: Path | None, clients: int) -> tuple[Path, list[d
     env = clean_env(work)
     git(vault, "init", "-q", env=env)
     git(vault, "add", "-A", env=env)
-    git(vault, "-c", "user.name=seed", "-c", "user.email=seed@krouter.invalid", "commit", "-q", "-m", "seed", env=env)
+    git(vault, "-c", "user.name=seed", "-c", "user.email=seed@lmemory.invalid", "commit", "-q", "-m", "seed", env=env)
     users = work / "users"
     tokdir = work / "tokens"
     tokdir.mkdir(mode=0o700)
@@ -189,7 +189,7 @@ class Client:
         ok = code == 200 and bool(res) and not res.get("isError")
         rec = {"who": self.p["name"], "kind": kind, "tool": tool, "args": args, "ok": ok, "code": code,
                "ms": round(dt * 1000, 2), "at": time.time(), "phase": self.phase, "text": text, **(meta or {})}
-        if tool == "krouter_ask":  # 出处当场核对，回执不留（30 分钟的运行里攒下来有上百 MB）
+        if tool == "lmemory_ask":  # 出处当场核对，回执不留（30 分钟的运行里攒下来有上百 MB）
             rec["sourced"] = text.startswith("vault_label: team\n") and ("recall: none" in text or bool(SOURCE_LINE.search(text)))
             rec["recall_none"] = "recall: none" in text
             rec["text"] = ""
@@ -215,18 +215,18 @@ class Client:
             q = f"{self.rng.choice(ZH)}{self.rng.choice(ZH)}现在用什么？"
         else:
             q = f"what did we decide about {self.rng.choice(EN)} {self.rng.choice(EN)}"
-        return self.call("ask", "krouter_ask", {"query": q})
+        return self.call("ask", "lmemory_ask", {"query": q})
 
     def note(self) -> dict:
         self.k += 1
         marker = f"mk-{self.p['name']}-{self.k:05d}"
-        return self.call("note", "krouter_note", {"text": f"{self.p['name']} 记下：发版前先跑冒烟测试 {marker}",
+        return self.call("note", "lmemory_note", {"text": f"{self.p['name']} 记下：发版前先跑冒烟测试 {marker}",
                                                   "kind": "decision"}, {"marker": marker})
 
     def correct_window(self) -> dict:
         self.k += 1
         day = DAYS[(self.p["i"] + self.k) % 5]
-        return self.call("correct_window", "krouter_correct",
+        return self.call("correct_window", "lmemory_correct",
                          {"new": f"发布窗口改成周{day}上午（{self.p['name']} 第 {self.k} 次）", "old": WINDOW, "page": SHARED},
                          {"subject": "window"})
 
@@ -234,14 +234,14 @@ class Client:
         self.k += 1
         j = self.rng.randrange(PER_CLIENT_LINES)
         i = self.p["i"]
-        return self.call("correct_line", "krouter_correct",
+        return self.call("correct_line", "lmemory_correct",
                          {"new": f"约定 c{i:02d}-{j}：改用方案乙{i:02d}{j}-{self.k}", "old": own_line(i, j), "page": SHARED},
                          {"subject": f"line-{i:02d}-{j}"})
 
     def contradict(self) -> dict:
         self.k += 1
         pick = CHOICES[(self.p["i"] + self.k) % len(CHOICES)]
-        return self.call("contradict", "krouter_correct",
+        return self.call("contradict", "lmemory_correct",
                          {"new": f"数据库改用 {pick}（{self.p['name']} 第 {self.k} 次）", "old": "数据库用 SQLite",
                           "page": TOPIC}, {"subject": "topic"})
 
@@ -317,7 +317,7 @@ def _links(value: str) -> list[str]:
 
 def verify(vault: Path, results: list[dict], env: dict | None = None) -> dict:
     checks: dict[str, dict] = {}
-    writes = [r for r in results if r["tool"] in ("krouter_note", "krouter_correct")]
+    writes = [r for r in results if r["tool"] in ("lmemory_note", "lmemory_correct")]
     acked = [r for r in writes if r["ok"]]
     journal = team.read_journal(vault)
 
@@ -332,11 +332,11 @@ def verify(vault: Path, results: list[dict], env: dict | None = None) -> dict:
     notes_dir = vault / NOTES_GLOB
     note_text = "".join(p.read_text(encoding="utf-8") for p in notes_dir.glob("*agent 记下.md")) if notes_dir.is_dir() else ""
     bad_notes = []
-    for r in (x for x in acked if x["tool"] == "krouter_note"):
+    for r in (x for x in acked if x["tool"] == "lmemory_note"):
         lines = [ln for ln in note_text.splitlines() if r["marker"] in ln]
         if len(lines) != 1 or f"— 来自 {r['who']}（MCP，" not in lines[0]:
             bad_notes.append({"marker": r["marker"], "found": len(lines)})
-    checks["notes_all_there_once_attributed"] = {"ok": not bad_notes, "notes": sum(1 for x in acked if x["tool"] == "krouter_note"),
+    checks["notes_all_there_once_attributed"] = {"ok": not bad_notes, "notes": sum(1 for x in acked if x["tool"] == "lmemory_note"),
                                                   "bad": bad_notes[:5]}
 
     # 3. 归属：日志、页面、git 作者都指向发起写入的那个令牌
@@ -347,7 +347,7 @@ def verify(vault: Path, results: list[dict], env: dict | None = None) -> dict:
         if "\x1f" not in block:
             continue
         an, body = block.split("\x1f", 1)
-        m = re.search(r"\[krouter-run ([^\]]+)\]", body)
+        m = re.search(r"\[lmemory-run ([^\]]+)\]", body)
         if m:
             git_author[m.group(1)] = an.strip()
     wrong = []
@@ -357,7 +357,7 @@ def verify(vault: Path, results: list[dict], env: dict | None = None) -> dict:
         if not j or j.get("who") != r["who"] or git_author.get(rid) != r["who"] or f"by: {r['who']}" not in r["text"]:
             wrong.append({"who": r["who"], "run": rid, "journal": j and j.get("who"), "git": git_author.get(rid)})
             continue
-        if r["tool"] == "krouter_correct":
+        if r["tool"] == "lmemory_correct":
             page = vault / r["text"].split("\n", 1)[0].removeprefix("corrected: ").strip()
             if not page.is_file() or _meta(page.read_text(encoding="utf-8")).get("author") != r["who"]:
                 wrong.append({"who": r["who"], "run": rid, "page_author": page.is_file() and _meta(page.read_text(encoding="utf-8")).get("author")})
@@ -388,10 +388,10 @@ def verify(vault: Path, results: list[dict], env: dict | None = None) -> dict:
                               "uncommitted": dirty[:5], "git_fsck": fsck.returncode}
 
     # 5. 每件被争的事：恰好一条纠正生效，是最后到的那条；其余按到达顺序串成取代链；冲突回执点名上一条
-    order = {j["pages"][0]: j["seq"] for j in journal if j.get("tool") == "krouter_correct"}
+    order = {j["pages"][0]: j["seq"] for j in journal if j.get("tool") == "lmemory_correct"}
     subjects: dict[str, list[dict]] = {}
     for r in acked:
-        if r["tool"] == "krouter_correct":
+        if r["tool"] == "lmemory_correct":
             r["page"] = r["text"].split("\n", 1)[0].removeprefix("corrected: ").strip()
             subjects.setdefault(r["subject"], []).append(r)
     diverged = []
@@ -430,7 +430,7 @@ def verify(vault: Path, results: list[dict], env: dict | None = None) -> dict:
                                     "diverged": diverged[:5]}
 
     # 6. 读到的结果都带出处：库名，以及一页路径或 recall: none
-    asks = [r for r in results if r["tool"] == "krouter_ask"]
+    asks = [r for r in results if r["tool"] == "lmemory_ask"]
     unsourced = [r["args"]["query"] for r in asks if r["ok"] and not r["sourced"]]
     checks["reads_sourced"] = {"ok": not unsourced and all(r["ok"] for r in asks), "asks": len(asks),
                                "failed": sum(1 for r in asks if not r["ok"]),
@@ -446,9 +446,9 @@ def final_answer(url: str, token: str, vault: Path, results: list[dict]) -> dict
     its `how` must give the new decision, and no replaced correction may be listed as active. (The first page overall
     may be the corrections log, a rule page; that is reported, not judged.)"""
     journal = team.read_journal(vault)
-    heads = [j["pages"][0] for j in journal if j.get("tool") == "krouter_correct" and "数据库改用" in (j.get("text") or "")]
+    heads = [j["pages"][0] for j in journal if j.get("tool") == "lmemory_correct" and "数据库改用" in (j.get("text") or "")]
     code, reply = post(url, token, {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                                     "params": {"name": "krouter_ask", "arguments": {"query": "数据库选型现在用什么"}}})
+                                     "params": {"name": "lmemory_ask", "arguments": {"query": "数据库选型现在用什么"}}})
     text = "".join(c.get("text", "") for c in ((reply or {}).get("result") or {}).get("content") or [])
     hits = re.findall(r"^- (\S.*?\.md) tier=\S+ status=(\S+)[^\n]*\n  how: ([^\n]*)", text, re.M)
     fixes = [(rel, st, how) for rel, st, how in hits if "｜纠正｜数据库改用" in rel]
@@ -470,8 +470,8 @@ def pct(xs: list[float], p: float) -> float:
 def stats(results: list[dict], wall: float) -> dict:
     """Latency over every call (bursts and mix); `per_second` over the mixed phase only (its calls / its wall time)."""
     out = {}
-    groups = {"read": [r for r in results if r["tool"] == "krouter_ask"],
-              "write": [r for r in results if r["tool"] != "krouter_ask"]}
+    groups = {"read": [r for r in results if r["tool"] == "lmemory_ask"],
+              "write": [r for r in results if r["tool"] != "lmemory_ask"]}
     for kind in sorted({r["kind"] for r in results}):
         groups[kind] = [r for r in results if r["kind"] == kind]
     for name, rs in groups.items():
@@ -518,7 +518,7 @@ def main() -> int:
     ap.add_argument("--out", help="also write the report here (JSON)")
     ap.add_argument("--server-arg", action="append", default=[])
     args = ap.parse_args()
-    work = Path(args.work or tempfile.mkdtemp(prefix="krouter-team-load-")).resolve()
+    work = Path(args.work or tempfile.mkdtemp(prefix="lmemory-team-load-")).resolve()
     work.mkdir(parents=True, exist_ok=True)
     src = Path(args.vault).resolve() if args.vault else None
     if src is None and args.pages:

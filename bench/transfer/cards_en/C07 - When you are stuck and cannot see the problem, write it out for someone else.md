@@ -6,7 +6,7 @@ card_id: C07
 when: stuck; cannot figure it out; no idea where to look
 source_ref: "[[05 时间日志/会话摘录/example C07]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When you are stuck and cannot see the problem, write it out for someone else

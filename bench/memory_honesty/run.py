@@ -10,7 +10,7 @@
 
 A system under test is an adapter: a command that reads one question per line on stdin (JSON `{"id", "q"}`) and
 writes one JSON line per question: `{"id", "cited": ["Engineering/…md", …], "refused": bool}` — `cited` in rank order,
-vault-relative paths. `--adapter krouter` (default) runs KRouter's recall in-process. Score with `--answers FILE` to
+vault-relative paths. `--adapter lmemory` (default) runs Lmemory's recall in-process. Score with `--answers FILE` to
 grade another system's output.
 
 Metrics
@@ -20,7 +20,7 @@ Metrics
 - correction hit rate: of the 10 `correction` questions, how many cited the new page first, not the replaced one.
 - current hit rate: of the 10 `current` questions, how many cited the gold page first.
 
-    python3 bench/memory_honesty/run.py                 # KRouter
+    python3 bench/memory_honesty/run.py                 # Lmemory
     python3 bench/memory_honesty/run.py --adapter bm25  # baseline: plain full-text search, always answers
     python3 bench/memory_honesty/run.py --adapter bm25-floor  # + superseded pages skipped + a floor picked on dev
     python3 bench/memory_honesty/run.py --answers other.jsonl
@@ -101,21 +101,21 @@ def aggregate(result: dict) -> dict:
     return {k: v for k, v in result.items() if k != "misses"}
 
 
-def krouter_answers(rows: list[dict], vault_src: Path | None = None) -> list[dict]:
-    sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
-    saved = {k: os.environ.get(k) for k in ("KROUTER_NO_QUERY_LOG", "KROUTER_CACHE_DIR", "KROUTER_MAP")}
+def lmemory_answers(rows: list[dict], vault_src: Path | None = None) -> list[dict]:
+    sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
+    saved = {k: os.environ.get(k) for k in ("LMEMORY_NO_QUERY_LOG", "LMEMORY_CACHE_DIR", "LMEMORY_MAP")}
     # Windows 上召回缓存的 SQLite 连接在进程里一直开着，临时目录删不掉也不算失败
-    with tempfile.TemporaryDirectory(prefix="krouter-bench-", ignore_cleanup_errors=True) as tmp:
-        os.environ["KROUTER_NO_QUERY_LOG"] = "1"
-        os.environ["KROUTER_CACHE_DIR"] = str(Path(tmp) / "cache")
-        os.environ.pop("KROUTER_MAP", None)
+    with tempfile.TemporaryDirectory(prefix="lmemory-bench-", ignore_cleanup_errors=True) as tmp:
+        os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
+        os.environ["LMEMORY_CACHE_DIR"] = str(Path(tmp) / "cache")
+        os.environ.pop("LMEMORY_MAP", None)
         vault = Path(tmp) / "vault"
         shutil.copytree(vault_src or HERE / "vault", vault)
         import recall_index as ri
 
         out = []
         for it in rows:
-            # 和 agent 拿到的一样：交 ri.PAGES 页（前 3 页直接命中，后面是联想），冲突兜底按产品默认（`KROUTER_CONFLICT`）
+            # 和 agent 拿到的一样：交 ri.PAGES 页（前 3 页直接命中，后面是联想），冲突兜底按产品默认（`LMEMORY_CONFLICT`）
             res = ri.recall(vault, it["q"])
             refused = res["confidence"] == "none" or not res["hits"]
             out.append({"id": it["id"], "refused": refused, "cited": [] if refused else ri.page_list(res, ri.PAGES),
@@ -257,11 +257,11 @@ def score(rows: list[dict], answers: list[dict]) -> dict:
 
 def candidates(adapter: str, rows: list[dict], qset: str) -> list[dict]:
     """Each question's best page and its score, before any refusal threshold: what a coverage curve sweeps.
-    krouter: only questions KRouter answers (its own refusals stay refusals). bm25: plain BM25. bm25-floor: BM25 with
+    lmemory: only questions Lmemory answers (its own refusals stay refusals). bm25: plain BM25. bm25-floor: BM25 with
     superseded pages left out, i.e. the floor baseline at every possible floor."""
     src, cjk = vault_of(qset), qset in CJK_SETS
-    if adapter == "krouter":
-        return [a for a in krouter_answers(rows, src) if not a["refused"]]
+    if adapter == "lmemory":
+        return [a for a in lmemory_answers(rows, src) if not a["refused"]]
     if adapter == "bm25" and not cjk:
         return [a for a in _bm25_answers_v1(rows) if not a["refused"]]  # v1 baseline has no scores: one point
     scored = bm25_scored(rows, skip_superseded=adapter == "bm25-floor", vault_src=src, cjk=cjk)
@@ -328,15 +328,15 @@ def bootstrap(rows: list[dict], answers: list[dict], other: list[dict] | None = 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--answers", help="grade this JSONL instead of running KRouter")
-    ap.add_argument("--adapter", choices=["krouter", "bm25", "bm25-floor"], default="krouter")
+    ap.add_argument("--answers", help="grade this JSONL instead of running Lmemory")
+    ap.add_argument("--adapter", choices=["lmemory", "bm25", "bm25-floor"], default="lmemory")
     ap.add_argument("--set", choices=sorted(SETS), default="dev", dest="qset",
                     help="dev: the 30 bench questions (tune on these); heldout: never tune on these (HELDOUT.md)")
     ap.add_argument("--reveal", action="store_true",
                     help="held-out only: also print which questions were missed. Changing ranking or refusal after "
                          "this burns the set; record it in HELDOUT.md")
     ap.add_argument("--ci", action="store_true", help="add 95%% bootstrap intervals (questions resampled)")
-    ap.add_argument("--vs", choices=["krouter", "bm25", "bm25-floor"],
+    ap.add_argument("--vs", choices=["lmemory", "bm25", "bm25-floor"],
                     help="also run this adapter and give paired 95%% intervals for the differences")
     ap.add_argument("--vs-matched", choices=["bm25", "bm25-floor"], dest="vs_matched",
                     help="compare at the same coverage: the other system answers exactly as many questions as this "
@@ -348,7 +348,7 @@ def main() -> int:
 
     def run(adapter: str) -> list[dict]:
         src, cjk = vault_of(args.qset), args.qset in CJK_SETS
-        return {"krouter": lambda r: krouter_answers(r, src),
+        return {"lmemory": lambda r: lmemory_answers(r, src),
                 "bm25": lambda r: bm25_answers(r, src, cjk),
                 "bm25-floor": lambda r: bm25_floor_answers(r, args.qset)}[adapter](rows)
 

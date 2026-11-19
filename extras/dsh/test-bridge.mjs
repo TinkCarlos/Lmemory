@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url";
 import { parseReceipt, resolveRouter, runRoute } from "./lib/route.js";
 
 // Tests are not the host's traffic: the nightly learning reads the query log.
-process.env.KROUTER_NO_QUERY_LOG = "1";
+process.env.LMEMORY_NO_QUERY_LOG = "1";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "../..");
 const VAULT = join(ROOT, "template");
-const ROUTER = join(ROOT, "skill/krouter/scripts/route_knowledge.sh");
+const ROUTER = join(ROOT, "skill/lmemory/scripts/route_knowledge.sh");
 
 let failed = 0;
 function check(name, cond, detail = "") {
@@ -63,14 +63,14 @@ check(
 const write = runRoute({ route: "rm", query: "/", vault: VAULT, router: ROUTER });
 check("refuse non-route", !write.ok && write.stderr.includes("refused route"), write.stderr);
 
-const savedRouter = process.env.KROUTER_ROUTER;
-process.env.KROUTER_ROUTER = join(
+const savedRouter = process.env.LMEMORY_ROUTER;
+process.env.LMEMORY_ROUTER = join(
   homedir(),
   ".agents/skills/obsidian-knowledge-router/scripts/route_knowledge.sh",
 );
 const pinned = resolveRouter();
-if (savedRouter !== undefined) process.env.KROUTER_ROUTER = savedRouter;
-else delete process.env.KROUTER_ROUTER;
+if (savedRouter !== undefined) process.env.LMEMORY_ROUTER = savedRouter;
+else delete process.env.LMEMORY_ROUTER;
 check(
   "skip live foreign router",
   Boolean(pinned) && !String(pinned).includes("obsidian-knowledge-router"),
@@ -78,12 +78,12 @@ check(
 );
 
 const savedVault = process.env.OBSIDIAN_VAULT;
-const savedAlt = process.env.KROUTER_VAULT;
+const savedAlt = process.env.LMEMORY_VAULT;
 delete process.env.OBSIDIAN_VAULT;
-delete process.env.KROUTER_VAULT;
+delete process.env.LMEMORY_VAULT;
 const missing = runRoute({ route: "status", router: ROUTER });
 if (savedVault !== undefined) process.env.OBSIDIAN_VAULT = savedVault;
-if (savedAlt !== undefined) process.env.KROUTER_VAULT = savedAlt;
+if (savedAlt !== undefined) process.env.LMEMORY_VAULT = savedAlt;
 check("missing vault fails", !missing.ok, missing.stderr);
 
 if (failed) {

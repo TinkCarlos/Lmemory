@@ -1,9 +1,9 @@
-"""`session_hook.py prompt` with `KROUTER_RECALL_PROMPT=1`: mention it and it comes to mind (`recollect.py`).
+"""`lmemory_capture.py prompt` with `LMEMORY_RECALL_PROMPT=1`: mention it and it comes to mind (`recollect.py`).
 
 The contract since 2.0: when the message names nothing in the vault the hook prints nothing at all (Claude Code and
 Codex add any output to the context, so silence is the default); when it names a page it prints one JSON object,
 `hookSpecificOutput.additionalContext`, holding at most two pages, each with its conclusion, its path and a mark that
-this is memory, not the user's words. On by default since set 35 (the hook plus the standing index passed with both hosts); `KROUTER_RECALL_PROMPT=0` off."""
+this is memory, not the user's words. On by default since set 35 (the hook plus the standing index passed with both hosts); `LMEMORY_RECALL_PROMPT=0` off."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
-HOOK = SCRIPTS / "session_hook.py"
+SCRIPTS = REPO / "skill/lmemory/scripts"
+HOOK = SCRIPTS / "lmemory_capture.py"
 sys.path.insert(0, str(SCRIPTS))
 import recollect  # noqa: E402
 
@@ -56,9 +56,9 @@ def box(tmp_path):
         "Z07|周会|团队手册/团队周会.md|每周二上午 10 点\n"
         "E25|status page|Handbook/Status page.md|Update within 15 minutes\n", encoding="utf-8")
     env = {k: val for k, val in os.environ.items() if not k.endswith("_API_KEY")}
-    env.update(KROUTER_VAULT=str(v), KROUTER_STATE_DIR=str(tmp_path / "state"), KROUTER_CACHE_DIR=str(tmp_path / "cache"),
-               KROUTER_NO_QUERY_LOG="1", KROUTER_RECALL_PROMPT="1")
-    for k in ("KROUTER_IN_DISTILL", "KROUTER_INJECT", "KROUTER_MAP", "OBSIDIAN_VAULT"):
+    env.update(LMEMORY_VAULT=str(v), LMEMORY_STATE_DIR=str(tmp_path / "state"), LMEMORY_CACHE_DIR=str(tmp_path / "cache"),
+               LMEMORY_NO_QUERY_LOG="1", LMEMORY_RECALL_PROMPT="1")
+    for k in ("LMEMORY_IN_DISTILL", "LMEMORY_INJECT", "LMEMORY_MAP", "OBSIDIAN_VAULT"):
         env.pop(k, None)
     subprocess.run([sys.executable, str(SCRIPTS / "recall_index.py"), "--vault", str(v), "--stats"], env=env,
                    capture_output=True, check=True, timeout=120)
@@ -83,7 +83,7 @@ def _note(out: str, event: str = "UserPromptSubmit") -> str:
 
 def test_a_named_page_comes_with_its_conclusion_its_path_and_a_memory_mark(box):
     note = _note(_say(box, "测试环境的数据有没有办法留下来，我下周要演示"))
-    assert "KRouter 记忆提示" in note and "不是用户这句话里说的" in note
+    assert "Lmemory 记忆提示" in note and "不是用户这句话里说的" in note
     assert "凌晨 3 点重置数据" in note and "团队手册/测试环境.md" in note and "「测试环境」" in note
     assert "相关页：发布流程" in note  # 联想页只给标题
     assert "发布只从 main 打 tag" not in note
@@ -95,10 +95,10 @@ def test_nothing_named_prints_nothing(box):
 
 def test_on_by_default_and_off_by_switch(box):
     # 第 35 套两个宿主都过线：钩子和下意识索引默认打开；开关照样能关
-    env = {k: v for k, v in box["env"].items() if k != "KROUTER_RECALL_PROMPT"}
+    env = {k: v for k, v in box["env"].items() if k != "LMEMORY_RECALL_PROMPT"}
     assert "团队手册/测试环境.md" in _note(_say(box, "测试环境的数据有没有办法留下来，我下周要演示", env=env, sid="d1"))
-    assert _say(box, "测试环境的数据有没有办法留下来，我下周要演示", env={**env, "KROUTER_RECALL_PROMPT": "0"}) == ""
-    assert _say(box, "测试环境的数据有没有办法留下来，我下周要演示", env={**box["env"], "KROUTER_INJECT": "0"}) == ""
+    assert _say(box, "测试环境的数据有没有办法留下来，我下周要演示", env={**env, "LMEMORY_RECALL_PROMPT": "0"}) == ""
+    assert _say(box, "测试环境的数据有没有办法留下来，我下周要演示", env={**box["env"], "LMEMORY_INJECT": "0"}) == ""
 
 
 def test_codex_gets_the_same_json_and_cursor_only_its_receipt(box):
@@ -167,14 +167,14 @@ def test_a_session_marked_no_capture_still_recalls_but_records_no_words(box):
 
 
 def test_per_session_cap(box, monkeypatch):
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(box["state"]))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(box["state"]))
     hits = [{"rel": f"p{i}.md", "how": "x", "notes": []} for i in range(recollect.PER_SESSION + 3)]
     assert len(recollect.keep_new(hits, "claude", "cap")) == recollect.PER_SESSION
     assert recollect.keep_new([{"rel": "new.md", "how": "y", "notes": []}], "claude", "cap") == []
 
 
 def test_no_index_brings_nothing_and_starts_a_refresh(box):
-    env = {**box["env"], "KROUTER_CACHE_DIR": str(box["tmp"] / "empty-cache")}
+    env = {**box["env"], "LMEMORY_CACHE_DIR": str(box["tmp"] / "empty-cache")}
     assert _say(box, "测试环境的数据有没有办法留下来，我下周要演示", env=env) == ""
     assert list(box["state"].glob("recall-refresh-*.stamp"))
 
@@ -224,11 +224,11 @@ import learn_mentions  # noqa: E402
 
 def test_the_standing_index_lists_live_topics_with_a_how_to_fetch_line(box):
     text = compile_subconscious.standing_index(box["vault"])
-    assert text.startswith("KRouter 下意识索引")
+    assert text.startswith("Lmemory 下意识索引")
     assert "测试环境" in text and "〔团队手册/测试环境.md〕" in text
     assert "〔团队手册/代码托管.md〕" in text and "代码托管（旧）" not in text  # 旧页的那一行算在新页名下
     assert "短信通道" not in text and "部署钥匙" not in text  # 退役的、机密的不列
-    assert "krouter_ask" in text and "route_knowledge.sh" in text and str(box["vault"]) in text  # 不假设宿主看得到工具说明
+    assert "lmemory_ask" in text and "route_knowledge.sh" in text and str(box["vault"]) in text  # 不假设宿主看得到工具说明
 
 
 def test_the_standing_index_keeps_to_its_budget_and_says_how_many_are_left(box):
@@ -245,10 +245,10 @@ def test_session_start_hands_over_the_index_only_when_on(box):
     def start(env):
         return subprocess.run([sys.executable, str(HOOK), "start"], input=json.dumps({"cwd": str(box["tmp"])}), env=env,
                               capture_output=True, text=True, timeout=60).stdout
-    env = {k: v for k, v in box["env"].items() if k not in ("KROUTER_RECALL_PROMPT",)}
-    assert "下意识索引" in json.loads(start({**env, "KROUTER_RECALL_INDEX": "1"}))["hookSpecificOutput"]["additionalContext"]
-    assert start({**env, "KROUTER_RECALL_INDEX": "0"}) == ""
-    out = start({**env, "KROUTER_RECALL_INDEX": "1"})
+    env = {k: v for k, v in box["env"].items() if k not in ("LMEMORY_RECALL_PROMPT",)}
+    assert "下意识索引" in json.loads(start({**env, "LMEMORY_RECALL_INDEX": "1"}))["hookSpecificOutput"]["additionalContext"]
+    assert start({**env, "LMEMORY_RECALL_INDEX": "0"}) == ""
+    out = start({**env, "LMEMORY_RECALL_INDEX": "1"})
     assert len(json.loads(out)["hookSpecificOutput"]["additionalContext"]) < 9400
 
 
@@ -258,7 +258,7 @@ def _transcript(path: Path, prompt_text: str, tool_result: str, answer: str) -> 
     rows = [
         {"type": "user", "timestamp": ts, "message": {"role": "user", "content": prompt_text}},
         {"type": "assistant", "timestamp": ts, "message": {"content": [
-            {"type": "tool_use", "id": "t1", "name": "mcp__krouter__krouter_ask", "input": {"query": "测试环境"}}]}},
+            {"type": "tool_use", "id": "t1", "name": "mcp__lmemory__lmemory_ask", "input": {"query": "测试环境"}}]}},
         {"type": "user", "timestamp": ts, "message": {"content": [
             {"type": "tool_result", "tool_use_id": "t1", "content": tool_result}]}},
         {"type": "assistant", "timestamp": ts, "message": {"content": [{"type": "text", "text": answer}]}},
@@ -267,7 +267,7 @@ def _transcript(path: Path, prompt_text: str, tool_result: str, answer: str) -> 
 
 
 def test_a_page_the_agent_fetched_and_used_after_the_hook_said_nothing_is_learned(box):
-    box["env"]["KROUTER_RECALL_LEARN"] = "1"  # 第 36 套没过线：默认关
+    box["env"]["LMEMORY_RECALL_LEARN"] = "1"  # 第 36 套没过线：默认关
     said = "演示前那台机器的数据会不会被清掉，老秦说夜里会洗一遍"
     assert _say(box, said, sid="L1") == ""  # 钩子没认出来
     t = box["tmp"] / "t.jsonl"
@@ -286,7 +286,7 @@ def test_a_page_the_agent_fetched_and_used_after_the_hook_said_nothing_is_learne
 
 
 def test_nothing_is_learned_when_the_agent_did_not_use_the_page(box):
-    box["env"]["KROUTER_RECALL_LEARN"] = "1"
+    box["env"]["LMEMORY_RECALL_LEARN"] = "1"
     said = "演示前那台机器的数据会不会被清掉"
     _say(box, said, sid="L2")
     t = box["tmp"] / "t2.jsonl"

@@ -4,7 +4,7 @@
     python3 bench/subconscious/run.py dev [--routes alias,trigger] [--show]
     python3 bench/subconscious/run.py heldout [--save brought.jsonl]     # run once
 
-Each case is one message. `recollect.recollect()` is called on it exactly as `session_hook.py prompt` calls it, on a
+Each case is one message. `recollect.recollect()` is called on it exactly as `lmemory_capture.py prompt` calls it, on a
 temporary copy of `bench/memory_honesty/vault3` with `overlay/` laid into `90 系统文件/`. Scored mechanically: recall
 case right = expected page brought, any other page = a wrong page; changed case right = new page brought, the old
 page brought = a wrong page and an old-page delivery; quiet case = anything brought counts against it.
@@ -23,7 +23,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
 import recollect  # noqa: E402
 
 VAULT = REPO / "bench/memory_honesty/vault3"
@@ -82,9 +82,9 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         import os
 
-        os.environ["KROUTER_CACHE_DIR"] = str(Path(tmp) / "cache")
-        os.environ["KROUTER_STATE_DIR"] = str(Path(tmp) / "state")
-        os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+        os.environ["LMEMORY_CACHE_DIR"] = str(Path(tmp) / "cache")
+        os.environ["LMEMORY_STATE_DIR"] = str(Path(tmp) / "state")
+        os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
         v = make_vault(Path(tmp))
         import recall_index
 

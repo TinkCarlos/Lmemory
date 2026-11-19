@@ -13,13 +13,13 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-HOOK = REPO / "skill/krouter/scripts/session_hook.py"
+HOOK = REPO / "skill/lmemory/scripts/lmemory_capture.py"
 DIGEST = "## 定了什么、改了什么（模型提炼，待你确认）"
 
 
 def _root(path: Path) -> str:
-    sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
-    from krouter_home import project_root
+    sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
+    from lmemory_home import project_root
 
     return project_root(str(path))
 
@@ -28,7 +28,7 @@ def _page(folder: Path, name: str, root: str, lines: list[str], day: str | None 
     day = day or date.today().isoformat()
     body = "\n".join(f"- {ln}" for ln in lines)
     (folder / f"{day}｜{name}.md").write_text(
-        f"---\nsource: krouter-import\nstatus: imported\ndate: {day}\nproject: {Path(root).name}\n"
+        f"---\nsource: lmemory-import\nstatus: imported\ndate: {day}\nproject: {Path(root).name}\n"
         f"project_root: {root}\n{extra}---\n\n# {name}\n\n{DIGEST}\n\n{body}\n\n## 摘录\n\n- **问**：…\n", encoding="utf-8")
 
 
@@ -47,8 +47,8 @@ def _setup(tmp_path: Path, consent: bool = True) -> dict:
     state.mkdir()
     if consent:
         (state / "import.json").write_text(json.dumps({"consent": True}), encoding="utf-8")
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(state), "KROUTER_NO_QUERY_LOG": "1"}
-    env.pop("KROUTER_INJECT", None)
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(state), "LMEMORY_NO_QUERY_LOG": "1"}
+    env.pop("LMEMORY_INJECT", None)
     return {"vault": vault, "env": env, "state": state, "folder": folder, "shop": shop, "tmp": tmp_path}
 
 
@@ -73,12 +73,12 @@ def test_start_brings_every_distilled_decision_with_its_page_and_no_human_gate(t
     assert "- 数据库每晚 02:00 备份 〔" in ctx
     assert "- 发版只从 main 打 tag（10:05） 〔" in ctx
     assert "很久以前" not in ctx  # 30 天外
-    assert "krouter_ask" in lines[-1]
+    assert "lmemory_ask" in lines[-1]
 
 
 def test_inject_confirmed_keeps_the_old_gate(tmp_path):
     s = _setup(tmp_path)
-    strict = _ctx(_hook({**s["env"], "KROUTER_INJECT": "confirmed"}, "start", {"cwd": str(s["shop"])}))
+    strict = _ctx(_hook({**s["env"], "LMEMORY_INJECT": "confirmed"}, "start", {"cwd": str(s["shop"])}))
     assert "发版只从 main 打 tag" not in strict  # 没确认、也不是纠错：不带
     assert "改成 CI 发布（10:20）（待确认）" in strict and "- 数据库每晚 02:00 备份 〔" in strict
 
@@ -98,7 +98,7 @@ def test_same_folder_name_in_two_repos_never_shares_decisions(tmp_path):
     assert "alpha" not in sub  # 子目录不是 git 仓库时就是它自己，不会去匹配别人
     # 1.0.0 导入的旧页只有 project（文件夹名），没有 project_root：一律不带
     (s["folder"] / "2026-10-12｜旧版本页.md").write_text(
-        f"---\nsource: krouter-import\ndate: {date.today().isoformat()}\nproject: api\n---\n\n{DIGEST}\n\n"
+        f"---\nsource: lmemory-import\ndate: {date.today().isoformat()}\nproject: api\n---\n\n{DIGEST}\n\n"
         "- 原来 旧 → 改成 新\n\n## 摘录\n", encoding="utf-8")
     assert "旧 → 改成 新" not in _ctx(_hook(s["env"], "start", {"cwd": str(beta)}))
 
@@ -120,7 +120,7 @@ def test_header_follows_the_language_of_the_lines(tmp_path):
     en.mkdir()
     _page(s["folder"], "english", _root(en), ["Was: manual uploads → now: CI uploads (10:20)"])
     ctx = _ctx(_hook(s["env"], "start", {"cwd": str(en)}))
-    assert ctx.startswith("KRouter: decisions recorded") and "(unconfirmed)" not in ctx and "krouter_ask" in ctx
+    assert ctx.startswith("Lmemory: decisions recorded") and "(unconfirmed)" not in ctx and "lmemory_ask" in ctx
     assert not any("一" <= ch <= "鿿" for ch in ctx.replace("05 时间日志/会话摘录", ""))
 
 
@@ -129,7 +129,7 @@ def test_start_is_silent_without_consent_without_decisions_or_when_turned_off(tm
     assert _hook(s["env"], "start", {"cwd": str(s["shop"])}).stdout == ""
     s = _setup(tmp_path / "b")
     assert _hook(s["env"], "start", {"cwd": str(tmp_path / "nowhere")}).stdout == ""
-    assert _hook({**s["env"], "KROUTER_INJECT": "0"}, "start", {"cwd": str(s["shop"])}).stdout == ""
+    assert _hook({**s["env"], "LMEMORY_INJECT": "0"}, "start", {"cwd": str(s["shop"])}).stdout == ""
     bad = subprocess.run([sys.executable, str(HOOK), "start"], input="not json", env=s["env"], capture_output=True,
                          text=True, timeout=60)
     assert bad.returncode == 0  # hook 永远不让会话失败
@@ -147,7 +147,7 @@ def test_end_imports_the_session_that_just_ended(tmp_path):
         {"type": "user", "timestamp": ts, "cwd": str(work), "message": {"role": "user", "content": "超时改成多少"}},
         {"type": "assistant", "timestamp": ts, "message": {"content": [{"type": "text", "text": "改成 10 秒。"}]}},
         {"type": "custom-title", "customTitle": "超时设置"}]) + "\n", encoding="utf-8")
-    env = {**s["env"], "KROUTER_CLAUDE_PROJECTS": str(tmp_path / "projects")}
+    env = {**s["env"], "LMEMORY_CLAUDE_PROJECTS": str(tmp_path / "projects")}
     res = _hook(env, "end", {"session_id": "dddd4444-s", "transcript_path": str(transcript), "cwd": str(work)})
     assert res.returncode == 0 and res.stdout == ""
     page = ""

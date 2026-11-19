@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 import mcp_server  # noqa: E402
 import recall_index  # noqa: E402
@@ -39,9 +39,9 @@ def vault(tmp_path, monkeypatch):
     (v / "02 经验与方法" / "发版流程.md").write_text(
         "---\ntitle: 发版流程\nstatus: active\n---\n\n# 发版流程\n\n- 发版只从 main 打 tag，CI 发布。\n", encoding="utf-8")
     monkeypatch.setenv("OBSIDIAN_VAULT", str(v))
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
     return v
 
 
@@ -163,7 +163,7 @@ def test_a_note_is_found_by_the_very_next_lookup(vault, monkeypatch):
 
 
 def test_lookups_re_check_the_vault_at_most_once_per_window(vault, monkeypatch):
-    monkeypatch.setenv("KROUTER_REFRESH_EVERY", "3600")
+    monkeypatch.setenv("LMEMORY_REFRESH_EVERY", "3600")
     recall_index.forget_refresh()
     recall_index.recall(vault, "api port")
     page = vault / "02 经验与方法" / "Kettle.md"
@@ -172,7 +172,7 @@ def test_lookups_re_check_the_vault_at_most_once_per_window(vault, monkeypatch):
     assert not any("Kettle" in h["rel"] for h in recall_index.recall(vault, "kettle descales")["hits"])
     recall_index.forget_refresh()
     assert any("Kettle" in h["rel"] for h in recall_index.recall(vault, "kettle descales")["hits"])
-    monkeypatch.delenv("KROUTER_REFRESH_EVERY")  # 默认（命令行、一次性进程）：每次都先检查
+    monkeypatch.delenv("LMEMORY_REFRESH_EVERY")  # 默认（命令行、一次性进程）：每次都先检查
     page.write_text(page.read_text(encoding="utf-8").replace("monthly", "weekly"), encoding="utf-8")
     hit = recall_index.recall(vault, "kettle descales weekly")["hits"][0]
     assert "Kettle" in hit["rel"]
@@ -248,8 +248,8 @@ def test_when_recall_fails_the_literal_search_reads_the_whole_scope(vault, monke
 def test_server_flags_set_the_pool(monkeypatch):
     seen = {}
     monkeypatch.setattr(mcp_server, "serve_stdio", lambda: seen.setdefault("mode", "stdio") and 0)
-    monkeypatch.delenv("KROUTER_WORKERS", raising=False)
-    monkeypatch.delenv("KROUTER_REFRESH_EVERY", raising=False)
+    monkeypatch.delenv("LMEMORY_WORKERS", raising=False)
+    monkeypatch.delenv("LMEMORY_REFRESH_EVERY", raising=False)
     mcp_server.main([])
     assert (mcp_server.WORKERS, mcp_server.REFRESH_EVERY) == (1, 2.0)
     mcp_server.main(["--workers", "0", "--refresh-every", "0"])

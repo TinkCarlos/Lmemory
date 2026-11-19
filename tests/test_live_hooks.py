@@ -17,8 +17,8 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
-HOOK = SCRIPTS / "session_hook.py"
+SCRIPTS = REPO / "skill/lmemory/scripts"
+HOOK = SCRIPTS / "lmemory_capture.py"
 IMPORT = SCRIPTS / "import_sessions.py"
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(SCRIPTS))
@@ -34,7 +34,7 @@ def _jsonl(path: Path, rows: list[dict]) -> Path:
 
 
 def _root(path: Path) -> str:
-    from krouter_home import project_root
+    from lmemory_home import project_root
 
     return project_root(str(path))
 
@@ -50,10 +50,10 @@ def box(tmp_path):
     state = tmp_path / "state"
     state.mkdir()
     (state / "import.json").write_text(json.dumps({"consent": True}), encoding="utf-8")
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(state), "KROUTER_NO_QUERY_LOG": "1",
-           "KROUTER_CODEX_SESSIONS": str(tmp_path / "codex"), "KROUTER_CURSOR_PROJECTS": str(tmp_path / "cursor"),
-           "KROUTER_CLAUDE_PROJECTS": str(tmp_path / "claude")}
-    for k in ("KROUTER_INJECT", "KROUTER_IN_DISTILL"):
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(state), "LMEMORY_NO_QUERY_LOG": "1",
+           "LMEMORY_CODEX_SESSIONS": str(tmp_path / "codex"), "LMEMORY_CURSOR_PROJECTS": str(tmp_path / "cursor"),
+           "LMEMORY_CLAUDE_PROJECTS": str(tmp_path / "claude")}
+    for k in ("LMEMORY_INJECT", "LMEMORY_IN_DISTILL"):
         env.pop(k, None)
     return {"vault": vault, "folder": folder, "work": work, "state": state, "env": env, "tmp": tmp_path}
 
@@ -67,7 +67,7 @@ def _hook(env: dict, which: str, agent: str, payload) -> subprocess.CompletedPro
 def _decision(box, line: str = "原来手动上传 → 改成 CI 发布（10:20）") -> None:
     day = date.today().isoformat()
     (box["folder"] / f"{day}｜发版.md").write_text(
-        f"---\nsource: krouter-import\nstatus: imported\ndate: {day}\nproject: api\nproject_root: {_root(box['work'])}\n"
+        f"---\nsource: lmemory-import\nstatus: imported\ndate: {day}\nproject: api\nproject_root: {_root(box['work'])}\n"
         f"---\n\n# 发版\n\n{DIGEST}\n\n- {line}\n\n## 摘录\n\n- **问**：…\n", encoding="utf-8")
 
 
@@ -102,7 +102,7 @@ def _wait_page(folder: Path, needle: str) -> str:
                 text = page.read_text(encoding="utf-8")
             except OSError:
                 continue
-            if needle in text and "source: krouter-import" in text:
+            if needle in text and "source: lmemory-import" in text:
                 return text
         time.sleep(0.1)
     return ""
@@ -207,9 +207,9 @@ def test_a_session_marked_not_to_record_stays_out_codex_and_cursor(box):
 
 
 @pytest.mark.parametrize("agent", ["codex", "cursor", "claude"])
-def test_turn_and_end_do_nothing_under_a_krouter_model_call_or_without_consent(box, agent):
+def test_turn_and_end_do_nothing_under_a_lmemory_model_call_or_without_consent(box, agent):
     t = _codex_rollout(box, [("x 改成 y", "好")])
-    env = {**box["env"], "KROUTER_IN_DISTILL": "1"}
+    env = {**box["env"], "LMEMORY_IN_DISTILL": "1"}
     for which in ("turn", "end"):
         assert _hook(env, which, agent, {"session_id": "s", "transcript_path": str(t)}).returncode == 0
     (box["state"] / "import.json").unlink()
@@ -223,7 +223,7 @@ def test_turn_and_end_do_nothing_under_a_krouter_model_call_or_without_consent(b
 
 def test_a_local_import_keeps_the_digest_until_the_next_distill(box, monkeypatch):
     t = _codex_rollout(box, [("缓存过期时间改成多少？", "原来 30 分钟，改成 10 分钟。"), ("那重试呢？", "重试 3 次。")])
-    monkeypatch.setenv("KROUTER_CODEX_SESSIONS", str(box["tmp"] / "codex"))
+    monkeypatch.setenv("LMEMORY_CODEX_SESSIONS", str(box["tmp"] / "codex"))
     import import_sessions as imp
 
     entries = imp.collect(date(1970, 1, 1), date.today(), [t])
@@ -250,7 +250,7 @@ def test_a_local_import_keeps_the_digest_until_the_next_distill(box, monkeypatch
 
 def test_plugin_hooks_also_record_each_claude_code_turn():
     hooks = json.loads((REPO / "hooks/hooks.json").read_text(encoding="utf-8"))["hooks"]
-    assert hooks["Stop"][0]["hooks"][0]["command"].endswith("session_hook.py\" turn")
+    assert hooks["Stop"][0]["hooks"][0]["command"].endswith("lmemory_capture.py\" turn")
 
 
 # ---------- 安装：并进各家的钩子文件 ----------
@@ -263,9 +263,9 @@ def apps(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
     monkeypatch.setenv("APPDATA", str(tmp_path / "AppData"))
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / ".codex"))
-    monkeypatch.setenv("KROUTER_SKILL_HOME", str(tmp_path / "skill"))
-    monkeypatch.delenv("KROUTER_NO_HOOKS", raising=False)
-    for k in ("KROUTER_HOOKS_CONFIG_CODEX", "KROUTER_HOOKS_CONFIG_CURSOR"):
+    monkeypatch.setenv("LMEMORY_SKILL_HOME", str(tmp_path / "skill"))
+    monkeypatch.delenv("LMEMORY_NO_HOOKS", raising=False)
+    for k in ("LMEMORY_HOOKS_CONFIG_CODEX", "LMEMORY_HOOKS_CONFIG_CURSOR"):
         monkeypatch.delenv(k, raising=False)
     (tmp_path / ".codex").mkdir()
     bootstrap.app_settings("Cursor").mkdir(parents=True)
@@ -288,11 +288,11 @@ def test_installer_writes_each_apps_own_format(apps, capsys):
     assert set(codex) == {"hooks"}  # Codex 只认顶层 "hooks"
     assert set(codex["hooks"]) == {"SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"}
     end = codex["hooks"]["SessionEnd"][0]["hooks"][0]
-    assert end["type"] == "command" and end["timeout"] == 3 and end["command"].endswith("session_hook.py end --agent codex")
+    assert end["type"] == "command" and end["timeout"] == 3 and end["command"].endswith("lmemory_capture.py end --agent codex")
     cursor = json.loads(apps["cursor"].read_text(encoding="utf-8"))
     assert cursor["version"] == 1 and set(cursor["hooks"]) == {"sessionStart", "beforeSubmitPrompt", "stop", "sessionEnd"}
     stop = cursor["hooks"]["stop"][0]
-    assert stop["command"].endswith("session_hook.py turn --agent cursor") and "failClosed" not in stop
+    assert stop["command"].endswith("lmemory_capture.py turn --agent cursor") and "failClosed" not in stop
     out = capsys.readouterr().out
     assert "/hooks" in out  # Codex 要先在 /hooks 里信任
 
@@ -315,7 +315,7 @@ def test_installer_keeps_every_hook_already_there_and_is_idempotent(apps):
     cursor = json.loads(first["cursor"])["hooks"]
     assert cursor["beforeShellExecution"] == mine["hooks"]["beforeShellExecution"]
     assert cursor["beforeSubmitPrompt"][0] == mine["hooks"]["beforeSubmitPrompt"][0] and len(cursor["beforeSubmitPrompt"]) == 2
-    assert apps["cursor"].with_name("hooks.json.krouter-bak").is_file()
+    assert apps["cursor"].with_name("hooks.json.lmemory-bak").is_file()
 
 
 def test_a_codex_file_codex_cannot_read_is_left_alone(apps, capsys):
@@ -340,7 +340,7 @@ def test_an_app_that_is_not_installed_gets_nothing(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path))  # Windows: Path.home() reads USERPROFILE, not HOME
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / ".config"))
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / ".codex"))
-    monkeypatch.delenv("KROUTER_NO_HOOKS", raising=False)
+    monkeypatch.delenv("LMEMORY_NO_HOOKS", raising=False)
     (tmp_path / ".cursor").mkdir()  # install.sh 放 Cursor 规则时会建它：不算 Cursor 装了
     assert bootstrap.register_hooks(T, dry=False) == []
     assert not any(tmp_path.rglob("hooks.json"))
@@ -355,6 +355,16 @@ def test_uninstall_takes_out_only_ours(apps):
     assert json.loads(apps["cursor"].read_text(encoding="utf-8"))["hooks"] == {"stop": [{"command": "python3 /me/audit.py"}]}
     assert json.loads(apps["codex"].read_text(encoding="utf-8"))["hooks"] == {}
     assert bootstrap.unregister_hooks(dry=False) == []
+
+
+def test_rebrand_keeps_the_upstream_capture_hook(apps):
+    original = {"type": "command", "command": "python3 /existing/krouter/scripts/session_hook.py turn --agent codex"}
+    apps["codex"].write_text(json.dumps({"hooks": {"Stop": [{"hooks": [original]}]}}), encoding="utf-8")
+    bootstrap.register_hooks(T, dry=False)
+    commands = _commands(apps["codex"], True)["Stop"]
+    assert commands[0] == original["command"] and commands[1].endswith("lmemory_capture.py turn --agent codex")
+    bootstrap.unregister_hooks(dry=False)
+    assert _commands(apps["codex"], True)["Stop"] == [original["command"]]
 
 
 def test_codex_hooks_turned_off_is_reported(apps, capsys):

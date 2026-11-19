@@ -1,14 +1,14 @@
 #!/bin/sh
 # 团队服务器镜像的冒烟测试：只读挂一个示例库，等健康检查变绿，不带 token 必须 401，带 token 的查询要带库名回来，
 # 访问日志只有问题的 hash，库里一个文件都不能变。CI 和发版流程都跑它；本机有 Docker 也能跑。
-#   sh scripts/docker_smoke.sh krouter:test
+#   sh scripts/docker_smoke.sh lmemory:test
 set -eu
 IMAGE=${1:?usage: docker_smoke.sh IMAGE}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-# 绑定挂载的目录要在 Docker 看得见的地方：colima / Docker Desktop 只共享用户目录时设 KROUTER_SMOKE_TMP=$HOME/...
-WORK=$(mktemp -d "${KROUTER_SMOKE_TMP:-${TMPDIR:-/tmp}}/krouter-smoke.XXXXXX")
-NAME=krouter-smoke-$$
-PORT=${KROUTER_SMOKE_PORT:-18787}
+# 绑定挂载的目录要在 Docker 看得见的地方：colima / Docker Desktop 只共享用户目录时设 LMEMORY_SMOKE_TMP=$HOME/...
+WORK=$(mktemp -d "${LMEMORY_SMOKE_TMP:-${TMPDIR:-/tmp}}/lmemory-smoke.XXXXXX")
+NAME=lmemory-smoke-$$
+PORT=${LMEMORY_SMOKE_PORT:-18787}
 TOKEN=smoke-test-token-0123456789
 cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; rm -rf "$WORK"; }
 trap cleanup EXIT
@@ -18,7 +18,7 @@ chmod 644 "$WORK/token"   # 容器里的非 root 用户要能读
 sums() { (cd "$WORK/vault" && find . -type f -exec cksum {} \; | sort); }
 sums > "$WORK/before"
 docker run -d --name "$NAME" -p "127.0.0.1:$PORT:8787" \
-  -v "$WORK/vault:/vault:ro" -v "$WORK/token:/run/secrets/krouter_token:ro" "$IMAGE" >/dev/null
+  -v "$WORK/vault:/vault:ro" -v "$WORK/token:/run/secrets/lmemory_token:ro" "$IMAGE" >/dev/null
 state=starting
 i=0
 while [ $i -lt 60 ]; do
@@ -32,7 +32,7 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: applicat
   -d '{"jsonrpc":"2.0","id":1,"method":"ping"}' "http://127.0.0.1:$PORT/mcp")
 [ "$code" = 401 ] || { echo "smoke: no token gave $code, want 401"; exit 1; }
 curl -s -X POST -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"krouter_ask","arguments":{"query":"smoke-test question 发版流程怎么定的"}}}' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lmemory_ask","arguments":{"query":"smoke-test question 发版流程怎么定的"}}}' \
   "http://127.0.0.1:$PORT/mcp" > "$WORK/reply.json"
 python3 - "$WORK/reply.json" <<'PY'
 import json, sys

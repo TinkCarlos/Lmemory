@@ -1,6 +1,6 @@
 """Skills grown from experience cards (`skills.py`): drafted nightly through the host lane (quietly skipped with none),
 offered as drafts apart from the facts, promoted or withdrawn on their use records, each change one commit that one
-command takes back; the host fetches the full text (`krouter_skill`); export only when asked. Also: an English vault's
+command takes back; the host fetches the full text (`lmemory_skill`); export only when asked. Also: an English vault's
 session pages carry English turn labels, and both kinds are parsed."""
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 BENCH = REPO / "bench/transfer"
 sys.path.insert(0, str(SCRIPTS))
 import experience  # noqa: E402
@@ -40,10 +40,10 @@ def vault(tmp_path, monkeypatch):
     _git(v, "init", "-q")
     _git(v, "-c", "user.name=t", "-c", "user.email=t@t", "add", "-A")
     _git(v, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init")
-    monkeypatch.setenv("KROUTER_SKILLS", "1")
-    monkeypatch.delenv("KROUTER_EXPERIENCE", raising=False)
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
+    monkeypatch.setenv("LMEMORY_SKILLS", "1")
+    monkeypatch.delenv("LMEMORY_EXPERIENCE", raising=False)
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
     return v
 
 
@@ -81,10 +81,10 @@ def test_a_card_borne_out_repeatedly_is_drafted_with_its_sources_as_one_commit(v
     assert "status: draft" in page and "**什么时候用**：当同一件耗时的事每次都要从头做一遍时" in page
     assert "1. 先确认" in page and "经验卡〔C02〕[[02 经验与方法/经验卡/C02｜" in page and "claude:s0000000" in page
     log = _git(vault, "log", "--format=%s%n%b", "-3")
-    assert "技能草稿：「慢活的结果存起来复用」（一张卡被反复证实；〔C02〕采纳 2、又遇到 1）" in log and "[krouter-run " in log
+    assert "技能草稿：「慢活的结果存起来复用」（一张卡被反复证实；〔C02〕采纳 2、又遇到 1）" in log and "[lmemory-run " in log
     # 摘要里：和经验分开，标明是草稿
     text = skills.digest(vault)
-    assert text.startswith("KRouter 技能") and "技能草稿（还没转正" in text and f"慢活的结果存起来复用：当同一件耗时的事每次都要从头做一遍时〔{d['id']}〕" in text
+    assert text.startswith("Lmemory 技能") and "技能草稿（还没转正" in text and f"慢活的结果存起来复用：当同一件耗时的事每次都要从头做一遍时〔{d['id']}〕" in text
     full = skills.show(vault, d["id"])
     assert full.startswith("（这是草稿") and "## 做法" in full and f"skill_id: {d['id']}" in full
     # 同一批卡，第二晚不再调模型
@@ -199,7 +199,7 @@ def test_use_records_count_skill_ids_like_card_ids(vault, monkeypatch):
     assert experience.record_uses(vault, "claude:abc", turns) == 2
     u = experience.usage(vault)[d["id"]]
     assert u["offered"] == 1 and u["adopted"] == 1
-    monkeypatch.setenv("KROUTER_SKILLS", "0")
+    monkeypatch.setenv("LMEMORY_SKILLS", "0")
     assert skills.ids(vault) == set() and skills.digest(vault) == ""
 
 
@@ -213,36 +213,36 @@ def _mcp(env: dict, *msgs: dict) -> list[dict]:
 
 def test_mcp_lists_skills_and_returns_the_full_text(vault, monkeypatch, tmp_path):
     d = _draft(vault, monkeypatch)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CACHE_DIR": str(tmp_path / "c")}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CACHE_DIR": str(tmp_path / "c")}
     out = _mcp(env, {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
                {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-               {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "krouter_skill", "arguments": {"id": d["id"]}}},
-               {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "krouter_skill", "arguments": {"id": "S0000"}}})
-    assert "krouter_skill" in out[0]["result"]["instructions"]
-    tool = next(t for t in out[1]["result"]["tools"] if t["name"] == "krouter_skill")
+               {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "lmemory_skill", "arguments": {"id": d["id"]}}},
+               {"jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": {"name": "lmemory_skill", "arguments": {"id": "S0000"}}})
+    assert "lmemory_skill" in out[0]["result"]["instructions"]
+    tool = next(t for t in out[1]["result"]["tools"] if t["name"] == "lmemory_skill")
     assert f"{d['id']} = 慢活的结果存起来复用 (draft): 当同一件耗时的事每次都要从头做一遍时" in tool["description"]
     assert out[2]["result"]["isError"] is False and "## 做法" in out[2]["result"]["content"][0]["text"]
     assert out[3]["result"]["isError"] is True and d["id"] in out[3]["result"]["content"][0]["text"]
     assert experience.usage(vault)[d["id"]].get("offered", 0) == 0  # 取全文记为 fetched，不算提出或采纳
     assert '"kind": "fetched"' in (vault / experience.USES).read_text(encoding="utf-8")
-    off = _mcp({**env, "KROUTER_SKILLS": "0"}, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-    assert "krouter_skill" not in [t["name"] for t in off[0]["result"]["tools"]]
+    off = _mcp({**env, "LMEMORY_SKILLS": "0"}, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    assert "lmemory_skill" not in [t["name"] for t in off[0]["result"]["tools"]]
 
 
 def test_session_start_lists_skills_after_the_experience_digest(vault, monkeypatch, tmp_path):
     d = _draft(vault, monkeypatch)
-    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(tmp_path / "no-consent")}
-    res = subprocess.run([sys.executable, str(SCRIPTS / "session_hook.py"), "start", "--agent", "claude"],
+    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(tmp_path / "no-consent")}
+    res = subprocess.run([sys.executable, str(SCRIPTS / "lmemory_capture.py"), "start", "--agent", "claude"],
                          input=json.dumps({"cwd": str(tmp_path), "session_id": "s1"}), env=e, capture_output=True,
                          text=True, timeout=60)
     ctx = json.loads(res.stdout)["hookSpecificOutput"]["additionalContext"]
-    assert ctx.startswith("KRouter 经验摘要") and "\n\nKRouter 技能" in ctx and f"〔{d['id']}〕" in ctx
+    assert ctx.startswith("Lmemory 经验摘要") and "\n\nLmemory 技能" in ctx and f"〔{d['id']}〕" in ctx
     assert "## 做法" not in ctx  # 只列名字和什么时候用，全文要取
 
 
 def test_skills_never_come_back_as_facts(vault, monkeypatch, tmp_path):
     _draft(vault, monkeypatch)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CACHE_DIR": str(tmp_path / "c")}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CACHE_DIR": str(tmp_path / "c")}
     res = subprocess.run(["sh", str(SCRIPTS / "route_knowledge.sh"), "search", "慢活的结果存起来复用"], env=env,
                          capture_output=True, text=True, timeout=120)
     assert "02 经验与方法/技能/" not in res.stdout.replace("[[02 经验与方法/技能/", "")  # 变更记录里的链接不算
@@ -257,8 +257,8 @@ def test_export_only_when_asked_and_only_its_own_files(vault, monkeypatch, tmp_p
     res = skills.export(vault, "agent-skills", dest, drafts=True)
     rel = res["written"][0]
     text = (dest / rel).read_text(encoding="utf-8")
-    assert rel == f"krouter-skill-{d['id'].lower()}/SKILL.md" and text.startswith(f"---\nname: krouter-skill-{d['id'].lower()}\n")
-    assert "description: \"当同一件耗时的事每次都要从头做一遍时（KRouter 技能" in text and "## 做法" in text
+    assert rel == f"lmemory-skill-{d['id'].lower()}/SKILL.md" and text.startswith(f"---\nname: lmemory-skill-{d['id'].lower()}\n")
+    assert "description: \"当同一件耗时的事每次都要从头做一遍时（Lmemory 技能" in text and "## 做法" in text
     cur = skills.export(vault, "cursor-rule", tmp_path / "rules", drafts=True)
     assert (tmp_path / "rules" / cur["written"][0]).read_text(encoding="utf-8").count("alwaysApply: false") == 1
     page = vault / d["rel"]
@@ -280,7 +280,7 @@ def test_nightly_runs_the_step_and_reports_counts(vault, monkeypatch, tmp_path):
     assert "新起草〔S1〕[[02 经验与方法/技能/技能｜n]]：依据 〔C02〕采纳 2、又遇到 1" in lines
     assert "转正〔S2〕「m」：被采纳 2 次" in lines and "撤回〔S3〕「k」：起草 45 天" in lines
     assert "skills" in nightly.STEPS and "skills" in nightly.MODEL_STEPS
-    env = {**os.environ, "KROUTER_HOST_CLI": "0", "KROUTER_KEYS_ENV": str(tmp_path / "none.env")}
+    env = {**os.environ, "LMEMORY_HOST_CLI": "0", "LMEMORY_KEYS_ENV": str(tmp_path / "none.env")}
     for k in list(env):
         if k.endswith("_API_KEY"):
             env.pop(k)
@@ -323,11 +323,11 @@ def test_an_english_vault_writes_english_turn_labels_and_both_kinds_parse(monkey
 
 
 def test_an_english_vault_keeps_skills_in_an_english_folder_and_digest(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_SKILLS", "1")
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_SKILLS", "1")
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
     v = tmp_path / "vault"
     shutil.copytree(REPO / "template", v)
-    (v / "krouter-zones.psv").write_text("@lang|en\n02 经验与方法|02 Methods\n", encoding="utf-8")  # 没有 Skills 那一行的旧库
+    (v / "lmemory-zones.psv").write_text("@lang|en\n02 经验与方法|02 Methods\n", encoding="utf-8")  # 没有 Skills 那一行的旧库
     folder = v / "02 Methods/经验卡"
     folder.mkdir(parents=True)
     for card in sorted((BENCH / "cards_en").glob("C02*.md")):
@@ -340,7 +340,7 @@ def test_an_english_vault_keeps_skills_in_an_english_folder_and_digest(tmp_path,
     row = skills.nightly(v)
     assert row["drafted"] and row["drafted"][0]["rel"].startswith("02 Methods/Skills/Skill - ")
     text = skills.digest(v)
-    assert text.startswith("KRouter skills") and "Skill drafts" in text and "\"02 Methods/Skills\"" in text
+    assert text.startswith("Lmemory skills") and "Skill drafts" in text and "\"02 Methods/Skills\"" in text
     assert not any("一" <= ch <= "鿿" for ch in text)
     assert "## Steps" in skills.show(v, row["drafted"][0]["id"])
 
@@ -385,15 +385,15 @@ def test_the_bench_scores_drafts_through_the_codes_own_checks(tmp_path):
                              "steps": ["把结果存起来", "下次直接复用"]}], ensure_ascii=False)
         drafts, _ = skills.parse(reply, {c["id"]: c for c in pool}, {c["id"] for c in singles}, covered)
     assert drafts and set(drafts[0]["cards"]) == {ids["a"], ids["b"]} and not singles
-    assert bench.called('CALL krouter_skill {"id": "Sca77"}') == "Sca77" and bench.called("好的，我们先看看") == ""
+    assert bench.called('CALL lmemory_skill {"id": "Sca77"}') == "Sca77" and bench.called("好的，我们先看看") == ""
 
 
 def test_on_by_default_since_sets_24_and_25_and_off_with_either_switch(monkeypatch):
-    for k in ("KROUTER_SKILLS", "KROUTER_EXPERIENCE"):
+    for k in ("LMEMORY_SKILLS", "LMEMORY_EXPERIENCE"):
         monkeypatch.delenv(k, raising=False)
     assert skills.DEFAULT_ON and skills.on()
-    monkeypatch.setenv("KROUTER_SKILLS", "0")
+    monkeypatch.setenv("LMEMORY_SKILLS", "0")
     assert not skills.on()
-    monkeypatch.setenv("KROUTER_SKILLS", "1")
-    monkeypatch.setenv("KROUTER_EXPERIENCE", "0")
+    monkeypatch.setenv("LMEMORY_SKILLS", "1")
+    monkeypatch.setenv("LMEMORY_EXPERIENCE", "0")
     assert not skills.on()

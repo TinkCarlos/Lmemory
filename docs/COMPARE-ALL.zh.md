@@ -1,5 +1,7 @@
 # 十个开源记忆项目的对照
 
+> 这里保留上游 KRouter 的历史横向对比。当前构建的复测见[中文 README](../README.zh.md)。
+
 [English](COMPARE-ALL.md) · 回到 [两家对照](COMPARE.zh.md) · [README](../README.zh.md)
 
 抓取：2026-11-11（UTC）。KRouter 和 MemOS 的元数据在 05:48 抓，其余八家的 README 和元数据在 04:48 抓。星数和发布每天都在变。KRouter 一格里“2.1.0”的内容在 v2.1.0 发布里；行按名字的字母顺序排。

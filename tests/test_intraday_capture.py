@@ -66,7 +66,7 @@ def fake(tmp_path):
         "code = int(os.environ.get('FAKE_EXIT', '0'))\n"
         "print(json.dumps({'import': 'dry-run' if '--dry-run' in sys.argv else 'done', 'pages': 3}))\n"
         "sys.exit(code)\n", encoding="utf-8")
-    env = {**os.environ, "KROUTER_STATE_DIR": str(tmp_path / "state"), "KROUTER_ROUTER": str(router)}
+    env = {**os.environ, "LMEMORY_STATE_DIR": str(tmp_path / "state"), "LMEMORY_ROUTER": str(router)}
     return {"env": env, "calls": calls, "state": tmp_path / "state"}
 
 

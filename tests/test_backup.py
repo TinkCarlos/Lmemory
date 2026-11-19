@@ -12,16 +12,16 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "skill/krouter/scripts/backup.py"
+SCRIPT = ROOT / "skill/lmemory/scripts/backup.py"
 pytestmark = pytest.mark.skipif(shutil.which("openssl") is None or shutil.which("git") is None,
                                 reason="needs openssl and git")
 
 
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(tmp_path / "keys.env"))
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    for k in ("KROUTER_BACKUP_PASSPHRASE", "KROUTER_BACKUP_DIR"):
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(tmp_path / "keys.env"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    for k in ("LMEMORY_BACKUP_PASSPHRASE", "LMEMORY_BACKUP_DIR"):
         monkeypatch.delenv(k, raising=False)
     import backup
 
@@ -60,7 +60,7 @@ def test_backup_restores_the_vault_and_its_history(env, tmp_path):
     assert (root / ".obsidian/app.json").is_file() and res["git_ok"] is True
     assert (root / "01 项目/待填").is_dir()  # 空文件夹也回来
     assert (root / "01 项目/实时资料").is_symlink() and res["links"] == 1  # 软链接按原样重建
-    assert made["links"] == 1 and made["links_outside"] == 1 and not (root / ".krouter-links.json").exists()
+    assert made["links"] == 1 and made["links_outside"] == 1 and not (root / ".lmemory-links.json").exists()
     head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
     assert head.strip() == made["git_head"]
 
@@ -86,7 +86,7 @@ def test_prune_keeps_newest_weeks_and_months(env, tmp_path):
     now = datetime(2026, 10, 20, 3, 0)
     for d in range(0, 200, 1):
         t = now - timedelta(days=d)
-        name = f"krouter-backup-Vault-{t:%Y%m%d-%H%M%S}.tar.gz.enc"
+        name = f"lmemory-backup-Vault-{t:%Y%m%d-%H%M%S}.tar.gz.enc"
         (out / name).write_bytes(b"x")
         (out / name.replace(".tar.gz.enc", ".json")).write_text("{}", encoding="utf-8")
     (out / "my-own-file.txt").write_text("keep me", encoding="utf-8")
@@ -109,9 +109,9 @@ def test_cli_off_without_a_folder_then_init_run_and_status(env, tmp_path, monkey
     assert nightly.classify(0, off.stdout)[0] == "off"
     init = run("init", "--dir", str(tmp_path / "cloud"))
     shown = json.loads(init.stdout)
-    assert shown["passphrase"] == "created" and "KROUTER_BACKUP_PASSPHRASE" not in init.stdout.split("next")[0]
+    assert shown["passphrase"] == "created" and "LMEMORY_BACKUP_PASSPHRASE" not in init.stdout.split("next")[0]
     secret = (tmp_path / "keys.env").read_text(encoding="utf-8")
-    assert secret.split("KROUTER_BACKUP_PASSPHRASE=", 1)[1].split("\n")[0] not in init.stdout  # 不打印密码
+    assert secret.split("LMEMORY_BACKUP_PASSPHRASE=", 1)[1].split("\n")[0] not in init.stdout  # 不打印密码
     st = json.loads(run("status").stdout)
     assert st["backup"] == "on" and "password manager" in st["host_action"] and "no backup" in st["host_action"]
     ok = json.loads(run("--vault", str(v)).stdout)
@@ -126,13 +126,13 @@ def test_two_places_each_get_a_checked_archive_and_one_failing_is_partial(env, t
     v = _vault(tmp_path)
     blocked = tmp_path / "blocked"
     blocked.write_text("a file, not a folder", encoding="utf-8")
-    monkeypatch.setenv("KROUTER_BACKUP_PASSPHRASE", "pw")
-    monkeypatch.setenv("KROUTER_BACKUP_DIR", f"{tmp_path / 'cloud'}|{tmp_path / 'usb'}")
+    monkeypatch.setenv("LMEMORY_BACKUP_PASSPHRASE", "pw")
+    monkeypatch.setenv("LMEMORY_BACKUP_DIR", f"{tmp_path / 'cloud'}|{tmp_path / 'usb'}")
     run = lambda *a: subprocess.run([sys.executable, str(SCRIPT), *a], capture_output=True, text=True,  # noqa: E731
                                     env={**__import__("os").environ})
     both = json.loads(run("--vault", str(v)).stdout)
     assert both["backup"] == "ok" and len(both["places"]) == 2
-    monkeypatch.setenv("KROUTER_BACKUP_DIR", f"{tmp_path / 'cloud'}|{blocked}")
+    monkeypatch.setenv("LMEMORY_BACKUP_DIR", f"{tmp_path / 'cloud'}|{blocked}")
     res = run("--vault", str(v))
     out = json.loads(res.stdout)
     assert res.returncode == 0 and out["backup"] == "partial" and len(out["places"]) == 1

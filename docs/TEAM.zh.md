@@ -1,19 +1,23 @@
 # 给团队用（从 README 挪过来）
 
+> 历史评测与客户端记录来自上游。Lmemory 的本次复测以 README 中标明的构建和基准为准。
+
 > **实验性。**只在一台机器上测过，没有真实团队用过几周；Kubernetes 清单和 systemd 单元只由测试检查，没有在真实集群或主机上跑过。
 
-一个服务装下一个团队的几份记忆，每份是一个放 Markdown 的文件夹、在各自的 git 仓库里；每个人的 agent 通过 MCP 问它。要自己部署，没有 KRouter 云服务。
+一个服务装下一个团队的几份记忆，每份是一个放 Markdown 的文件夹、在各自的 git 仓库里；每个人的 agent 通过 MCP 问它。要自己部署，没有 Lmemory 云服务。
+
+在源码目录运行 `docker build -t lmemory:local .` 构建示例镜像。Kubernetes 节点需要能访问你构建的镜像。
 
 | | |
 |---|---|
-| **部署** | `mcp_server.py --http`（只用 Python 标准库，不装包）、Docker 镜像 `ghcr.io/398894496-arch/krouter`、[Compose](../deploy/docker-compose.yml)（两份记忆，加一个定时 git pull 的边车）、[Kubernetes 清单](../deploy/kubernetes/krouter.yaml)、加固过的 [systemd 服务](../deploy/systemd/krouter.service) |
+| **部署** | `mcp_server.py --http`（只用 Python 标准库，不装包）、Docker 镜像 `lmemory:local`、[Compose](../deploy/docker-compose.yml)（两份记忆，加一个定时 git pull 的边车）、[Kubernetes 清单](../deploy/kubernetes/lmemory.yaml)、加固过的 [systemd 服务](../deploy/systemd/lmemory.service) |
 | **隔离** | 一个服务挂好几份记忆，各在 `/mcp/NAME`，各有自己的索引、每条回答上的标签和 token；查一份记忆从不读另一份的文件夹 |
 | **鉴权** | 每个人（或每个 agent）一个令牌（`--users`：只存哈希，分读、写，可限定哪几份记忆），或者每份记忆一个共享 token，两种可以并用；只要有一份记忆没有任何令牌，服务就拒绝监听本机以外的地址；浏览器来源按白名单放行；访问日志只记问题的哈希和人名，不记原文和令牌 |
-| **归属** | 每次写入都记下是谁：页面上、变更记录里、一份变更日志（`krouter_changes` 可查"这条是谁在什么时候改的"）、git 提交作者；两个人对同一件事给出相反的纠正，后到的生效，先到的保留为被取代并在回执里点名 |
+| **归属** | 每次写入都记下是谁：页面上、变更记录里、一份变更日志（`lmemory_changes` 可查"这条是谁在什么时候改的"）、git 提交作者；两个人对同一件事给出相反的纠正，后到的生效，先到的保留为被取代并在回执里点名 |
 | **速度** | 见下面的实测；每份记忆常驻 4 个查询进程（`--workers`），查一次不用重新启动 Python |
 | **新鲜度** | 最多每 2 秒重新检查一次文件（`--refresh-every`）；通过服务写进去的笔记，下一次查询就查得到；Compose 和 Kubernetes 每 5 分钟拉一次各个仓库 |
 | **监控** | `GET /healthz`；Prometheus `GET /metrics`：按记忆、工具、结果分的调用数，拒答数，延迟直方图，启动时建索引的耗时，查询进程数 |
-| **写入** | 默认只读；加 `--allow-write` 才开 `krouter_note` 和 `krouter_correct`：一次只写一个，每条一次 git 提交，记进变更记录；`read` 令牌看不到写入工具 |
+| **写入** | 默认只读；加 `--allow-write` 才开 `lmemory_note` 和 `lmemory_correct`：一次只写一个，每条一次 git 提交，记进变更记录；`read` 令牌看不到写入工具 |
 | **备份、回滚** | 记忆就是那个 git 仓库：像代码一样备份，`git revert` 撤回一次改动；索引是从文件夹重建的缓存 |
 
 用 [`bench/scale/serve_load.py`](../bench/scale/serve_load.py) 在合成记忆库上实测，一台 Apple M2 笔记本（8 GB），服务和调用方在同一台机器上，每行 300 次调用，没有一次失败：

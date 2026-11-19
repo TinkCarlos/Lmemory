@@ -28,7 +28,7 @@ GEMINI_NAMES = frozenset(
     {"GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"}
 )
 CONFIG_NAMES = frozenset(
-    {"OPENAI_BASE_URL", "OPENAI_API_BASE", "MODEL", "DISTILL_MODEL", "KROUTER_DISTILL_MODEL"}
+    {"OPENAI_BASE_URL", "OPENAI_API_BASE", "MODEL", "DISTILL_MODEL", "LMEMORY_DISTILL_MODEL"}
 )
 BEARER_URLS = {
     "OPENAI_API_KEY": "https://api.openai.com/v1/models",
@@ -58,17 +58,17 @@ def _load_lane():
     import importlib.util
 
     here = Path(__file__).resolve().parent
-    for scripts in (here.parents[1] / "skill/krouter/scripts",
-                    Path.home() / ".agents/skills/krouter/scripts"):
+    for scripts in (here.parents[1] / "skill/lmemory/scripts",
+                    Path.home() / ".agents/skills/lmemory/scripts"):
         path = scripts / "llm.py"
         if path.is_file():
-            spec = importlib.util.spec_from_file_location("krouter_llm", path)
+            spec = importlib.util.spec_from_file_location("lmemory_llm", path)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             if str(scripts) not in sys.path:
                 sys.path.append(str(scripts))
             return mod
-    raise SystemExit("KRouter: skill/krouter/scripts/llm.py not found")
+    raise SystemExit("Lmemory: skill/lmemory/scripts/llm.py not found")
 
 
 _lane = _load_lane()
@@ -87,9 +87,9 @@ gate = _lane.gate
 
 
 def vault_root() -> Path:
-    raw = (os.environ.get("KROUTER_VAULT") or os.environ.get("OBSIDIAN_VAULT", "")).strip()
+    raw = (os.environ.get("LMEMORY_VAULT") or os.environ.get("OBSIDIAN_VAULT", "")).strip()
     if not raw:
-        raise SystemExit("KROUTER_VAULT (or OBSIDIAN_VAULT) is not set")
+        raise SystemExit("LMEMORY_VAULT (or OBSIDIAN_VAULT) is not set")
     return Path(raw)
 
 
@@ -98,8 +98,8 @@ def key_page(vault: Path) -> Path:
 
 
 def keys_env_path() -> Path:
-    raw = os.environ.get("KROUTER_KEYS_ENV", "").strip()
-    return Path(raw) if raw else Path.home() / ".dsh-krouter-keys.env"
+    raw = os.environ.get("LMEMORY_KEYS_ENV", "").strip()
+    return Path(raw) if raw else Path.home() / ".dsh-lmemory-keys.env"
 
 
 def usable(val: str) -> bool:
@@ -196,8 +196,8 @@ def probe_key(name: str, key: str, extra: dict[str, str] | None = None) -> str:
             return "unprobed"
         headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
         if name == "OPENROUTER_API_KEY":
-            headers["HTTP-Referer"] = "https://github.com/398894496-arch/KRouter"
-            headers["X-Title"] = "KRouter"
+            headers["HTTP-Referer"] = "https://github.com/TinkCarlos/Lmemory"
+            headers["X-Title"] = "Lmemory"
     req = urllib.request.Request(url, headers=headers, method="GET")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
@@ -255,7 +255,7 @@ def repo_root() -> Path:
 
 
 def bundled_router() -> Path:
-    return repo_root() / "skill/krouter/scripts/route_knowledge.sh"
+    return repo_root() / "skill/lmemory/scripts/route_knowledge.sh"
 
 
 def is_foreign_live_router(path: Path) -> bool:
@@ -264,13 +264,13 @@ def is_foreign_live_router(path: Path) -> bool:
 
 def timer_router() -> Path:
     """Clone skill only. Never the host's live obsidian-knowledge-router."""
-    pinned = os.environ.get("KROUTER_ROUTER", "").strip()
+    pinned = os.environ.get("LMEMORY_ROUTER", "").strip()
     candidates: list[Path] = []
     if pinned:
         candidates.append(Path(pinned))
     candidates.append(bundled_router())
-    candidates.append(Path.home() / ".agents/skills/krouter/scripts/route_knowledge.sh")
-    candidates.append(Path.home() / ".agents/skills/krouter-obsidian/scripts/route_knowledge.sh")  # 2.0 以前的安装
+    candidates.append(Path.home() / ".agents/skills/lmemory/scripts/route_knowledge.sh")
+    candidates.append(Path.home() / ".agents/skills/lmemory-obsidian/scripts/route_knowledge.sh")  # 2.0 以前的安装
     for path in candidates:
         if is_foreign_live_router(path):
             continue
@@ -314,7 +314,7 @@ def write_runtime_prompt(base: Path, vault: Path, router: Path) -> Path:
     header = (
         "# Runtime lock (injected by the timer)\n\n"
         f"OBSIDIAN_VAULT={vault}\n"
-        f"KROUTER_ROUTER={router}\n\n"
+        f"LMEMORY_ROUTER={router}\n\n"
         f"Run `{router} status` (then search / correction as needed), exactly as written: no `env` or `VAR=` prefix, "
         "no other command — the writer's permissions allow the router and nothing else. "
         "Write only inside that vault. "
@@ -323,15 +323,15 @@ def write_runtime_prompt(base: Path, vault: Path, router: Path) -> Path:
         + zone_note(vault)
         + "---\n\n"
     )
-    # 放在库里：grok 的内核沙箱只许读库目录，库外的提示文件它读不到。`.krouter/` 是点目录，不进索引，跑完就删
-    dest = vault / ".krouter" / "runtime-prompt.md"
+    # 放在库里：grok 的内核沙箱只许读库目录，库外的提示文件它读不到。`.lmemory/` 是点目录，不进索引，跑完就删
+    dest = vault / ".lmemory" / "runtime-prompt.md"
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(header + base.read_text(encoding="utf-8"), encoding="utf-8")
     return dest
 
 
-GROK_PROFILE = "krouter"
-GROK_MARK = "# krouter: written by KRouter for the nightly writer; regenerated every run"
+GROK_PROFILE = "lmemory"
+GROK_MARK = "# lmemory: written by Lmemory for the nightly writer; regenerated every run"
 
 
 def write_grok_sandbox(vault: Path, router: Path) -> None:
@@ -339,8 +339,8 @@ def write_grok_sandbox(vault: Path, router: Path) -> None:
     and state; nothing else in the account — no keys file, no ~/.ssh, no browser profiles. Extends grok's
     built-in `strict` profile (read CWD + system paths, write CWD + temp). Other profiles in the file are kept."""
     home = Path.home()
-    cache = Path(os.environ.get("KROUTER_CACHE_DIR") or home / ".cache" / "krouter")
-    state = Path(os.environ.get("KROUTER_STATE_DIR") or home / ".local" / "state" / "krouter")
+    cache = Path(os.environ.get("LMEMORY_CACHE_DIR") or home / ".cache" / "lmemory")
+    state = Path(os.environ.get("LMEMORY_STATE_DIR") or home / ".local" / "state" / "lmemory")
     for d in (cache, state):
         d.mkdir(parents=True, exist_ok=True)
     skill = router.resolve().parent
@@ -380,12 +380,12 @@ def claude_allow(vault: Path, router: Path) -> list[str]:
 def writer_invoke(writer: str, prompt: Path, vault: Path, router: Path | None = None) -> list[str]:
     """argv for the CLI writer. grok runs in a kernel sandbox; claude with an allow-list and no other shell;
     codex in its workspace-write sandbox (writes the vault only, can still read the account); other harnesses
-    have no confinement KRouter can set, and the install prompt says so."""
-    router = router or Path(os.environ.get("KROUTER_ROUTER") or timer_router())
+    have no confinement Lmemory can set, and the install prompt says so."""
+    router = router or Path(os.environ.get("LMEMORY_ROUTER") or timer_router())
     kind, _ = writer_probe_argv(writer)
     vault_s = str(vault)
     prompt_s = str(prompt)
-    flagship = os.environ.get("KROUTER_DISTILL_MODEL", "").strip() or CLI_FLAGSHIP.get(kind, "")
+    flagship = os.environ.get("LMEMORY_DISTILL_MODEL", "").strip() or CLI_FLAGSHIP.get(kind, "")
     if kind == "grok":
         argv = [writer]
         if flagship:
@@ -439,7 +439,7 @@ def status_payload(detect: bool, probe: bool) -> dict[str, str]:
     keys = collect_keys(vault)
     extra = extra_urls(keys)
     live, key_field = live_keys(keys, extra, probe=probe)
-    pinned = os.environ.get("KROUTER_WRITER", "").strip()
+    pinned = os.environ.get("LMEMORY_WRITER", "").strip()
     writer, wr = ("", "unset")
     if detect:
         writer, wr = detect_writer(pinned)
@@ -477,7 +477,7 @@ def patch_health(vault: Path, key_field: str, writer_field: str) -> None:
             check=False,
         )
     subprocess.run(
-        [sys.executable, str(patch), str(health), "krouter_writer", writer_field],
+        [sys.executable, str(patch), str(health), "lmemory_writer", writer_field],
         check=False,
     )
 
@@ -494,12 +494,12 @@ def distill_gate(payload: dict[str, str]) -> tuple[bool, int, str]:
         return (
             False,
             0,
-            "KRouter: timer on; key probe network failed. Distill skipped.",
+            "Lmemory: timer on; key probe network failed. Distill skipped.",
         )
     return (
         False,
         0,
-        f"KRouter: timer on; distill skipped. "
+        f"Lmemory: timer on; distill skipped. "
         f"Log in grok/codex/claude once, or put your *_API_KEY on {page} "
         f"or in {keys_env_path()}.",
     )
@@ -547,7 +547,7 @@ def run_cli_writer(writer: str, vault: Path, router: Path) -> int:
             f"CLI writer {kind} left no seal (exit {code}). Timer on; left to-summarize.",
         )
         print(
-            "KRouter: CLI writer left a to-summarize note.",
+            "Lmemory: CLI writer left a to-summarize note.",
             file=sys.stderr,
         )
     return 0
@@ -565,13 +565,13 @@ def exec_distill(probe: bool) -> int:
         print(msg, file=sys.stderr)
         return code
     live, extra = apply_live_env(vault, probe=probe)
-    model = extra.get("MODEL") or extra.get("DISTILL_MODEL") or extra.get("KROUTER_DISTILL_MODEL")
+    model = extra.get("MODEL") or extra.get("DISTILL_MODEL") or extra.get("LMEMORY_DISTILL_MODEL")
     if model:
-        os.environ["KROUTER_DISTILL_MODEL"] = model
+        os.environ["LMEMORY_DISTILL_MODEL"] = model
     probe_result = payload.get("writer_probe", "")
     writer = payload.get("writer_path", "")
     router = timer_router()
-    os.environ["KROUTER_ROUTER"] = str(router)
+    os.environ["LMEMORY_ROUTER"] = str(router)
     os.environ["OBSIDIAN_VAULT"] = str(vault)
     os.environ["PATH"] = enrich_path(os.environ.get("PATH", ""))
     os.environ.setdefault("HOME", str(Path.home()))
@@ -584,14 +584,14 @@ def exec_distill(probe: bool) -> int:
         return run_cli_writer(writer, vault, router)
     notify.send(notify.NO_WRITER, kind="no-writer")
     if probe_result.endswith(":unconfined"):
-        print(f"KRouter: {writer_kind(probe_result)} is logged in but not used: it runs with no confinement KRouter "
-              f"can set. Set KROUTER_ALLOW_UNCONFINED=1 in the keys file to use it anyway.", file=sys.stderr)
+        print(f"Lmemory: {writer_kind(probe_result)} is logged in but not used: it runs with no confinement Lmemory "
+              f"can set. Set LMEMORY_ALLOW_UNCONFINED=1 in the keys file to use it anyway.", file=sys.stderr)
     if probe_result.endswith(":reads-account"):
-        print("KRouter: Codex is logged in but not used: it can read your whole account. Set KROUTER_ALLOW_CODEX=1 "
+        print("Lmemory: Codex is logged in but not used: it can read your whole account. Set LMEMORY_ALLOW_CODEX=1 "
               "in the keys file to use it anyway, or log in grok / claude (they are limited to the vault).",
               file=sys.stderr)
     print(
-        f"KRouter: timer on; distill skipped. "
+        f"Lmemory: timer on; distill skipped. "
         f"Put *_API_KEY on {payload.get('key_page', 'the vault key page')} "
         f"or log in grok/codex/claude (Claudian-class subscription).",
         file=sys.stderr,
@@ -600,7 +600,7 @@ def exec_distill(probe: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Resolve KRouter self-evolution key and writer")
+    parser = argparse.ArgumentParser(description="Resolve Lmemory self-evolution key and writer")
     parser.add_argument("--exec", action="store_true", help="timer entry: detect, then run the writer")
     parser.add_argument("--status", action="store_true", help="print JSON status, no secrets")
     parser.add_argument("--sync-health", action="store_true", help="patch the health page from local detect")

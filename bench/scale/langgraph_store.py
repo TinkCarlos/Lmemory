@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The LangGraph store (krouter.integrations.langgraph) with many users: does a question asked in one user's namespace
+"""The LangGraph store (lmemory.integrations.langgraph) with many users: does a question asked in one user's namespace
 get that user's page, nothing when the user never said it, and never another user's page?
 
     python3 bench/scale/langgraph_store.py [USERS] [WORKDIR]     # needs langgraph; default 300 users, a temp folder
@@ -23,8 +23,8 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "sdk"))
-os.environ.setdefault("KROUTER_NO_QUERY_LOG", "1")
-from krouter.integrations.langgraph import KRouterStore  # noqa: E402
+os.environ.setdefault("LMEMORY_NO_QUERY_LOG", "1")
+from lmemory.integrations.langgraph import LmemoryStore  # noqa: E402
 
 FACTS = ["is vegetarian and never eats fish.", "loves spicy ramen with pork belly.",
          "is allergic to peanuts and avoids satay.", "has a dog called Biscuit who is afraid of thunder.",
@@ -38,8 +38,8 @@ QUESTIONS = {0: "does the user eat fish", 2: "is the user allergic to peanuts", 
 
 def main() -> int:
     users = int(sys.argv[1]) if len(sys.argv) > 1 else 300
-    work = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(tempfile.mkdtemp(prefix="krouter-lg-scale-"))
-    store = KRouterStore(work / "memory", cache_dir=work / "cache")
+    work = Path(sys.argv[2]) if len(sys.argv) > 2 else Path(tempfile.mkdtemp(prefix="lmemory-lg-scale-"))
+    store = LmemoryStore(work / "memory", cache_dir=work / "cache")
     rnd = random.Random(3)
     owned = {}
     t = time.monotonic()

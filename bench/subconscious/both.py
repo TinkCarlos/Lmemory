@@ -7,7 +7,7 @@
     python3 bench/subconscious/both.py learn --work DIR --host sonnet        # set 36, after a `prepare learn` run
 
 The bench vault (vault3 + overlay, plus `--crowd` distractor topics) is built once in DIR at `prepare` and kept, because
-the host's fetches name its paths and `score` runs each fetch on it for real: `CALL krouter_ask: <question>` and
+the host's fetches name its paths and `score` runs each fetch on it for real: `CALL lmemory_ask: <question>` and
 `CALL shell: … route_knowledge.sh search '<q>'` resolve to the lock's page, else recall's first page when recall answers;
 `CALL read: <path>` to that path. A page whose path the reply names counts as recalled too.
 """
@@ -29,7 +29,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(HERE))
 import run as set32  # noqa: E402
@@ -44,14 +44,14 @@ INSTRUCTIONS = (
     "(sometimes with context the app attached to that message). Reply to each item as you would in that session, as "
     "if it were the only one: only the start of the reply, at most four sentences, in the user's language. Do not run "
     "anything or call tools. If you would fetch something first (a tool call, a command, reading a file), write each "
-    "such fetch as its own first line, exactly `CALL krouter_ask: <question>`, `CALL shell: <command>` or "
+    "such fetch as its own first line, exactly `CALL lmemory_ask: <question>`, `CALL shell: <command>` or "
     "`CALL read: <path>`, then the reply.")
 
 
 def env_for(work: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    env.update(KROUTER_VAULT=str(work / "vault"), KROUTER_CACHE_DIR=str(work / "cache"),
-               KROUTER_STATE_DIR=str(work / "state"), KROUTER_NO_QUERY_LOG="1")
+    env.update(LMEMORY_VAULT=str(work / "vault"), LMEMORY_CACHE_DIR=str(work / "cache"),
+               LMEMORY_STATE_DIR=str(work / "state"), LMEMORY_NO_QUERY_LOG="1")
     env.pop("OBSIDIAN_VAULT", None)
     return env
 
@@ -140,7 +140,7 @@ def prepare(split: str, work: Path, crowd: int, capped: bool) -> None:
           f"{full} as full lines")
 
 
-CALL = re.compile(r"^\s*[`*>-]*\s*CALL\s+(krouter_ask|shell|read)\s*[:：]\s*(.+?)\s*`?\s*$", re.M | re.I)
+CALL = re.compile(r"^\s*[`*>-]*\s*CALL\s+(lmemory_ask|shell|read)\s*[:：]\s*(.+?)\s*`?\s*$", re.M | re.I)
 
 
 def resolve(work: Path, kind: str, arg: str) -> str:
@@ -175,10 +175,10 @@ def resolve(work: Path, kind: str, arg: str) -> str:
 
 
 def memory_fetch(work: Path, kind: str, arg: str) -> bool:
-    """A fetch from the memory: krouter_ask, the route command, or reading a file inside the vault. Reading the
+    """A fetch from the memory: lmemory_ask, the route command, or reading a file inside the vault. Reading the
     project's own files (`package.json`) is ordinary work, not a memory fetch (set 35's log, before held-out)."""
     k = kind.lower()
-    return k == "krouter_ask" or (k == "shell" and ("route_knowledge" in arg or str(work / "vault") in arg)) or \
+    return k == "lmemory_ask" or (k == "shell" and ("route_knowledge" in arg or str(work / "vault") in arg)) or \
         (k == "read" and (str(work / "vault") in arg or (work / "vault" / arg.strip().strip("'\"`")).is_file()))
 
 

@@ -5,13 +5,13 @@ The vault is exported from its own git history at `--vault-commit` (`git archive
 uncommitted edits are never touched or used). Each system answers every question with up to three cited pages or a
 refusal, with the same functions the memory honesty bench uses, so the systems differ only in how they choose:
 
-- `krouter`: KRouter as an agent calls it, `route_knowledge.py search <question>` (the alias lock first, then ranked
+- `lmemory`: Lmemory as an agent calls it, `route_knowledge.py search <question>` (the alias lock first, then ranked
   recall), from `--repo` (default: this checkout); the cited pages are read off its receipt;
 - `bm25-floor`: BM25 over Chinese character pairs and English words, superseded pages skipped, a floor picked on dev3;
 - any of the above from another checkout (`--repo`, e.g. the dense candidate), labelled with `--name`.
 
-    python3 bench/real_questions/run_real.py --vault ~/Vault --vault-commit 57b6019 --system krouter
-    python3 bench/real_questions/run_real.py … --system krouter --repo <checkout> --name dense-candidate-1
+    python3 bench/real_questions/run_real.py --vault ~/Vault --vault-commit 57b6019 --system lmemory
+    python3 bench/real_questions/run_real.py … --system lmemory --repo <checkout> --name dense-candidate-1
 
 Writes one JSON line per question to `<state>/outputs.<name>.jsonl` (private). Prints counts only.
 """
@@ -29,7 +29,7 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STATE = Path.home() / ".local/state/krouter-eval/real"
+STATE = Path.home() / ".local/state/lmemory-eval/real"
 
 
 def bench_from(repo: Path):
@@ -41,11 +41,11 @@ def bench_from(repo: Path):
 
 def route_answers(repo: Path, rows: list[dict], vault: Path, cache: Path, route: str = "search",
                   pages: int = 3) -> list[dict]:
-    """KRouter's own entry point, one question at a time; cited pages read off the receipt (direct hits, then the
+    """Lmemory's own entry point, one question at a time; cited pages read off the receipt (direct hits, then the
     `associated:` pages), the first `pages` of them."""
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CACHE_DIR": str(cache), "KROUTER_NO_QUERY_LOG": "1"}
-    env.pop("KROUTER_MAP", None)  # 用快照库里自己的别名表
-    script = repo / "skill/krouter/scripts/route_knowledge.py"
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CACHE_DIR": str(cache), "LMEMORY_NO_QUERY_LOG": "1"}
+    env.pop("LMEMORY_MAP", None)  # 用快照库里自己的别名表
+    script = repo / "skill/lmemory/scripts/route_knowledge.py"
     out = []
     for it in rows:
         text = subprocess.run(["python3", str(script), route, it["q"]], env=env, capture_output=True, text=True,
@@ -70,8 +70,8 @@ def pool_of(bench, system: str, rows: list[dict], vault: Path, cache: Path, repo
         return {qid: [p for p, _ in hits[:5]] for qid, hits in scored}
     import sys
 
-    sys.path.insert(0, str(repo / "skill/krouter/scripts"))
-    os.environ["KROUTER_CACHE_DIR"] = str(cache)
+    sys.path.insert(0, str(repo / "skill/lmemory/scripts"))
+    os.environ["LMEMORY_CACHE_DIR"] = str(cache)
     import recall_index as ri
 
     return {it["id"]: [h["rel"] for h in ri.recall(vault, it["q"], limit=5, gate=False)["hits"]] for it in rows}
@@ -88,7 +88,7 @@ def main() -> int:
     ap.add_argument("--vault", required=True)
     ap.add_argument("--vault-commit", required=True)
     ap.add_argument("--questions", default=str(STATE / "frozen.jsonl"))
-    ap.add_argument("--system", choices=["krouter", "bm25-floor"], required=True)
+    ap.add_argument("--system", choices=["lmemory", "bm25-floor"], required=True)
     ap.add_argument("--repo", default=str(HERE.parents[1]))
     ap.add_argument("--name", default="")
     ap.add_argument("--prebuild-dense", action="store_true",
@@ -96,10 +96,10 @@ def main() -> int:
     ap.add_argument("--without-learning", action="store_true",
                     help="remove the learned triggers from the snapshot (90 系统文件/自动化/下意识触发词-自学习.psv)")
     args = ap.parse_args()
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
     bench = bench_from(Path(args.repo))
     rows = [json.loads(x) for x in Path(args.questions).read_text(encoding="utf-8").splitlines() if x.strip()]
-    tmp = Path(tempfile.mkdtemp(prefix="krouter-real-"))
+    tmp = Path(tempfile.mkdtemp(prefix="lmemory-real-"))
     try:
         vault = tmp / "vault"
         snapshot(Path(args.vault), args.vault_commit, vault)
@@ -107,14 +107,14 @@ def main() -> int:
             for f in vault.rglob("*自学习*.psv"):
                 f.unlink()
         if args.prebuild_dense:  # 不先建好向量，第一次查询会退回纯字面，测不出向量的效果
-            env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CACHE_DIR": str(tmp / "cache"),
-                   "KROUTER_NO_QUERY_LOG": "1"}
-            res = subprocess.run(["python3", str(Path(args.repo) / "skill/krouter/scripts/dense.py"), "--build",
+            env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CACHE_DIR": str(tmp / "cache"),
+                   "LMEMORY_NO_QUERY_LOG": "1"}
+            res = subprocess.run(["python3", str(Path(args.repo) / "skill/lmemory/scripts/dense.py"), "--build",
                                   "--vault", str(vault)], env=env, capture_output=True, text=True, timeout=7200)
             print(json.dumps({"dense_build": (res.stdout.strip().splitlines() or [""])[-1][:200],
                               "rc": res.returncode}))
         pool = pool_of(bench, args.system, rows, vault, tmp / "pool-cache", Path(args.repo))
-        if args.system == "krouter":
+        if args.system == "lmemory":
             answers = route_answers(Path(args.repo), rows, vault, tmp / "cache")
         else:
             scored = bench.bm25_scored(rows, skip_superseded=True, vault_src=vault, cjk=True)

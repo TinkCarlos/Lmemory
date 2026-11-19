@@ -53,7 +53,7 @@ def banks(tmp_path):
 
 def _ask(url: str, token: str, q: str):
     return _post(url, {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                       "params": {"name": "krouter_ask", "arguments": {"query": q}}}, token=token)
+                       "params": {"name": "lmemory_ask", "arguments": {"query": q}}}, token=token)
 
 
 def _get(url: str, token: str | None = None):
@@ -87,10 +87,10 @@ def test_health_lists_banks_and_metrics_count_calls_without_question_text(banks)
     _ask(banks["banks"]["team"], TEAM, "how do we deploy the quantum toaster on mars")
     assert _get(banks["base"] + "/metrics")[0] == 401
     code, text = _get(banks["base"] + "/metrics", OPS)
-    assert code == 200 and "krouter_up 1" in text
-    assert 'krouter_tool_calls_total{vault="ops",tool="krouter_ask",outcome="ok"} 1' in text
-    assert 'krouter_request_seconds_count{vault="team"} 1' in text
-    assert 'krouter_index_build_seconds{vault="ops"}' in text
+    assert code == 200 and "lmemory_up 1" in text
+    assert 'lmemory_tool_calls_total{vault="ops",tool="lmemory_ask",outcome="ok"} 1' in text
+    assert 'lmemory_request_seconds_count{vault="team"} 1' in text
+    assert 'lmemory_index_build_seconds{vault="ops"}' in text
     assert "handover" not in text and "toaster" not in text
 
 

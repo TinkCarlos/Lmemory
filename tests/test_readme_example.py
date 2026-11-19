@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-ROUTE = REPO / "skill/krouter/scripts/route_knowledge.py"
+ROUTE = REPO / "skill/lmemory/scripts/route_knowledge.py"
 CASES = [
     ("docs/OVERVIEW.md", "docs/examples/writer-vault", "Going to open this week's newsletter with a question to the reader."),
     ("docs/OVERVIEW.zh.md", "docs/examples/writer-vault-zh", "这周的周报我想用提问开头。"),
@@ -21,8 +21,8 @@ CASES = [
 @pytest.mark.parametrize("readme,vault,query", CASES)
 def test_example_receipt_is_verbatim(readme, vault, query, tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    env.update(KROUTER_NO_QUERY_LOG="1", KROUTER_CACHE_DIR=str(tmp_path / "cache"),
-               KROUTER_VAULT=str(REPO / vault), OBSIDIAN_VAULT=str(REPO / vault))
+    env.update(LMEMORY_NO_QUERY_LOG="1", LMEMORY_CACHE_DIR=str(tmp_path / "cache"),
+               LMEMORY_VAULT=str(REPO / vault), OBSIDIAN_VAULT=str(REPO / vault))
     out = subprocess.run([sys.executable, str(ROUTE), "search", query], capture_output=True, text=True, env=env,
                          check=True).stdout
     real = out[out.index("recall_confidence:"):out.index("open_page:")]

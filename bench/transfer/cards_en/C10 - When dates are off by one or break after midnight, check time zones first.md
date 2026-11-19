@@ -6,7 +6,7 @@ card_id: C10
 when: off by one day; after midnight; wrong date
 source_ref: "[[05 时间日志/会话摘录/example C10]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When dates are off by one or break after midnight, check time zones first

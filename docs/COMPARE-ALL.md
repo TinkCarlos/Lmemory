@@ -1,5 +1,7 @@
 # Ten open-source memory projects side by side
 
+> Historical KRouter measurements and evaluation context, preserved from upstream. See the [Lmemory README](../README.md) for the current build.
+
 [中文](COMPARE-ALL.zh.md) · back to the [two-project comparison](COMPARE.md) · [README](../README.md)
 
 Fetched 2026-11-11 (UTC). KRouter's and MemOS's metadata at 05:48, the other eight READMEs and metadata at 04:48. Stars and releases change daily. What the KRouter row says under "2.1.0" is in release v2.1.0; rows are in alphabetical order.

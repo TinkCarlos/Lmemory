@@ -1,5 +1,5 @@
 """English installs have English names end to end; the install is light and says what it changes; uninstall takes
-the Claude Code plugin out; `krouter doctor` gives one verdict. Chinese and default-layout vaults keep working."""
+the Claude Code plugin out; `lmemory doctor` gives one verdict. Chinese and default-layout vaults keep working."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 BOOT = REPO / "scripts/bootstrap.py"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(REPO / "scripts"))
@@ -60,11 +60,11 @@ def test_a_default_layout_vault_is_untouched_by_the_english_table(tmp_path):
 @pytest.mark.parametrize("sh_only", ["0", "1"])
 def test_router_status_and_search_on_an_english_vault_are_english(tmp_path, sh_only):
     v = _english_vault(tmp_path)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "KROUTER_SH_ONLY": sh_only, "KROUTER_NO_QUERY_LOG": "1",
-           "KROUTER_CACHE_DIR": str(tmp_path / "cache"), "HOME": str(tmp_path), "XDG_CONFIG_HOME": str(tmp_path / "cfg"),
+    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "LMEMORY_SH_ONLY": sh_only, "LMEMORY_NO_QUERY_LOG": "1",
+           "LMEMORY_CACHE_DIR": str(tmp_path / "cache"), "HOME": str(tmp_path), "XDG_CONFIG_HOME": str(tmp_path / "cfg"),
            # CI 的区域设置：BSD awk 在 UTF-8 下按排序规则比较汉字，路径换算曾因此选错一行
            "LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8"}
-    env.pop("KROUTER_MAP", None)
+    env.pop("LMEMORY_MAP", None)
 
     def route(*a: str) -> str:
         return subprocess.run(["/bin/sh", str(SCRIPTS / "route_knowledge.sh"), *a], env=env, capture_output=True,
@@ -109,13 +109,13 @@ def _env(tmp: Path) -> dict:
     home.mkdir(exist_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.endswith(("_API_KEY", "_BASE_URL", "_MODEL"))}
     env.update({"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8",
-                "LC_ALL": "en_US.UTF-8", "KROUTER_KEYS_ENV": str(tmp / "keys.env"), "KROUTER_WRITER": "/nonexistent/grok",
-                "KROUTER_SKIP_LAUNCHD": "1", "KROUTER_SKIP_TIMER": "1", "KROUTER_NO_PROMPT": "1",
-                "KROUTER_STATE_DIR": str(tmp / "state"), "XDG_CONFIG_HOME": str(home / ".config"),
-                "APPDATA": str(home / "AppData"), "KROUTER_NO_QUERY_LOG": "1"})
-    # KROUTER_VAULT_FILE 也去掉：记下的库落在这个测试自己的 HOME 里（conftest 那份是全体测试共用的）
-    for k in ("OBSIDIAN_VAULT", "KROUTER_VAULT", "KROUTER_VAULT_FILE", "KROUTER_SKILL_HOME", "KROUTER_CURSOR_RULE",
-              "KROUTER_ASK_RULE", "KROUTER_LEARN_CLI"):
+                "LC_ALL": "en_US.UTF-8", "LMEMORY_KEYS_ENV": str(tmp / "keys.env"), "LMEMORY_WRITER": "/nonexistent/grok",
+                "LMEMORY_SKIP_LAUNCHD": "1", "LMEMORY_SKIP_TIMER": "1", "LMEMORY_NO_PROMPT": "1",
+                "LMEMORY_STATE_DIR": str(tmp / "state"), "XDG_CONFIG_HOME": str(home / ".config"),
+                "APPDATA": str(home / "AppData"), "LMEMORY_NO_QUERY_LOG": "1"})
+    # LMEMORY_VAULT_FILE 也去掉：记下的库落在这个测试自己的 HOME 里（conftest 那份是全体测试共用的）
+    for k in ("OBSIDIAN_VAULT", "LMEMORY_VAULT", "LMEMORY_VAULT_FILE", "LMEMORY_SKILL_HOME", "LMEMORY_CURSOR_RULE",
+              "LMEMORY_ASK_RULE", "LMEMORY_LEARN_CLI"):
         env.pop(k, None)
     return env
 
@@ -139,8 +139,8 @@ def test_english_install_writes_no_chinese_path_or_line_and_the_lamp_tells_the_t
     printed = "\n".join(ln for ln in res.stdout.splitlines() if not ln.startswith("{"))
     assert not CJK.search(printed), [ln for ln in printed.splitlines() if CJK.search(ln)]
     # what still holds a change of mind with no model, and what does not, not just the gap
-    assert "Without a model" in printed and "krouter_correct" in printed and "leave the older page first" in printed
-    assert "scripts/krouter doctor" in printed and "uninstall.sh" in printed
+    assert "Without a model" in printed and "lmemory_correct" in printed and "leave the older page first" in printed
+    assert "scripts/lmemory doctor" in printed and "uninstall.sh" in printed
     health = (vault / "90 System/Automation/Daily health.md").read_text(encoding="utf-8")
     assert "lamp: unused" in health  # no nightly job was installed, so it is not shown as running
 
@@ -153,7 +153,7 @@ def test_minimal_install_only_looks_up(tmp_path):
     home = tmp_path / "home"
     assert out["mcp"] == [] and out["hooks"] == [] and out["imported"] == 0 and out["timer"] is False
     assert not (home / ".cursor").exists()  # no Cursor rules unless Cursor is named
-    assert (home / ".agents/skills/krouter/scripts/route_knowledge.sh").is_file()
+    assert (home / ".agents/skills/lmemory/scripts/route_knowledge.sh").is_file()
     assert "Minimal install" in res.stdout and "keeps up by itself" not in res.stdout
 
 
@@ -163,7 +163,7 @@ def test_dry_run_lists_every_file_and_setting_and_changes_nothing(tmp_path):
     vault = tmp_path / "v"
     res, _ = _boot(env, "--lang", "en", "--vault", str(vault), "--dry-run")
     assert res.returncode == 0 and not vault.exists() and not (tmp_path / "home/.agents").exists()
-    for want in ("Home.md", "krouter-zones.psv", ".agents/skills/krouter", ".cursor/rules/krouter.mdc",
+    for want in ("Home.md", "lmemory-zones.psv", ".agents/skills/lmemory", ".cursor/rules/lmemory.mdc",
                  "where the vault is", "Daily health.md", "session import:", "nightly job:", "open in Obsidian:"):
         assert want in res.stdout, want
 
@@ -177,8 +177,8 @@ def _fake_claude(tmp: Path) -> Path:
         "#!/bin/sh\n"
         f"echo \"$*\" >> '{log}'\n"
         "case \"$*\" in\n"
-        "  'plugin list --json') echo '[{\"id\": \"krouter@krouter\", \"enabled\": true}]' ;;\n"
-        "  'plugin marketplace list --json') echo '[{\"name\": \"krouter\", \"source\": \"directory\", \"path\": \"/x\"},"
+        "  'plugin list --json') echo '[{\"id\": \"lmemory@lmemory\", \"enabled\": true}]' ;;\n"
+        "  'plugin marketplace list --json') echo '[{\"name\": \"lmemory\", \"source\": \"directory\", \"path\": \"/x\"},"
         " {\"name\": \"other\", \"source\": \"github\"}]' ;;\n"
         "esac\n", encoding="utf-8")
     (bin_ / "claude").chmod(0o755)
@@ -189,16 +189,16 @@ def _fake_claude(tmp: Path) -> Path:
 def test_uninstall_takes_out_the_plugin_and_the_folder_marketplace(tmp_path):
     log = _fake_claude(tmp_path)
     env = {**_env(tmp_path), "PATH": f"{tmp_path / 'bin'}:/usr/bin:/bin:/usr/sbin:/sbin"}
-    env.pop("KROUTER_NO_MCP", None)  # conftest turns app wiring off; this HOME is a throwaway one
+    env.pop("LMEMORY_NO_MCP", None)  # conftest turns app wiring off; this HOME is a throwaway one
     res = subprocess.run(["/bin/sh", str(REPO / "scripts/uninstall.sh"), "--dry-run"], env=env, capture_output=True,
                          text=True, timeout=120)
-    assert res.returncode == 0 and "would: claude plugin uninstall krouter@krouter" in res.stdout
+    assert res.returncode == 0 and "would: claude plugin uninstall lmemory@lmemory" in res.stdout
     assert "plugin uninstall" not in log.read_text(encoding="utf-8")
     res = subprocess.run(["/bin/sh", str(REPO / "scripts/uninstall.sh")], env=env, capture_output=True, text=True,
                          timeout=120)
     calls = log.read_text(encoding="utf-8")
-    assert res.returncode == 0 and "plugin uninstall krouter@krouter" in calls
-    assert "plugin marketplace remove krouter" in calls and "remove other" not in calls
+    assert res.returncode == 0 and "plugin uninstall lmemory@lmemory" in calls
+    assert "plugin marketplace remove lmemory" in calls and "remove other" not in calls
 
 
 def test_corrections_read_and_settle_english_candidates(tmp_path):
@@ -225,7 +225,7 @@ def test_doctor_says_ok_or_names_the_fix(tmp_path):
     env = {**_env(tmp_path), "PYTHONPATH": str(REPO / "sdk"), "OBSIDIAN_VAULT": str(v)}
 
     def doctor() -> subprocess.CompletedProcess:
-        return subprocess.run([sys.executable, "-m", "krouter.cli", "doctor"], env=env, capture_output=True, text=True,
+        return subprocess.run([sys.executable, "-m", "lmemory.cli", "doctor"], env=env, capture_output=True, text=True,
                               timeout=120)
 
     health = v / "90 System/Automation/Daily health.md"
@@ -249,7 +249,7 @@ def test_first_run_in_english_needs_no_ripgrep_and_prints_no_chinese(tmp_path):
                          timeout=300)
     assert res.returncode == 0, res.stdout[-2000:] + res.stderr[-2000:]
     assert "ok status -> Home.md" in res.stdout and not CJK.search(res.stdout), res.stdout
-    assert not list(tmp_path.glob("krouter-first-run.*"))  # the throwaway copy is gone
+    assert not list(tmp_path.glob("lmemory-first-run.*"))  # the throwaway copy is gone
 
 
 def test_excerpt_receipt_is_english_in_an_english_vault(monkeypatch):
@@ -276,42 +276,42 @@ def test_a_codex_folder_left_by_a_login_probe_is_not_a_codex_install(tmp_path, m
 
 
 @POSIX
-def test_krouter_vault_is_the_name_and_wins_over_obsidian_vault(tmp_path):
+def test_lmemory_vault_is_the_name_and_wins_over_obsidian_vault(tmp_path):
     a, b = _english_vault(tmp_path / "a"), tmp_path / "b"
     shutil.copytree(REPO / "template", b)
-    env = {**os.environ, "KROUTER_NO_QUERY_LOG": "1", "KROUTER_CACHE_DIR": str(tmp_path / "cache"), "HOME": str(tmp_path),
-           "XDG_CONFIG_HOME": str(tmp_path / "cfg"), "KROUTER_VAULT_FILE": str(tmp_path / "none")}
+    env = {**os.environ, "LMEMORY_NO_QUERY_LOG": "1", "LMEMORY_CACHE_DIR": str(tmp_path / "cache"), "HOME": str(tmp_path),
+           "XDG_CONFIG_HOME": str(tmp_path / "cfg"), "LMEMORY_VAULT_FILE": str(tmp_path / "none")}
     env.pop("OBSIDIAN_VAULT", None)
     router = ["/bin/sh", str(SCRIPTS / "route_knowledge.sh"), "status"]
     for sh_only in ("0", "1"):
-        out = subprocess.run(router, env={**env, "KROUTER_SH_ONLY": sh_only, "KROUTER_VAULT": str(a)},
+        out = subprocess.run(router, env={**env, "LMEMORY_SH_ONLY": sh_only, "LMEMORY_VAULT": str(a)},
                              capture_output=True, text=True, timeout=60).stdout
         assert f"source: {a}/Home.md" in out  # the new name alone
-        out = subprocess.run(router, env={**env, "KROUTER_SH_ONLY": sh_only, "KROUTER_VAULT": str(a), "OBSIDIAN_VAULT": str(b)},
+        out = subprocess.run(router, env={**env, "LMEMORY_SH_ONLY": sh_only, "LMEMORY_VAULT": str(a), "OBSIDIAN_VAULT": str(b)},
                              capture_output=True, text=True, timeout=60).stdout
-        assert f"source: {a}/Home.md" in out  # both set: KROUTER_VAULT wins
-        out = subprocess.run(router, env={**env, "KROUTER_SH_ONLY": sh_only, "OBSIDIAN_VAULT": str(b)},
+        assert f"source: {a}/Home.md" in out  # both set: LMEMORY_VAULT wins
+        out = subprocess.run(router, env={**env, "LMEMORY_SH_ONLY": sh_only, "OBSIDIAN_VAULT": str(b)},
                              capture_output=True, text=True, timeout=60).stdout
         assert f"source: {b}/Agent第二大脑.md" in out  # the older name alone still works
-    gone = subprocess.run(router, env={**env, "KROUTER_SH_ONLY": "1"}, capture_output=True, text=True, timeout=60)
-    assert gone.returncode == 2 and "KROUTER_VAULT" in gone.stderr
-    code = ("import sys; sys.path.insert(0, sys.argv[1]); import krouter; "
-            "print(krouter.ask('home', vault=sys.argv[2]).page)")
-    out = subprocess.run([sys.executable, "-c", code, str(REPO / "sdk"), str(b)], env={**env, "KROUTER_VAULT": str(a)},
+    gone = subprocess.run(router, env={**env, "LMEMORY_SH_ONLY": "1"}, capture_output=True, text=True, timeout=60)
+    assert gone.returncode == 2 and "LMEMORY_VAULT" in gone.stderr
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); import lmemory; "
+            "print(lmemory.ask('home', vault=sys.argv[2]).page)")
+    out = subprocess.run([sys.executable, "-c", code, str(REPO / "sdk"), str(b)], env={**env, "LMEMORY_VAULT": str(a)},
                          capture_output=True, text=True, timeout=60)
-    assert out.stdout.strip() == f"{b}/Agent第二大脑.md", out.stderr  # an explicit vault= beats KROUTER_VAULT
+    assert out.stdout.strip() == f"{b}/Agent第二大脑.md", out.stderr  # an explicit vault= beats LMEMORY_VAULT
 
 
 @POSIX
 def test_default_install_lists_and_backs_up_each_settings_file_it_changes(tmp_path):
     env = _env(tmp_path)
-    env.pop("KROUTER_NO_MCP", None)  # wire the apps found in this throwaway HOME (no claude / codex on PATH)
+    env.pop("LMEMORY_NO_MCP", None)  # wire the apps found in this throwaway HOME (no claude / codex on PATH)
     gemini = tmp_path / "home/.gemini/settings.json"
     gemini.parent.mkdir(parents=True)
     gemini.write_text('{"theme": "dark"}\n', encoding="utf-8")
     res, out = _boot(env, "--lang", "en")
     assert res.returncode == 0 and "gemini-cli" in out["mcp"], res.stdout[-1500:]
-    assert json.loads((gemini.parent / "settings.json.krouter-bak").read_text(encoding="utf-8")) == {"theme": "dark"}
+    assert json.loads((gemini.parent / "settings.json.lmemory-bak").read_text(encoding="utf-8")) == {"theme": "dark"}
     listed = res.stdout.split("Files changed", 1)[1]
     assert str(gemini) in listed.split("Done.", 1)[0]
     assert "Files and folders created:" in res.stdout and "Second Brain" in res.stdout
@@ -330,19 +330,19 @@ def test_release_pack_attaches_what_the_readmes_link_and_what_a_release_install_
 
 def _desktop_env(tmp: Path, running: str) -> dict:
     env = _env(tmp)
-    env.pop("KROUTER_NO_MCP", None)
+    env.pop("LMEMORY_NO_MCP", None)
     cfg = tmp / "home/Library/Application Support/Claude/claude_desktop_config.json"
     cfg.parent.mkdir(parents=True, exist_ok=True)
     cfg.write_text('{"mcpServers": {"other": {"command": "x"}}}\n', encoding="utf-8")
-    env.update({"KROUTER_CLAUDE_DESKTOP_CONFIG": str(cfg), "KROUTER_CLAUDE_DESKTOP_RUNNING": running,
-                "KROUTER_VAULT_FILE": str(tmp / "home/.config/krouter/vault")})
+    env.update({"LMEMORY_CLAUDE_DESKTOP_CONFIG": str(cfg), "LMEMORY_CLAUDE_DESKTOP_RUNNING": running,
+                "LMEMORY_VAULT_FILE": str(tmp / "home/.config/lmemory/vault")})
     return env
 
 
 @POSIX
 def test_claude_desktop_running_is_left_alone_and_gets_an_extension_instead(tmp_path):
     env = _desktop_env(tmp_path, "1")
-    cfg = Path(env["KROUTER_CLAUDE_DESKTOP_CONFIG"])
+    cfg = Path(env["LMEMORY_CLAUDE_DESKTOP_CONFIG"])
     before = cfg.read_text(encoding="utf-8")
     res, out = _boot(env, "--lang", "en", "--no-import")
     assert res.returncode == 0, res.stdout[-1500:] + res.stderr[-1500:]
@@ -357,22 +357,22 @@ def test_claude_desktop_running_is_left_alone_and_gets_an_extension_instead(tmp_
 
     m = json.loads(zipfile.ZipFile(mcpb).read("manifest.json"))
     assert m["user_config"]["memory_folder"]["default"] == out["vault"]  # the folder the install recorded
-    env["KROUTER_CLAUDE_DESKTOP_RUNNING"] = "0"  # quit the app, then the one command the install printed
+    env["LMEMORY_CLAUDE_DESKTOP_RUNNING"] = "0"  # quit the app, then the one command the install printed
     res = subprocess.run([sys.executable, str(BOOT), "--connect", "claude-desktop"], env=env, capture_output=True,
                          text=True, timeout=120)
     data = json.loads(cfg.read_text(encoding="utf-8"))
-    assert res.returncode == 0 and "mcp_server.py" in json.dumps(data["mcpServers"]["krouter"]), res.stdout
-    assert data["mcpServers"]["other"] == {"command": "x"} and (cfg.parent / (cfg.name + ".krouter-bak")).is_file()
-    env["KROUTER_CLAUDE_DESKTOP_RUNNING"] = "1"  # uninstall while it runs: left alone, and told why
+    assert res.returncode == 0 and "mcp_server.py" in json.dumps(data["mcpServers"]["lmemory"]), res.stdout
+    assert data["mcpServers"]["other"] == {"command": "x"} and (cfg.parent / (cfg.name + ".lmemory-bak")).is_file()
+    env["LMEMORY_CLAUDE_DESKTOP_RUNNING"] = "1"  # uninstall while it runs: left alone, and told why
     res = subprocess.run([sys.executable, str(BOOT), "--unregister-mcp"], env=env, capture_output=True, text=True,
                          timeout=120)
-    assert "krouter" in json.loads(cfg.read_text(encoding="utf-8"))["mcpServers"] and "Quit Claude Desktop" in res.stdout
+    assert "lmemory" in json.loads(cfg.read_text(encoding="utf-8"))["mcpServers"] and "Quit Claude Desktop" in res.stdout
 
 
 def test_claude_desktop_detection_tells_the_app_from_claude_code(monkeypatch):
     import bootstrap as bs
 
-    monkeypatch.delenv("KROUTER_CLAUDE_DESKTOP_RUNNING", raising=False)
+    monkeypatch.delenv("LMEMORY_CLAUDE_DESKTOP_RUNNING", raising=False)
     monkeypatch.setattr(bs.platform, "system", lambda: "Darwin")
     ps = ("/Users/u/Library/Application Support/Claude/claude-code/2.1/x/claude.app/Contents/MacOS/claude\n"
           "/Users/u/.local/bin/claude\n")
@@ -386,7 +386,7 @@ def test_claude_desktop_detection_tells_the_app_from_claude_code(monkeypatch):
 def test_the_release_extension_passes_its_structure_check_and_answers(tmp_path):
     import build_mcpb
 
-    bundle = build_mcpb.build(tmp_path / "KRouter.mcpb")
+    bundle = build_mcpb.build(tmp_path / "Lmemory.mcpb")
     assert build_mcpb.check(bundle) == []
 
 
@@ -398,11 +398,11 @@ def test_a_second_install_keeps_the_recorded_folder_whatever_the_terminal_langua
     res, first = _boot(env, "--lang", "zh")
     assert res.returncode == 0, res.stdout[-1500:] + res.stderr[-1500:]
     zh = Path(first["vault"])
-    assert zh.name == "第二大脑"
+    assert zh.name == "Lmemory 记忆库"
     res, again = _boot(env, "--lang", "en")
     assert res.returncode == 0, res.stdout[-1500:] + res.stderr[-1500:]
     assert Path(again["vault"]) == zh and again["state"] != "new"
-    assert not (tmp_path / "home/Documents/Second Brain").exists()
+    assert not (tmp_path / "home/Documents/Lmemory Vault").exists()
 
 
 @POSIX
@@ -435,8 +435,8 @@ def test_a_crontab_that_cannot_run_does_not_break_the_install(tmp_path):
     # "installed" only when a job is really there: launchd's plist (macOS) or a systemd user timer (Linux with a user
     # session, as on GitHub's runners); with neither, the crontab that cannot run means no job
     home = Path(env["HOME"])
-    job = ((home / "Library/LaunchAgents/local.dsh-krouter.daily-evolution.plist").is_file()
-           or (home / ".config/systemd/user/dsh-krouter-daily.timer").is_file())
+    job = ((home / "Library/LaunchAgents/local.dsh-lmemory.daily-evolution.plist").is_file()
+           or (home / ".config/systemd/user/dsh-lmemory-daily.timer").is_file())
     assert out.get("timer") is job, res.stdout[-1500:]
 
 
@@ -445,7 +445,7 @@ def test_uninstall_dry_run_says_would_and_never_removed(tmp_path):
     env = _env(tmp_path)
     res, out = _boot(env, "--lang", "en")
     assert res.returncode == 0, res.stdout[-1500:] + res.stderr[-1500:]
-    skill = Path(env["HOME"]) / ".agents/skills/krouter"
+    skill = Path(env["HOME"]) / ".agents/skills/lmemory"
     dry = subprocess.run(["/bin/sh", str(REPO / "scripts/uninstall.sh"), "--dry-run"], env=env, capture_output=True,
                          text=True, timeout=300)
     assert dry.returncode == 0, dry.stderr

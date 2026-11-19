@@ -2,7 +2,7 @@
 
 basic-memory and claude-mem cannot run in CI (an index, a Claude Code plugin with a model behind it), so their raw
 per-question answers from the 2026-10-12 run are stored; these tests grade them again and check the published rows.
-KRouter and BM25 are re-run live, so a change to either shows up here as a changed row.
+Lmemory and BM25 are re-run live, so a change to either shows up here as a changed row.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ PUBLISHED_DEV = {  # docs/BENCHMARK.md, dev columns
     "bm25": (19, 30, "0/10", "1/10", "10/10"),
     "basic-memory-0.22.1": (11, 28, "2/10", "7/10", "10/10"),
     "claude-mem-13.35.0": (13, 30, "0/10", "7/10", "10/10"),
-    "krouter-1.0.1": (0, 17, "10/10", "8/10", "9/10"),
+    "lmemory-1.0.1": (0, 17, "10/10", "8/10", "9/10"),
     "bm25-floor": (3, 22, "7/10", "9/10", "10/10"),
 }
 
@@ -38,9 +38,9 @@ def test_stored_raw_output_reproduces_the_published_dev_rows():
         assert _row(bench.score(rows, answers)) == want, name
 
 
-def test_live_krouter_and_bm25_still_match_the_published_rows():
+def test_live_lmemory_and_bm25_still_match_the_published_rows():
     rows = bench.questions("dev")
-    assert _row(bench.score(rows, bench.krouter_answers(rows))) == PUBLISHED_DEV["krouter-1.0.1"]
+    assert _row(bench.score(rows, bench.lmemory_answers(rows))) == PUBLISHED_DEV["lmemory-1.0.1"]
     assert _row(bench.score(rows, bench.bm25_answers(rows))) == PUBLISHED_DEV["bm25"]
 
 

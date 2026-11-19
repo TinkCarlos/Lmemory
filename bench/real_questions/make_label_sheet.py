@@ -7,7 +7,7 @@ the same three things the judge answers: was there an answer page before the ask
 stay in the browser (localStorage) until "导出" saves them as a JSON file. The page holds private messages: it is
 written to the private state folder and never published.
 
-    python3 bench/real_questions/make_label_sheet.py --vault ~/Vault --vault-commit 57b6019 --a krouter.no-learning --b bm25-floor
+    python3 bench/real_questions/make_label_sheet.py --vault ~/Vault --vault-commit 57b6019 --a lmemory.no-learning --b bm25-floor
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ button{font:inherit;padding:6px 14px;border:1px solid var(--acc);color:var(--acc
 <p class="note">每题回答三件事：① 候选页池里有没有一页在提问时就能回答这个问题；② X 的得分；③ Y 的得分。2 = 引用的页直接回答了；1 = 相关但还得继续找；0 = 没用。拒答的一侧不用打分。只记录了"这个问题被问过"的页算 0。X、Y 是哪个系统是保密的。</p>
 __ITEMS__</main><div id="bar"><span id="done"></span><button onclick="exportIt()">导出</button></div>
 <script>
-const KEY="krouter-label-sheet-v1";let st={};try{st=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){}
+const KEY="lmemory-label-sheet-v1";let st={};try{st=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){}
 document.querySelectorAll("input[type=radio]").forEach(r=>{if(st[r.name]===r.value)r.checked=true;r.addEventListener("change",()=>{st[r.name]=r.value;try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}count()})});
 function count(){const n=document.querySelectorAll("section").length;let d=0;document.querySelectorAll("section").forEach(s=>{const id=s.dataset.id;if(st[id+"|exists"])d++});document.getElementById("done").textContent=`已标 ${d} / ${n}`}
 function exportIt(){const b=new Blob([JSON.stringify(st,null,1)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="label_sheet_answers.json";a.click()}
@@ -65,7 +65,7 @@ def main() -> int:
     rng = random.Random(20261016)
     sample = rng.sample(questions, args.n)
     outs = {k: jr.load(k) for k in {args.a, args.b, *filter(None, args.pool_from.split(","))}}
-    tmp = Path(tempfile.mkdtemp(prefix="krouter-label-"))
+    tmp = Path(tempfile.mkdtemp(prefix="lmemory-label-"))
     jr.snapshot(Path(args.vault), args.vault_commit, tmp / "vault")
     pages = jr.Pages(tmp / "vault")
     items, key = [], {}

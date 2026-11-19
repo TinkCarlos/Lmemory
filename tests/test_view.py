@@ -1,7 +1,7 @@
-"""`krouter view`: the read-only page. No browser: the server is started in a thread on a free port and its endpoints are
+"""`lmemory view`: the read-only page. No browser: the server is started in a thread on a free port and its endpoints are
 requested directly. What is checked: it listens on loopback only, has no endpoint that writes, refers to nothing outside
 (no external address in any response, a Content-Security-Policy that allows none), pages through a large memory instead of
-sending it, and shows the same explanation as `krouter why`."""
+sending it, and shows the same explanation as `lmemory why`."""
 
 from __future__ import annotations
 
@@ -18,19 +18,19 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "sdk"))
-from krouter import sample, view, viewdata, why  # noqa: E402
-from krouter.viewdata import Store  # noqa: E402
+from lmemory import sample, view, viewdata, why  # noqa: E402
+from lmemory.viewdata import Store  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def env(tmp_path_factory):
     mp = pytest.MonkeyPatch()
     root = tmp_path_factory.mktemp("view")
-    mp.setenv("KROUTER_NO_QUERY_LOG", "1")
-    mp.setenv("KROUTER_CACHE_DIR", str(root / "cache"))
-    mp.setenv("KROUTER_STATE_DIR", str(root / "state"))
+    mp.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    mp.setenv("LMEMORY_CACHE_DIR", str(root / "cache"))
+    mp.setenv("LMEMORY_STATE_DIR", str(root / "state"))
     mp.delenv("OBSIDIAN_VAULT", raising=False)
-    mp.delenv("KROUTER_VAULT", raising=False)
+    mp.delenv("LMEMORY_VAULT", raising=False)
     en = sample.build(root / "en", "en")
     zh = sample.build(root / "zh", "zh")
     yield {"en": en, "zh": zh, "root": root}
@@ -76,7 +76,7 @@ def test_it_listens_on_loopback_only_and_there_is_no_way_to_ask_otherwise(srv):
     _c, server = srv
     assert server.server_address[0] == "127.0.0.1" and view.BIND == "127.0.0.1"
     assert server.url.startswith("http://127.0.0.1:")
-    from krouter import cli
+    from lmemory import cli
 
     src = inspect.getsource(cli)
     assert "--host" not in src and "0.0.0.0" not in inspect.getsource(view)
@@ -229,12 +229,12 @@ def test_experience_cards_with_how_often_they_were_offered_and_adopted(srv):
 def test_skills_are_listed_when_they_exist_and_their_absence_is_not_an_error(env, tmp_path):
     v = tmp_path / "v"
     shutil.copytree(env["en"], v, ignore=shutil.ignore_patterns(".git"))
-    # skills.py 的存放方式：技能文件夹（英文库 02 Methods/Skills），type: krouter-skill，status active / draft
+    # skills.py 的存放方式：技能文件夹（英文库 02 Methods/Skills），type: lmemory-skill，status active / draft
     folder = v / "02 Methods" / "Skills"
     folder.mkdir(parents=True, exist_ok=True)
     for sid, name, status in (("S01", "Triage", "draft"), ("S02", "Review", "active")):
         (folder / f"Skill - {name}.md").write_text(
-            f"---\ntitle: \"Skill - {name}\"\ntype: krouter-skill\nstatus: {status}\nskill_id: {sid}\nuse_when: \"x\"\n"
+            f"---\ntitle: \"Skill - {name}\"\ntype: lmemory-skill\nstatus: {status}\nskill_id: {sid}\nuse_when: \"x\"\n"
             f"cards: C01\ndrafted: 2026-10-01\n---\n\n# Skill - {name}\n\n## Steps\n\n1. x\n\n## Sources\n\n- test\n",
             encoding="utf-8")
     s = Store(v)
@@ -298,7 +298,7 @@ def test_try_a_sentence_shows_what_why_shows(srv, env):
 
 
 def test_a_large_memory_is_paged_and_a_page_costs_a_screen_not_the_memory(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     big = sample.build_big(tmp_path, 3000)
     s = Store(big)
     s.refresh(force=True)
@@ -321,7 +321,7 @@ def test_a_large_memory_is_paged_and_a_page_costs_a_screen_not_the_memory(tmp_pa
 
 
 def test_view_command_wiring(env, monkeypatch):
-    from krouter import cli
+    from lmemory import cli
 
     seen = {}
     monkeypatch.setattr(view, "run", lambda *a, **k: seen.update(args=a) or 0)

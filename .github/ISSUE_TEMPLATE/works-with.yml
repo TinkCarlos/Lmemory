@@ -1,5 +1,5 @@
 name: Works in my app (or does not)
-description: You ran KRouter in an app, agent framework or deployment the README lists as not yet tested
+description: You ran Lmemory in an app, agent framework or deployment the README lists as not yet tested
 labels: [works-with]
 body:
   - type: input
@@ -19,7 +19,7 @@ body:
   - type: input
     id: env
     attributes:
-      label: OS, Python version, KRouter version (`krouter --version` or the release tag)
+      label: OS, Python version, Lmemory version (`lmemory --version` or the release tag)
     validations:
       required: true
   - type: textarea

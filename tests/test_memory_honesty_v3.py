@@ -10,7 +10,7 @@ Held-out only: nobody tunes on vault3. Rules and the pre-registered decision rul
   count), so no neighbour question can be answered by accident;
 - no question repeats a question from another set;
 - the statistics helpers (bootstrap intervals, coverage curve) behave on a tiny known case;
-- a sanity guard far from any target: KRouter cites wrong pages less often and refuses more neighbours than plain BM25.
+- a sanity guard far from any target: Lmemory cites wrong pages less often and refuses more neighbours than plain BM25.
 
 Messages carry aggregates only.
 """
@@ -106,9 +106,9 @@ def test_statistics_helpers_on_a_known_case():
 def test_heldout3_sanity_guard_against_plain_bm25():
     rows = bench.questions("heldout3")
     src = bench.vault_of("heldout3")
-    kr = bench.aggregate(bench.score(rows, bench.krouter_answers(rows, src)))
+    kr = bench.aggregate(bench.score(rows, bench.lmemory_answers(rows, src)))
     bm = bench.aggregate(bench.score(rows, bench.bm25_answers(rows, src, cjk=True)))
-    msg = f"heldout3 aggregates: krouter={kr} bm25={bm}"
+    msg = f"heldout3 aggregates: lmemory={kr} bm25={bm}"
     assert kr["wrong_citation_rate"] < bm["wrong_citation_rate"], msg
     assert int(kr["refused"].split("/")[0]) > int(bm["refused"].split("/")[0]), msg
     print(msg)

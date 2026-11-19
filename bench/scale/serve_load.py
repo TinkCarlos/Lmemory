@@ -2,7 +2,7 @@
 """Scale over HTTP: the MCP server under load, the way a team uses it.
 
 Starts `mcp_server.py --http` on loopback for a vault (one bank, or the same vault as several banks), then asks
-`krouter_ask` questions: first one caller at a time, then C callers at once, and reports p50 / p95 latency, answers
+`lmemory_ask` questions: first one caller at a time, then C callers at once, and reports p50 / p95 latency, answers
 per second, failures, and the server's memory (its process and its workers: the peak while under load, which
 includes `rg` reading files, and what stays resident afterwards).
 
@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SERVER = REPO / "skill/krouter/scripts/mcp_server.py"
+SERVER = REPO / "skill/lmemory/scripts/mcp_server.py"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gen import EN, ZH  # noqa: E402
 
@@ -64,7 +64,7 @@ def rss_mb(pid: int) -> float:
 
 def ask(url: str, q: str) -> tuple[float, bool]:
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                       "params": {"name": "krouter_ask", "arguments": {"query": q}}}).encode()
+                       "params": {"name": "lmemory_ask", "arguments": {"query": q}}}).encode()
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json",
                                                          "Accept": "application/json, text/event-stream"})
     t = time.perf_counter()
@@ -93,9 +93,9 @@ def main() -> int:
     ap.add_argument("--server", default=str(SERVER), help="the mcp_server.py to run (to compare with another version)")
     args = ap.parse_args()
     vault = Path(args.vault).resolve()
-    cache = tempfile.mkdtemp(prefix="krouter-scale-cache-")
-    state = tempfile.mkdtemp(prefix="krouter-scale-state-")
-    env = {**os.environ, "KROUTER_CACHE_DIR": cache, "KROUTER_STATE_DIR": state, "KROUTER_NO_QUERY_LOG": "1",
+    cache = tempfile.mkdtemp(prefix="lmemory-scale-cache-")
+    state = tempfile.mkdtemp(prefix="lmemory-scale-state-")
+    env = {**os.environ, "LMEMORY_CACHE_DIR": cache, "LMEMORY_STATE_DIR": state, "LMEMORY_NO_QUERY_LOG": "1",
            "OBSIDIAN_VAULT": str(vault)}
     argv = [sys.executable, args.server, "--http", "127.0.0.1:0", *args.server_arg]
     if args.banks > 1:

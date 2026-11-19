@@ -6,7 +6,7 @@ card_id: C05
 when: all of them at once; in bulk; hundreds of files
 source_ref: "[[05 时间日志/会话摘录/example C05]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: Before changing a lot of things at once, try a small batch first

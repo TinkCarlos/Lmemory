@@ -92,7 +92,7 @@ def _run(tmp_path: Path, fail_chat: bool, extra_env: dict | None = None) -> tupl
                 "TARGET_DATE": DAY,
                 "OPENAI_API_KEY": TOKEN,
                 "OPENAI_BASE_URL": base,
-                "KROUTER_KEYS_ENV": str(tmp_path / "keys.env"),
+                "LMEMORY_KEYS_ENV": str(tmp_path / "keys.env"),
                 "NO_PROXY": "127.0.0.1,localhost",
                 **(extra_env or {}),
             },
@@ -141,6 +141,6 @@ def test_timer_runs_nightly_upkeep_without_touching_the_seal(tmp_path: Path):
 
 @pytest.mark.skipif(os.name == "nt", reason="run.sh is POSIX")
 def test_timer_nightly_can_be_turned_off_and_keeps_failure_exit(tmp_path: Path):
-    proc, vault, _seen = _run(tmp_path, fail_chat=True, extra_env={"KROUTER_NIGHTLY": "0"})
+    proc, vault, _seen = _run(tmp_path, fail_chat=True, extra_env={"LMEMORY_NIGHTLY": "0"})
     assert proc.returncode != 0
     assert not (vault / "90 系统文件/自动化/下意识体检.md").exists()

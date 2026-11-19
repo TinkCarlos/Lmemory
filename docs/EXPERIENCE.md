@@ -3,7 +3,7 @@
 Recall answers "what was decided about X". This page is about something else: a lesson learned on one task coming back
 on another task whose subject is different but whose situation is the same. Example: the stew tasted flat and a
 spoonful of sugar fixed it; later the poster's colours look dull, and "when something is flat as a whole, add a little
-of the opposite" is worth offering. Code: `skill/krouter/scripts/experience.py`. Measured 2026-11-09;
+of the opposite" is worth offering. Code: `skill/lmemory/scripts/experience.py`. Measured 2026-11-09;
 registrations and logs: [`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md), sets 13 and 15.
 
 **In one line:** handed a digest of every card at session start, Sonnet 5.5 offered the right lesson on 14 of 14
@@ -11,7 +11,7 @@ held-out tasks with a new subject in Chinese and 14 of 14 in English, Haiku 5.5 
 anything on any of the 28 held-out tasks that should get nothing. Matching by shared words, the first try, found 0 of
 14. Cards the host agent writes itself need no key; on a small check they did not yet reach their bar.
 
-**Status: on by default when the vault has cards** (since set 23, 2026-11-10): the digest at session start, the use records and `krouter_learn`. `KROUTER_EXPERIENCE=0` turns it all off; the model-lane extraction at distill time stays opt-in (`KROUTER_EXPERIENCE=1`), since it spends a call per session-day. With no cards, nothing is printed.
+**Status: on by default when the vault has cards** (since set 23, 2026-11-10): the digest at session start, the use records and `lmemory_learn`. `LMEMORY_EXPERIENCE=0` turns it all off; the model-lane extraction at distill time stays opt-in (`LMEMORY_EXPERIENCE=1`), since it spends a call per session-day. With no cards, nothing is printed.
 
 A lesson borne out again and again, or several cards on the same kind of situation, grow into a skill (a procedure
 with steps): [`SKILLS.md`](SKILLS.md).
@@ -20,12 +20,12 @@ with steps): [`SKILLS.md`](SKILLS.md).
 
 | Step | Where | What |
 |---|---|---|
-| Write, in session (no key) | `krouter_learn` (MCP) or `experience.py learn` | The agent that ran the session writes the card; the same checks, a ledger entry, one commit. The MCP server's instructions ask for it when a session solved a problem worth reusing. |
+| Write, in session (no key) | `lmemory_learn` (MCP) or `experience.py learn` | The agent that ran the session writes the card; the same checks, a ledger entry, one commit. The MCP server's instructions ask for it when a session solved a problem worth reusing. |
 | Write, model lane | `import_sessions.py`, where a session is distilled (session end or nightly) | One more model call through `llm.py` on the same redacted excerpt asks for at most two cards: situation, what was done, what came of it, the lesson without the subject, 3–5 "when" phrases, the source page. A card is kept only if every field is filled, nothing looks like a key, its situation and action share words with the excerpt, its phrases do not name the subject, and no card with the same lesson exists. No model lane: nothing happens. Written cards go into the run's commit and the change ledger (`经验卡：…`), so `--undo` takes them back. |
 | Store | `02 经验与方法/经验卡/*.md` | Plain Markdown, `type: experience-card`, `status: provisional`. Read, fix or delete them like any page; `status: retired` drops one; `adopted_at: YYYY-MM-DD` moves it up the digest. |
-| Offer | `session_hook.py start` (Claude Code, Codex `SessionStart`; Cursor `sessionStart`) | The digest: one line per card, "situation → what to do〔id〕", subject-free, at most 30, then how to use it: offer at most two, as "别的任务里的经验，可以试试：……〔id〕", only when this task's situation is the same (not just a shared word or subject), otherwise say nothing. The host model judges; nothing is matched. Needs no import consent (it only reads the vault). |
+| Offer | `lmemory_capture.py start` (Claude Code, Codex `SessionStart`; Cursor `sessionStart`) | The digest: one line per card, "situation → what to do〔id〕", subject-free, at most 30, then how to use it: offer at most two, as "别的任务里的经验，可以试试：……〔id〕", only when this task's situation is the same (not just a shared word or subject), otherwise say nothing. The host model judges; nothing is matched. Needs no import consent (it only reads the vault). |
 | Remember use | `import_sessions.py` (every turn, no model) | An answer citing a card id in brackets is recorded as `offered`; the next question as `adopted` only if it says the lesson was followed or worked and does not turn it down, and the answer cited only that card or the question names it. Anything unclear stays `offered`. `90 系统文件/自动化/经验卡使用记录.jsonl`. |
-| Seen again | `krouter_learn(same_as=…)`, `experience.record_again` | When the digest already has the lesson, the agent names that line's id instead of writing a card: the old card gets an `again` record with this session as its source. The code's lexical same-lesson check does the same as a fallback. Nightly, cards whose lessons share most of their words are listed in `夜间维护.md` to merge by hand; nothing is merged or deleted. |
+| Seen again | `lmemory_learn(same_as=…)`, `experience.record_again` | When the digest already has the lesson, the agent names that line's id instead of writing a card: the old card gets an `again` record with this session as its source. The code's lexical same-lesson check does the same as a fallback. Nightly, cards whose lessons share most of their words are listed in `夜间维护.md` to merge by hand; nothing is merged or deleted. |
 | Rank | `experience.digest` | Adopted or seen-again cards first (latest first), then by times offered and date; a card offered 3 times and never adopted sinks to the bottom. A hand-set `adopted_at` counts as an adoption. |
 | Language | `experience.digest` | English header, lines ("When …, … [id]") and usage line when most cards are English; cards may be written `- Situation:` / `- Lesson:` … |
 | Keep apart | `recall_index.py`, `route_knowledge.py` | Cards never appear among recalled facts or in the literal search. |
@@ -79,7 +79,7 @@ calls it.
 ## Cards the host writes itself (set 17)
 
 Twelve synthetic sessions (7 with a lesson, 3 whose lesson is already a card, 2 with none; Chinese and English), each
-given to the host with the digest and `krouter_learn`'s own description; every proposed card went through
+given to the host with the digest and `lmemory_learn`'s own description; every proposed card went through
 `experience.learn()` as the tool would. Scored mechanically against gold terms written before the run.
 
 | | Haiku 5.5 | Sonnet 5.5 | Both | Bar |
@@ -124,12 +124,12 @@ in a card's result does not change what is offered, but it is on the page a pers
 - **Default on since set 23.** A repeated lesson is no longer refused by comparing words: the host names the digest
   line it repeats (`same_as`) and the old card is recorded as seen again; on set 23 all 8 duplicate sessions were linked
   to the right card. The duplicate labels were confirmed by a second model before scoring; none was disputed.
-- **Whether a host calls `krouter_learn` on its own** at the end of a real session: measured on 2026-11-10, sets 30 and 31 in
+- **Whether a host calls `lmemory_learn` on its own** at the end of a real session: measured on 2026-11-10, sets 30 and 31 in
   [`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md). It mostly does not. Codex CLI: 0 of 4 on a problem solved, 0 of 12
   where nothing was learned; a Claude Sonnet 5.5 subagent given the same words (tools through a shell helper, not MCP): 0 of 4,
-  and 1 of 3 then 2 of 3 on development sessions. On the Codex version tested, the model sees the digest but no krouter tool
+  and 1 of 3 then 2 of 3 on development sessions. On the Codex version tested, the model sees the digest but no lmemory tool
   and none of the server's instructions, so it cannot know the tool exists; the session hook now names it
-  (`krouter_learn`, `krouter_correct`), unverified on Codex because its usage limit ran out. The digest itself is used when the
+  (`lmemory_learn`, `lmemory_correct`), unverified on Codex because its usage limit ran out. The digest itself is used when the
   situation matches: 2 of 4 on each host, never when it does not (0 of 12).
 - **The no-key model lane** (the agent's own CLI on the user's subscription) is built with a daily cap, a visible record
   and a switch, but its one real run failed on a lapsed login: [`HOST-LANE.md`](HOST-LANE.md).
@@ -137,5 +137,5 @@ in a card's result does not change what is offered, but it is on the page a pers
   consent); with no records, ties still fall to date and file name, which is how the set 15 scale vault would have
   dropped every real card.
 - **Recommendation:** once a card-writing check passes, set `DEFAULT_ON`: the digest, the use records and
-  `krouter_learn` on whenever the vault has cards (no cards, nothing printed), the 30-line cap kept, and the model-lane
+  `lmemory_learn` on whenever the vault has cards (no cards, nothing printed), the 30-line cap kept, and the model-lane
   extraction still opt-in, since it spends a call per distilled session-day.

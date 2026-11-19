@@ -6,7 +6,7 @@ DeepSeek Harness, Grok and Hermes over months of work. This reads each agent's l
 own messages (no injected context, tool output, subagents, headless or automation runs), redacts key-shaped text,
 and writes one JSON line per message to a private file. Nothing leaves the machine; nothing is printed but counts.
 
-    python3 bench/real_questions/extract_asks.py [--out ~/.local/state/krouter-eval/real/asks.jsonl]
+    python3 bench/real_questions/extract_asks.py [--out ~/.local/state/lmemory-eval/real/asks.jsonl]
         [--codex-root DIR ...] [--dsh-root DIR ...]
 
 Sources (each skipped when absent):
@@ -37,14 +37,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "skill/krouter/scripts"))
+sys.path.insert(0, str(HERE.parents[1] / "skill/lmemory/scripts"))
 import import_sessions as imp  # noqa: E402
-from krouter_redact import redact  # noqa: E402
+from lmemory_redact import redact  # noqa: E402
 
 HOME = Path.home()
 # 自动化、测试、评测跑出来的会话：不是人说的话
-AUTOMATION = re.compile(r"(/private/tmp|^/tmp|/var/folders|scratchpad|krouter-perm-test|krouter-grok-distill|"
-                        r"krouter-learn-|krouter-tests-|krouter-train-)")
+AUTOMATION = re.compile(r"(/private/tmp|^/tmp|/var/folders|scratchpad|lmemory-perm-test|lmemory-grok-distill|"
+                        r"lmemory-learn-|lmemory-tests-|lmemory-train-)")
 
 
 def iso(dt: datetime | None) -> str:
@@ -179,7 +179,7 @@ def hermes(db: Path) -> list[dict]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(HOME / ".local/state/krouter-eval/real/asks.jsonl"))
+    ap.add_argument("--out", default=str(HOME / ".local/state/lmemory-eval/real/asks.jsonl"))
     ap.add_argument("--codex-root", action="append", default=[])
     ap.add_argument("--dsh-root", action="append", default=[])
     args = ap.parse_args()

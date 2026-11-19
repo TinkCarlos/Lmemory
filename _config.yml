@@ -1,6 +1,6 @@
 # GitHub Pages：从仓库根目录直接生成文档站，README.md 是首页，.md 之间的相对链接自动换成网页链接。
 # 测试用的小库、模板库和测试夹具不上站（几百个测试页，不是文档）。
-title: KRouter
+title: Lmemory
 description: Your AI remembers what you decided — and what you changed your mind about.
 theme: jekyll-theme-primer
 plugins:

@@ -21,14 +21,14 @@ def build(dest: Path) -> Path:
     if dest.exists():
         shutil.rmtree(dest)
     with tempfile.TemporaryDirectory() as home:
-        env = {"HOME": home, "PATH": os.environ.get("PATH", ""), "LANG": "en_US.UTF-8", "KROUTER_NO_PROMPT": "1",
-               "KROUTER_NO_QUERY_LOG": "1", "XDG_CONFIG_HOME": f"{home}/.config", "KROUTER_STATE_DIR": f"{home}/state"}
+        env = {"HOME": home, "PATH": os.environ.get("PATH", ""), "LANG": "en_US.UTF-8", "LMEMORY_NO_PROMPT": "1",
+               "LMEMORY_NO_QUERY_LOG": "1", "XDG_CONFIG_HOME": f"{home}/.config", "LMEMORY_STATE_DIR": f"{home}/state"}
         res = subprocess.run([sys.executable, str(ROOT / "scripts/bootstrap.py"), "--minimal", "--no-open", "--no-timer",
                               "--no-import", "--lang", "en", "--vault", str(dest)], env=env, capture_output=True, text=True)
         if res.returncode:
             raise SystemExit(res.stdout[-800:] + res.stderr[-800:])
     shutil.copytree(ROOT / "bench/memory_honesty/vault/Engineering", dest / "Engineering")
-    sys.path.insert(0, str(ROOT / "skill/krouter/scripts"))
+    sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
     import recall_index as ri
     import zones
 

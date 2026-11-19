@@ -15,10 +15,10 @@ def write(root: Path, rel: str, text: str) -> Path:
 
 @pytest.fixture()
 def vault(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     psv = tmp_path / "map.psv"
     psv.write_text("# id|aliases|source|anchor\nQ01|主入口;总入口|Agent第二大脑.md|唯一总入口\n", encoding="utf-8")
-    monkeypatch.setenv("KROUTER_MAP", str(psv))
+    monkeypatch.setenv("LMEMORY_MAP", str(psv))
     v = tmp_path / "vault"
     write(v, "Agent第二大脑.md", "---\ntitle: Agent第二大脑\nstatus: active\n---\n\n整个知识库只从这里进入。\n")
     write(
@@ -142,10 +142,10 @@ def test_route_widens_from_single_file_scope(vault, monkeypatch, tmp_path):
     import subprocess
     import sys
 
-    root = Path(__file__).resolve().parents[1] / "skill/krouter/scripts/route_knowledge.py"
+    root = Path(__file__).resolve().parents[1] / "skill/lmemory/scripts/route_knowledge.py"
     write(vault, "02 经验与方法/Agent/用户偏好与工作约束.md", "---\ntitle: 用户偏好\n---\n\n名称要能看懂。\n")
-    env = {**__import__("os").environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(tmp_path / "state"),
-           "KROUTER_NO_QUERY_LOG": "0"}
+    env = {**__import__("os").environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(tmp_path / "state"),
+           "LMEMORY_NO_QUERY_LOG": "0"}
     out = subprocess.run([sys.executable, str(root), "preference", "封账 时间日志"], capture_output=True, text=True, env=env).stdout
     assert "scope_widened: vault" in out
     assert "封账先看时间日志文件.md" in out
@@ -177,8 +177,8 @@ def test_checkup_flags_dead_lock_and_tenure(vault, tmp_path):
           "---\ntitle: 新排版规则\nstatus: active\nsupersedes:\n  - \"[[02 经验与方法/准经验/旧排版规则]]\"\n---\n\n排版形态和动画要多变。\n")
     psv = tmp_path / "m2.psv"
     psv.write_text("Q09|旧规则|02 经验与方法/准经验/旧排版规则.md|x\n", encoding="utf-8")
-    script = Path(__file__).resolve().parents[1] / "skill/krouter/scripts/checkup.py"
-    env = {**__import__("os").environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(tmp_path / "s")}
+    script = Path(__file__).resolve().parents[1] / "skill/lmemory/scripts/checkup.py"
+    env = {**__import__("os").environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(tmp_path / "s")}
     subprocess.run([sys.executable, str(script), "--map", str(psv), "--days", "1"], check=True, env=env, capture_output=True)
     page = (vault / "90 系统文件/自动化/下意识体检.md").read_text(encoding="utf-8")
     assert "Q09 →" in page and "superseded" in page
@@ -433,9 +433,9 @@ def test_llm_plan_order(monkeypatch, tmp_path):
     import llm
 
     for k in list(__import__("os").environ):
-        if k.endswith(("_API_KEY", "_BASE_URL", "_MODEL")) or k == "KROUTER_LEARN_CLI":
+        if k.endswith(("_API_KEY", "_BASE_URL", "_MODEL")) or k == "LMEMORY_LEARN_CLI":
             monkeypatch.delenv(k, raising=False)
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(tmp_path / "none.env"))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(tmp_path / "none.env"))
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.setattr(llm, "detect_candidates", lambda: [])
     llm._CLI.clear()
@@ -445,18 +445,18 @@ def test_llm_plan_order(monkeypatch, tmp_path):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "y")
     # the writer's table and order (api_writer imports it from llm): every provider, flagship locked at call time
     assert [k for k, _ in llm.plan(None)] == ["api:DEEPSEEK_API_KEY", "api:OPENAI_API_KEY", "api:GEMINI_API_KEY"]
-    monkeypatch.setenv("KROUTER_LEARN_MODEL", "pinned-model")
+    monkeypatch.setenv("LMEMORY_LEARN_MODEL", "pinned-model")
     assert {d for _, d in llm.plan(None)} == {"pinned-model"}
-    monkeypatch.delenv("KROUTER_LEARN_MODEL")
+    monkeypatch.delenv("LMEMORY_LEARN_MODEL")
     import api_writer
     assert api_writer.CHAT_SPECS is not None and api_writer.CHAT_SPECS == llm.CHAT_SPECS
     assert llm.lock_flagship(["claude-opus-4-20250514", "claude-opus-5-5", "claude-haiku-5-5"]) == "claude-opus-5-5"
     cli = tmp_path / "claude"
     cli.write_text("#!/bin/sh\necho ok\n")
     cli.chmod(0o755)
-    monkeypatch.setenv("KROUTER_LEARN_CLI", str(cli))
+    monkeypatch.setenv("LMEMORY_LEARN_CLI", str(cli))
     assert llm.plan(None)[0] == ("cli", str(cli))  # the host's explicit pick goes first
-    monkeypatch.delenv("KROUTER_LEARN_CLI")
+    monkeypatch.delenv("LMEMORY_LEARN_CLI")
     for k in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"):
         monkeypatch.delenv(k)
     with pytest.raises(llm.NoModel):
@@ -470,9 +470,9 @@ def test_llm_no_key_uses_the_writers_cli_detection(monkeypatch, tmp_path):
     import llm
 
     for k in list(__import__("os").environ):
-        if k.endswith(("_API_KEY", "_BASE_URL", "_MODEL")) or k in ("KROUTER_LEARN_CLI", "KROUTER_WRITER"):
+        if k.endswith(("_API_KEY", "_BASE_URL", "_MODEL")) or k in ("LMEMORY_LEARN_CLI", "LMEMORY_WRITER"):
             monkeypatch.delenv(k, raising=False)
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(tmp_path / "none.env"))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(tmp_path / "none.env"))
     grok = tmp_path / "bin" / "grok"
     grok.parent.mkdir()
     grok.write_text('#!/bin/sh\n[ "$1" = models ] && exit 0\n'
@@ -521,7 +521,7 @@ def test_cli_env_carries_the_long_lived_token(monkeypatch, tmp_path):
 
     keys = tmp_path / "keys.env"
     keys.write_text("DEEPSEEK_API_KEY=sk-x\nCLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-test\n", encoding="utf-8")
-    monkeypatch.setenv("KROUTER_KEYS_ENV", str(keys))
+    monkeypatch.setenv("LMEMORY_KEYS_ENV", str(keys))
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     env = llm.cli_env()
     assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-ant-oat01-test"
@@ -537,7 +537,7 @@ def test_one_cli_at_a_time(monkeypatch, tmp_path):
 
     import llm
 
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path))
     inside, peak = [0], [0]
 
     def work():
@@ -558,7 +558,7 @@ def test_one_cli_at_a_time(monkeypatch, tmp_path):
 def test_a_question_that_names_something_the_vault_never_mentions_is_refused(tmp_path, monkeypatch):
     """`Porsche` is in no page: however many other words match, the vault cannot say when that project started.
     Sentence-initial capitals, `OK`, and month or day names are not names."""
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     v = tmp_path / "vault"
     write(v, "Projects/Models.md", "---\ntitle: Models\nstatus: active\n---\n\n"
           "I started the Ferrari model project in March and finished the Ferrari model in May.\n")
@@ -574,7 +574,7 @@ def test_a_question_that_names_something_the_vault_never_mentions_is_refused(tmp
 def test_a_question_that_matches_one_word_is_answered_as_low_and_says_so(tmp_path, monkeypatch, capsys):
     """A 20-page vault: `小红书的笔记几点发？` meets only 笔记 on a page about sealing days. Recall may still show the
     page, but at low confidence, with a note, and without a generated answer."""
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     v = tmp_path / "vault"
     write(v, "02 经验与方法/自动化/按日志文件判断封账.md",
           "---\ntitle: 按日志文件判断封账\nstatus: active\n---\n\n已经有真笔记的，只补缺的部分。笔记存在就算封账。\n")

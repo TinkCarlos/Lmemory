@@ -1,4 +1,4 @@
-"""Framework adapters are opt-in: the core package needs nothing installed, and importing KRouter never imports a
+"""Framework adapters are opt-in: the core package needs nothing installed, and importing Lmemory never imports a
 framework. Runs whether or not the frameworks are installed."""
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ def test_the_core_package_has_no_required_dependencies():
     assert re.search(r"^llamaindex = ", extras, re.M)
 
 
-def test_importing_krouter_imports_no_framework():
-    code = ("import sys; sys.path.insert(0, sys.argv[1]); import krouter, krouter.integrations; "
+def test_importing_lmemory_imports_no_framework():
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); import lmemory, lmemory.integrations; "
             "print(sorted(m for m in sys.modules if m.split('.')[0] in ('langgraph', 'langchain_core', 'llama_index')))")
     out = subprocess.run([sys.executable, "-c", code, str(REPO / "sdk")], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
@@ -30,4 +30,4 @@ def test_importing_krouter_imports_no_framework():
 
 def test_the_adapters_ship_in_the_package():
     for name in ("llamaindex.py", "langgraph.py", "langgraph_demo.py"):
-        assert (REPO / "sdk" / "krouter" / "integrations" / name).is_file()
+        assert (REPO / "sdk" / "lmemory" / "integrations" / name).is_file()

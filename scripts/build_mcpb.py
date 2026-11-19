@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""The Claude Desktop extension (`KRouter.mcpb`): one file the user double-clicks to install KRouter in Claude Desktop,
+"""The Claude Desktop extension (`Lmemory.mcpb`): one file the user double-clicks to install Lmemory in Claude Desktop,
 with no settings file to edit and no restart.
 
 Claude Desktop keeps its settings in memory while it runs and writes the whole `claude_desktop_config.json` back when
 it quits, so an `mcpServers` entry written while it is open is gone after the next restart. An extension is
 installed by the app itself, so it does not have that problem.
 
-    python3 scripts/build_mcpb.py [--out dist/KRouter.mcpb] [--vault FOLDER] [--python /path/to/python3]
-    python3 scripts/build_mcpb.py --check KRouter.mcpb          # the structure checks, and a real MCP round trip
+    python3 scripts/build_mcpb.py [--out dist/Lmemory.mcpb] [--vault FOLDER] [--python /path/to/python3]
+    python3 scripts/build_mcpb.py --check Lmemory.mcpb          # the structure checks, and a real MCP round trip
 
 A bundle follows the MCPB manifest spec (https://github.com/modelcontextprotocol/mcpb, `manifest_version` 0.3): a zip
-holding `manifest.json` and `server/` (the router's scripts and `krouter_desktop.py`, its entry point). The memory
+holding `manifest.json` and `server/` (the router's scripts and `lmemory_desktop.py`, its entry point). The memory
 folder is a `directory` setting the user can pick at install; `--vault` makes it the default (the installer passes
 the folder it recorded), and left empty the server uses the folder the install recorded. `--python` names the
 interpreter (the installer passes the one it found; Claude Desktop does not ship Python).
@@ -31,8 +31,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "extras/claude-desktop/manifest.json"
-LAUNCHER = ROOT / "extras/claude-desktop/krouter_desktop.py"
-SCRIPTS = ROOT / "skill/krouter/scripts"
+LAUNCHER = ROOT / "extras/claude-desktop/lmemory_desktop.py"
+SCRIPTS = ROOT / "skill/lmemory/scripts"
 REQUIRED = ("manifest_version", "name", "version", "description", "author", "server")
 USER_TYPES = {"string", "number", "boolean", "directory", "file"}
 SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
@@ -62,7 +62,7 @@ def build(out: Path, vault: str = "", python: str = "") -> Path:
                 info = zipfile.ZipInfo.from_file(src, f"server/{src.name}")
                 info.compress_type = zipfile.ZIP_DEFLATED
                 z.writestr(info, src.read_bytes())
-        z.write(LAUNCHER, "server/krouter_desktop.py")
+        z.write(LAUNCHER, "server/lmemory_desktop.py")
     os.replace(tmp, out)
     return out
 
@@ -89,15 +89,15 @@ def round_trip(server: Path, vault_arg: str, env: dict, declared: set[str] | Non
         _rpc(proc, {"jsonrpc": "2.0", "method": "notifications/initialized"})
         tools = _rpc(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}) or {}
         names = {t["name"] for t in tools.get("result", {}).get("tools", [])}
-        if not {"krouter_ask", "krouter_status"} <= names:
-            problems.append(f"tools/list lacks krouter_ask / krouter_status: {sorted(names)}")
+        if not {"lmemory_ask", "lmemory_status"} <= names:
+            problems.append(f"tools/list lacks lmemory_ask / lmemory_status: {sorted(names)}")
         if declared is not None and names - declared:  # 清单里列的工具要跟服务真给的对得上
             problems.append(f"the server offers tools the manifest does not list: {sorted(names - declared)}")
         ans = _rpc(proc, {"jsonrpc": "2.0", "id": 3, "method": "tools/call",
-                          "params": {"name": "krouter_ask", "arguments": {"query": "home"}}}) or {}
+                          "params": {"name": "lmemory_ask", "arguments": {"query": "home"}}}) or {}
         text = json.dumps(ans.get("result", {}), ensure_ascii=False)
         if "canonical" not in text and "source" not in text:
-            problems.append(f"krouter_ask gave no receipt: {text[:300]}")
+            problems.append(f"lmemory_ask gave no receipt: {text[:300]}")
     finally:
         proc.stdin.close()
         try:
@@ -165,7 +165,7 @@ def check(bundle: Path) -> list[str]:
     if problems:
         return problems
     # 真跑一遍：解开、按清单的方式启动、走一次 MCP 握手和查询（选了文件夹 / 没选、占位符没替换 两种）
-    work = Path(tempfile.mkdtemp(prefix="krouter-mcpb-"))
+    work = Path(tempfile.mkdtemp(prefix="lmemory-mcpb-"))
     try:
         z.extractall(work / "ext")
         sys.path.insert(0, str(SCRIPTS))
@@ -173,7 +173,7 @@ def check(bundle: Path) -> list[str]:
 
         vault = work / "vault"
         zones.lay_out(ROOT / "template", vault, alias_sample=SCRIPTS / "canonical_sources.psv")
-        import skills  # 一份技能：krouter_skill 只在库里有技能时出现，这样它也要对得上清单
+        import skills  # 一份技能：lmemory_skill 只在库里有技能时出现，这样它也要对得上清单
 
         sk = vault / zones.real(vault, skills.FOLDER)
         sk.mkdir(parents=True, exist_ok=True)
@@ -181,10 +181,10 @@ def check(bundle: Path) -> list[str]:
             f"---\ntitle: \"Skill - check the copy that is read\"\ntype: {skills.TYPE}\nstatus: active\nskill_id: S01\n"
             "use_when: \"a change has no effect\"\ncards: C01\ndrafted: 2026-10-01\n---\n\n# Skill - check the copy that is read\n\n"
             "## Steps\n\n1. Find which copy is read.\n\n## Sources\n\n- the bundle check\n", encoding="utf-8")
-        env = {**os.environ, "HOME": str(work), "XDG_CONFIG_HOME": str(work / "cfg"), "KROUTER_NO_QUERY_LOG": "1",
-               "KROUTER_CACHE_DIR": str(work / "cache"), "KROUTER_STATE_DIR": str(work / "state"),
-               "KROUTER_VAULT_FILE": str(work / "recorded")}
-        for k in ("KROUTER_VAULT", "OBSIDIAN_VAULT"):
+        env = {**os.environ, "HOME": str(work), "XDG_CONFIG_HOME": str(work / "cfg"), "LMEMORY_NO_QUERY_LOG": "1",
+               "LMEMORY_CACHE_DIR": str(work / "cache"), "LMEMORY_STATE_DIR": str(work / "state"),
+               "LMEMORY_VAULT_FILE": str(work / "recorded")}
+        for k in ("LMEMORY_VAULT", "OBSIDIAN_VAULT"):
             env.pop(k, None)
         server_py = work / "ext" / entry
         problems += [f"with a folder picked: {p}" for p in round_trip(server_py, str(vault), env,
@@ -199,7 +199,7 @@ def check(bundle: Path) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", default=str(ROOT / "dist-release/KRouter.mcpb"))
+    ap.add_argument("--out", default=str(ROOT / "dist-release/Lmemory.mcpb"))
     ap.add_argument("--vault", default="", help="default memory folder shown at install (the installer's recorded one)")
     ap.add_argument("--python", default="", help="interpreter to start the server with (default: python3 / python)")
     ap.add_argument("--check", default="", metavar="BUNDLE", help="check an existing bundle instead of building one")

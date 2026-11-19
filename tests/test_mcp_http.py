@@ -16,15 +16,15 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SERVER = REPO / "skill/krouter/scripts/mcp_server.py"
+SERVER = REPO / "skill/lmemory/scripts/mcp_server.py"
 TOKEN = "t0ken-for-tests-only-0123456789"
 
 
 def _env(tmp: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.endswith(("_API_KEY", "_BASE_URL"))}
-    env.update({"HOME": str(tmp / "home"), "KROUTER_CACHE_DIR": str(tmp / "cache"),
-                "KROUTER_STATE_DIR": str(tmp / "state"), "KROUTER_VAULT_FILE": str(tmp / "no-vault-file"),
-                "KROUTER_NO_QUERY_LOG": "1"})
+    env.update({"HOME": str(tmp / "home"), "LMEMORY_CACHE_DIR": str(tmp / "cache"),
+                "LMEMORY_STATE_DIR": str(tmp / "state"), "LMEMORY_VAULT_FILE": str(tmp / "no-vault-file"),
+                "LMEMORY_NO_QUERY_LOG": "1"})
     env.pop("OBSIDIAN_VAULT", None)
     (tmp / "home").mkdir(exist_ok=True)
     return env
@@ -80,7 +80,7 @@ def _get(url: str, method: str = "GET") -> int:
 
 def _ask(query: str, mid: int = 1) -> dict:
     return {"jsonrpc": "2.0", "id": mid, "method": "tools/call",
-            "params": {"name": "krouter_ask", "arguments": {"query": query}}}
+            "params": {"name": "lmemory_ask", "arguments": {"query": query}}}
 
 
 def test_bearer_token_is_required_and_checked(server):
@@ -89,7 +89,7 @@ def test_bearer_token_is_required_and_checked(server):
     assert _post(server["url"], init, token=None)[0] == 401
     assert _post(server["url"], init, token="wrong-token-but-long-enough")[0] == 401
     code, reply = _post(server["url"], init)
-    assert code == 200 and reply["result"]["serverInfo"]["title"] == "KRouter (team)"
+    assert code == 200 and reply["result"]["serverInfo"]["title"] == "Lmemory (team)"
     assert "'team' vault" in reply["result"]["instructions"]
 
 
@@ -143,7 +143,7 @@ def test_access_log_holds_a_hash_not_the_question(server):
     server["proc"].terminate()
     log = server["proc"].stderr.read()
     rows = [json.loads(line) for line in log.splitlines() if line.startswith("{") and '"status"' in line]
-    calls = [r for r in rows if r.get("tool") == "krouter_ask"]
+    calls = [r for r in rows if r.get("tool") == "lmemory_ask"]
     assert calls and all(len(r["q_sha256"]) == 16 for r in calls)
     assert secret not in log
 
@@ -169,5 +169,5 @@ def test_stdio_takes_the_label_too(tmp_path):
                          input="\n".join(json.dumps(m) for m in msgs) + "\n", env=_env(tmp_path),
                          capture_output=True, text=True, timeout=60)
     replies = [json.loads(line) for line in res.stdout.splitlines()]
-    assert replies[0]["result"]["serverInfo"]["title"] == "KRouter (personal)"
+    assert replies[0]["result"]["serverInfo"]["title"] == "Lmemory (personal)"
     assert replies[1]["result"]["content"][0]["text"].startswith("vault_label: personal\n")

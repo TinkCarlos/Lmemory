@@ -1,8 +1,8 @@
-# KRouter
+# Lmemory
 
-This directory is the **DeepSeek Harness socket** of KRouter, not a second product.
+This directory is the **DeepSeek Harness socket** of Lmemory, not a second product.
 
-The product is the repo root: router (`skill/krouter`) + writer (`extras/host-daily-evolution`) + this socket. One vault. `dsh plugin add` does not start the timer.
+The product is the repo root: router (`skill/lmemory`) + writer (`extras/host-daily-evolution`) + this socket. One vault. `dsh plugin add` does not start the timer.
 
 Uninstalling the socket does not delete notes.
 
@@ -25,14 +25,14 @@ export OBSIDIAN_VAULT=/path/to/YourVault
 Then, from a machine that already runs DSH. Prefer a spare profile. Point `dsh plugin add` at **this repo root**, not `extras/dsh`:
 
 ```bash
-dsh plugin --profile web add github:398894496-arch/KRouter
+dsh plugin --profile web add github:TinkCarlos/Lmemory
 # or, from a local clone:
-dsh plugin add /absolute/path/to/KRouter
+dsh plugin add /absolute/path/to/Lmemory
 ```
 
 Do not treat `extras/dsh` as a separate project to publish.
 
-Tools: `krouter_status` (includes `host_action` when the vault-page key and CLI login are missing — tell the host), `krouter_preference`, `krouter_correction`, `krouter_memory`, `krouter_project`, `krouter_search`, `krouter_suggest`.
+Tools: `lmemory_status` (includes `host_action` when the vault-page key and CLI login are missing — tell the host), `lmemory_preference`, `lmemory_correction`, `lmemory_memory`, `lmemory_project`, `lmemory_search`, `lmemory_suggest`.
 
 If `canonical_match` is true, open `canonical_source`. Suggestions are hints, not hits. If `host_prompt` is present, ask the host; do not guess. On Windows the socket prefers `route_knowledge.py`.
 

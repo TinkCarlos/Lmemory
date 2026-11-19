@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Set 11 (HELDOUT.md): LongMemEval answer accuracy, scored the way other memory projects report it.
 
-Set 7 counts whether KRouter cites an answer session. This script turns those citations into the benchmark's own
+Set 7 counts whether Lmemory cites an answer session. This script turns those citations into the benchmark's own
 question-answering evaluation: a reader model answers each question from the cited sessions with the benchmark's
 reader template, and a judge model grades each answer with the benchmark's per-type judge prompts. The templates are
 copied verbatim from LongMemEval (Wu et al., ICLR 2025; MIT): `src/generation/run_generation.py` (the step-by-step
@@ -11,14 +11,14 @@ The reader and the judge are whatever model you run the prompts through; this sc
 scores the replies. Each prompt file is JSONL `{qid, prompt}`; the replies you write back are JSONL
 `{qid, response}` (reader) and `{qid, verdict}` (judge, the raw reply text).
 
-    python3 bench/longmemeval/qa.py prepare --outputs outputs.krouter.jsonl --data longmemeval_s_cleaned.json --out qa/reader
+    python3 bench/longmemeval/qa.py prepare --outputs outputs.lmemory.jsonl --data longmemeval_s_cleaned.json --out qa/reader
     (run every qa/reader/batch_*.jsonl through the reader; write qa/answers/batch_*.jsonl)
     python3 bench/longmemeval/qa.py judge-prepare --answers qa/answers --data longmemeval_s_cleaned.json --out qa/judge
     (run every qa/judge/batch_*.jsonl through the judge; write qa/verdicts/batch_*.jsonl)
     python3 bench/longmemeval/qa.py score --verdicts qa/verdicts --data longmemeval_s_cleaned.json
 
 Set 12 holds that reader and judge fixed and changes only what the reader is given, so the retrieval's share of the
-score can be read off: no history, plain BM25's top three sessions, KRouter's citations (set 11), and the labelled
+score can be read off: no history, plain BM25's top three sessions, Lmemory's citations (set 11), and the labelled
 answer sessions (the benchmark's oracle setting).
 
     python3 bench/longmemeval/qa.py baseline --kind bm25 --data longmemeval_s_cleaned.json --out outputs.bm25.jsonl

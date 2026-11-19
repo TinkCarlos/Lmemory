@@ -1,5 +1,7 @@
 # 和 MemOS、Hindsight 放在一起看
 
+> 这里保留上游 KRouter 的历史评测。Lmemory 当前构建和复测结果见[中文 README](../README.zh.md)。
+
 十个项目并排（只写各家页面上的说法，不排名）：[`COMPARE-ALL.zh.md`](COMPARE-ALL.zh.md)。
 
 English: [`COMPARE.md`](COMPARE.md) · 回到 [README](../README.zh.md)

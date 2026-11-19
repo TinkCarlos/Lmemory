@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 IMPORT = SCRIPTS / "import_sessions.py"
 ROUTE = SCRIPTS / "route_knowledge.py"
 
@@ -52,10 +52,10 @@ def _vault(tmp_path: Path, template: str, sessions: dict[str, list[tuple[str, st
     claude = tmp_path / "claude"
     for sid, turns in sessions.items():
         _session(claude, sid, turns)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CLAUDE_PROJECTS": str(claude),
-           "KROUTER_CODEX_SESSIONS": str(tmp_path / "codex"), "KROUTER_CURSOR_PROJECTS": str(tmp_path / "cursor"),
-           "KROUTER_STATE_DIR": str(tmp_path / "state"), "KROUTER_CACHE_DIR": str(tmp_path / "cache"),
-           "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CLAUDE_PROJECTS": str(claude),
+           "LMEMORY_CODEX_SESSIONS": str(tmp_path / "codex"), "LMEMORY_CURSOR_PROJECTS": str(tmp_path / "cursor"),
+           "LMEMORY_STATE_DIR": str(tmp_path / "state"), "LMEMORY_CACHE_DIR": str(tmp_path / "cache"),
+           "LMEMORY_NO_QUERY_LOG": "1"}
     for k in [k for k in env if k.endswith("_API_KEY")]:
         env.pop(k)
     res = subprocess.run([sys.executable, str(IMPORT), "--days", "7"], env=env, capture_output=True, text=True,
@@ -75,7 +75,7 @@ def _ask(env: dict, q: str) -> str:
     ("zh", "账单服务的生产数据库密码是什么？", "库里没有这方面的记录。"),
 ])
 def test_your_own_earlier_question_is_not_an_answer(tmp_path, lang, q, answer):
-    vault, env = _vault(tmp_path, lang, {"aaaa1111-asked": [(f"look it up: {q}" if lang == "en" else f"用 krouter 查一下：{q}",
+    vault, env = _vault(tmp_path, lang, {"aaaa1111-asked": [(f"look it up: {q}" if lang == "en" else f"用 lmemory 查一下：{q}",
                                                               answer)]})
     out = _ask(env, q)
     assert "recall: none" in out, out
@@ -105,9 +105,9 @@ def test_a_manual_distill_with_no_model_lane_says_so_and_exits_normally(tmp_path
     vault, env = _vault(tmp_path, "en", {"eeee5555-port": [("Which port does the api use?", "Port 8443."),
                                                            ("And the health check?", "GET /health returns 200.")]})
     env = {k: v for k, v in env.items() if not k.endswith("_API_KEY")}
-    env.update({"PATH": "/usr/bin:/bin", "KROUTER_KEYS_ENV": str(tmp_path / "no-keys.env"), "HOME": str(tmp_path / "h"),
+    env.update({"PATH": "/usr/bin:/bin", "LMEMORY_KEYS_ENV": str(tmp_path / "no-keys.env"), "HOME": str(tmp_path / "h"),
                 "USERPROFILE": str(tmp_path / "h")})
-    env.pop("KROUTER_LEARN_CLI", None)
+    env.pop("LMEMORY_LEARN_CLI", None)
     res = subprocess.run([sys.executable, str(IMPORT), "--days", "3650", "--distill", "--distill-max", "40"], env=env,
                          capture_output=True, text=True, timeout=120)
     assert res.returncode == 0, res.stderr

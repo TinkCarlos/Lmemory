@@ -1,4 +1,4 @@
-"""`KROUTER_INDEX_PAGES=1` (set 49): the standing index also lists, by title, the pages in force that the alias table does
+"""`LMEMORY_INDEX_PAGES=1` (set 49): the standing index also lists, by title, the pages in force that the alias table does
 not name. Off by default; with it off, or with a table that names every such page, the index is the shipped one."""
 
 import shutil
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO / "skill/krouter/scripts"))
+sys.path.insert(0, str(REPO / "skill/lmemory/scripts"))
 
 SYSTEM = "90 系统文件"
 
@@ -22,12 +22,12 @@ def page(path: Path, title: str, body: str, extra: str = "status: active\n") -> 
 def env(tmp_path, monkeypatch):
     import recollect
 
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
-    monkeypatch.delenv("KROUTER_INDEX_PAGES", raising=False)
-    monkeypatch.delenv("KROUTER_TOPICS", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
+    monkeypatch.delenv("LMEMORY_INDEX_PAGES", raising=False)
+    monkeypatch.delenv("LMEMORY_TOPICS", raising=False)
     recollect._PAGES.clear()
     return tmp_path
 
@@ -73,7 +73,7 @@ def test_off_by_default_and_listed_when_on(env, monkeypatch):
     warm(v)
     shipped = cs.standing_index(v)
     assert "Access reviews" not in shipped
-    monkeypatch.setenv("KROUTER_INDEX_PAGES", "1")
+    monkeypatch.setenv("LMEMORY_INDEX_PAGES", "1")
     on = cs.standing_index(v)
     listed = names(on)
     assert "Access reviews" in listed and "出差标准" in listed
@@ -91,7 +91,7 @@ def test_a_table_that_names_every_page_gives_the_shipped_index(env, monkeypatch)
     v = bench_vault(env)
     warm(v)
     shipped = cs.standing_index(v)
-    monkeypatch.setenv("KROUTER_INDEX_PAGES", "1")
+    monkeypatch.setenv("LMEMORY_INDEX_PAGES", "1")
     assert cs.standing_index(v) == shipped
 
 
@@ -111,7 +111,7 @@ def test_rule_pages_are_listed_and_other_folders_are_not_once_there_are_enough(e
     (v / SYSTEM / "canonical_sources.psv").write_text(
         "R00|规矩零|02 经验与方法/规矩00.md|周五不发版\n", encoding="utf-8")
     warm(v)
-    monkeypatch.setenv("KROUTER_INDEX_PAGES", "1")
+    monkeypatch.setenv("LMEMORY_INDEX_PAGES", "1")
     listed = names(cs.standing_index(v))
     assert "规矩01" in listed and "主题｜发版" in listed
     assert listed.index("规矩01") < listed.index("主题｜发版")  # 规则页在前，主题页在后
@@ -129,7 +129,7 @@ def test_other_folders_stand_in_when_the_vault_is_not_laid_out_the_templates_way
     page(v / SYSTEM / "说明.md", "系统说明", "系统文件夹里的页不列。")
     (v / SYSTEM / "canonical_sources.psv").write_text("N01|报销|notes/报销.md|打车费当月报\n", encoding="utf-8")
     warm(v)
-    monkeypatch.setenv("KROUTER_INDEX_PAGES", "1")
+    monkeypatch.setenv("LMEMORY_INDEX_PAGES", "1")
     listed = names(cs.standing_index(v))
     assert listed == ["值班"]
 
@@ -142,7 +142,7 @@ def test_no_table_of_its_own_still_lists_and_the_template_sample_does_not(env, m
     warm(v)
     assert cs.table_state(v) == "none"
     assert cs.standing_index(v) == ""
-    monkeypatch.setenv("KROUTER_INDEX_PAGES", "1")
+    monkeypatch.setenv("LMEMORY_INDEX_PAGES", "1")
     assert names(cs.standing_index(v)) == ["报销"]
     (v / SYSTEM).mkdir(parents=True, exist_ok=True)
     (v / SYSTEM / "canonical_sources.psv").write_text(cs.sample_path().read_text(encoding="utf-8"), encoding="utf-8")
@@ -155,7 +155,7 @@ def test_titles_share_the_budget_and_the_rest_are_counted(env, monkeypatch):
 
     v = bench_vault(env, keep_every=8)
     warm(v)
-    monkeypatch.setenv("KROUTER_INDEX_PAGES", "1")
+    monkeypatch.setenv("LMEMORY_INDEX_PAGES", "1")
     whole = cs.standing_index(v)
     tight = cs.standing_index(v, chars=900)
     body = "\n".join(tight.splitlines()[1:-1])
@@ -168,6 +168,6 @@ def test_no_recall_index_yet_means_no_titles_and_no_error(env, monkeypatch):
     import compile_subconscious as cs
 
     v = bench_vault(env, keep_every=8)
-    monkeypatch.setenv("KROUTER_INDEX_PAGES", "1")
+    monkeypatch.setenv("LMEMORY_INDEX_PAGES", "1")
     assert cs.index_pages(v, set()) == []
     assert not (env / "cache").exists() or not list((env / "cache").glob("*.sqlite"))

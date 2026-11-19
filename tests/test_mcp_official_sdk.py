@@ -1,4 +1,4 @@
-"""The official MCP Python SDK (`pip install mcp`) talks to KRouter over stdio and over Streamable HTTP: initialize,
+"""The official MCP Python SDK (`pip install mcp`) talks to Lmemory over stdio and over Streamable HTTP: initialize,
 list the tools, ask a question, get the page back. Skipped when the SDK is not installed."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from mcp import ClientSession, StdioServerParameters  # noqa: E402
 from mcp.client.stdio import stdio_client  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-SERVER = REPO / "skill/krouter/scripts/mcp_server.py"
+SERVER = REPO / "skill/lmemory/scripts/mcp_server.py"
 TOKEN = "sdk-test-token-0123456789abcdef"
 
 
@@ -29,8 +29,8 @@ def env(tmp_path):
     (vault / "02 经验与方法" / "API port.md").write_text(
         "---\ntitle: API port\nstatus: active\nhow: The local API listens on 8080.\n---\n\n# API port\n\n"
         "The local API listens on 8080.\n", encoding="utf-8")
-    return {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CACHE_DIR": str(tmp_path / "cache"),
-            "KROUTER_STATE_DIR": str(tmp_path / "state"), "KROUTER_NO_QUERY_LOG": "1"}
+    return {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CACHE_DIR": str(tmp_path / "cache"),
+            "LMEMORY_STATE_DIR": str(tmp_path / "state"), "LMEMORY_NO_QUERY_LOG": "1"}
 
 
 def _field(obj, camel: str, snake: str):
@@ -40,13 +40,13 @@ def _field(obj, camel: str, snake: str):
 
 async def _session_checks(session: ClientSession) -> None:
     init = await session.initialize()
-    assert _field(init, "serverInfo", "server_info").name.lower().startswith("krouter")
+    assert _field(init, "serverInfo", "server_info").name.lower().startswith("lmemory")
     names = {t.name for t in (await session.list_tools()).tools}
-    assert {"krouter_ask", "krouter_status"} <= names
-    res = await session.call_tool("krouter_ask", {"query": "what port does the local api listen on"})
+    assert {"lmemory_ask", "lmemory_status"} <= names
+    res = await session.call_tool("lmemory_ask", {"query": "what port does the local api listen on"})
     text = res.content[0].text
     assert not _field(res, "isError", "is_error") and "API port" in text and "8080" in text
-    none = await session.call_tool("krouter_ask", {"query": "which espresso grinder setting do we use"})
+    none = await session.call_tool("lmemory_ask", {"query": "which espresso grinder setting do we use"})
     assert "recall: none" in none.content[0].text
 
 

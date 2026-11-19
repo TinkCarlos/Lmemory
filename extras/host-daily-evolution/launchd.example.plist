@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>local.dsh-krouter.daily-evolution</string>
+  <string>local.dsh-lmemory.daily-evolution</string>
   <key>ProgramArguments</key>
   <array>
     <string>__RUN_SH__</string>
@@ -16,18 +16,18 @@
     <integer>10</integer>
   </dict>
   <key>StandardOutPath</key>
-  <string>__HOME__/Library/Logs/dsh-krouter-daily.log</string>
+  <string>__HOME__/Library/Logs/dsh-lmemory-daily.log</string>
   <key>StandardErrorPath</key>
-  <string>__HOME__/Library/Logs/dsh-krouter-daily.log</string>
+  <string>__HOME__/Library/Logs/dsh-lmemory-daily.log</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>OBSIDIAN_VAULT</key>
     <string>__VAULT__</string>
-    <key>KROUTER_ROUTER</key>
+    <key>LMEMORY_ROUTER</key>
     <string>__ROUTER__</string>
-    <key>KROUTER_WRITER</key>
+    <key>LMEMORY_WRITER</key>
     <string>__WRITER__</string>
-    <key>KROUTER_KEYS_ENV</key>
+    <key>LMEMORY_KEYS_ENV</key>
     <string>__KEYS_ENV__</string>
     <key>HOME</key>
     <string>__HOME__</string>

@@ -31,22 +31,22 @@ PROMPT = HERE / "PROMPT.md"
 def _load_lane():
     """The provider table and flagship lock live in the skill's llm.py: one table for the writer and the
     nightly steps. Loaded by file path so an unrelated `llm` package on sys.path cannot stand in for it."""
-    for scripts in (HERE.parents[1] / "skill/krouter/scripts",
-                    Path.home() / ".agents/skills/krouter/scripts"):
+    for scripts in (HERE.parents[1] / "skill/lmemory/scripts",
+                    Path.home() / ".agents/skills/lmemory/scripts"):
         path = scripts / "llm.py"
         if path.is_file():
-            spec = importlib.util.spec_from_file_location("krouter_llm", path)
+            spec = importlib.util.spec_from_file_location("lmemory_llm", path)
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             if str(scripts) not in sys.path:
                 sys.path.append(str(scripts))
             return mod
-    raise SystemExit("KRouter: skill/krouter/scripts/llm.py not found")
+    raise SystemExit("Lmemory: skill/lmemory/scripts/llm.py not found")
 
 
 _lane = _load_lane()
 import zones  # noqa: E402  (skill scripts dir, appended by _load_lane)
-from krouter_redact import is_secret_page, redact  # noqa: E402
+from lmemory_redact import is_secret_page, redact  # noqa: E402
 CHAT_SPECS = _lane.CHAT_SPECS
 lock_flagship = _lane.lock_flagship
 openai_headers = _lane.openai_headers
@@ -110,14 +110,14 @@ TOOLS = [
 
 
 def vault_root() -> Path:
-    raw = (os.environ.get("KROUTER_VAULT") or os.environ.get("OBSIDIAN_VAULT", "")).strip()
+    raw = (os.environ.get("LMEMORY_VAULT") or os.environ.get("OBSIDIAN_VAULT", "")).strip()
     if not raw:
-        raise SystemExit("KROUTER_VAULT (or OBSIDIAN_VAULT) is not set")
+        raise SystemExit("LMEMORY_VAULT (or OBSIDIAN_VAULT) is not set")
     return Path(raw).resolve()
 
 
 def model_override(keys: dict[str, str], extra: dict[str, str]) -> str:
-    for name in ("MODEL", "DISTILL_MODEL", "KROUTER_DISTILL_MODEL"):
+    for name in ("MODEL", "DISTILL_MODEL", "LMEMORY_DISTILL_MODEL"):
         val = (keys.get(name) or extra.get(name) or os.environ.get(name, "")).strip()
         if val:
             return val
@@ -137,7 +137,7 @@ def pick_chat(keys: dict[str, str], extra: dict[str, str] | None = None) -> dict
             chosen["url"] = base + "/chat/completions"
         return chosen
     for name, val in keys.items():
-        if name in {"OPENAI_BASE_URL", "OPENAI_API_BASE", "MODEL", "DISTILL_MODEL", "KROUTER_DISTILL_MODEL"} or not val:
+        if name in {"OPENAI_BASE_URL", "OPENAI_API_BASE", "MODEL", "DISTILL_MODEL", "LMEMORY_DISTILL_MODEL"} or not val:
             continue
         if not (name.endswith("_API_KEY") or name.endswith("_API_TOKEN")):
             continue
@@ -321,13 +321,13 @@ def _http_json(url: str, payload: dict, headers: dict[str, str]) -> dict:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             raw = resp.read()
     except urllib.error.HTTPError as exc:
-        raise SystemExit(f"KRouter: chat API HTTP {exc.code}") from exc
+        raise SystemExit(f"Lmemory: chat API HTTP {exc.code}") from exc
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise SystemExit("KRouter: chat API network failed") from exc
+        raise SystemExit("Lmemory: chat API network failed") from exc
     try:
         return json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as exc:
-        raise SystemExit("KRouter: chat API returned non-JSON") from exc
+        raise SystemExit("Lmemory: chat API returned non-JSON") from exc
 
 
 def write_pending(vault: Path, day: date, reason: str) -> None:
@@ -452,7 +452,7 @@ def run(keys: dict[str, str], extra: dict[str, str] | None = None) -> int:
     extra = extra or {}
     spec = pick_chat(keys, extra)
     if spec is None:
-        print("KRouter: no chat endpoint for the vault-page key.", file=sys.stderr)
+        print("Lmemory: no chat endpoint for the vault-page key.", file=sys.stderr)
         return 1
     secret = keys.get(spec["name"], "")
     spec = apply_flagship_lock(spec, secret)
@@ -483,7 +483,7 @@ def run(keys: dict[str, str], extra: dict[str, str] | None = None) -> int:
         raise
     if wrote == 0:
         write_pending(vault, day, "API writer produced no files; left to-summarize.")
-        print("KRouter: API writer left a to-summarize note.", file=sys.stderr)
+        print("Lmemory: API writer left a to-summarize note.", file=sys.stderr)
         return 0
-    print(f"KRouter: API writer wrote {wrote} file(s) via {spec['name']}/{spec['model']}.")
+    print(f"Lmemory: API writer wrote {wrote} file(s) via {spec['name']}/{spec['model']}.")
     return 0

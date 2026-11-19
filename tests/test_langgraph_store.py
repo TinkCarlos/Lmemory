@@ -1,6 +1,6 @@
-"""KRouter as a LangGraph store (krouter.integrations.langgraph): the BaseStore interface, sync and async; namespace
+"""Lmemory as a LangGraph store (lmemory.integrations.langgraph): the BaseStore interface, sync and async; namespace
 isolation; the superseded trail; refusals; a real graph. Skipped when langgraph is not installed, unless
-KROUTER_REQUIRE_LANGGRAPH=1 (CI's langgraph job), where a missing install fails instead. No model is called."""
+LMEMORY_REQUIRE_LANGGRAPH=1 (CI's langgraph job), where a missing install fails instead. No model is called."""
 
 from __future__ import annotations
 
@@ -14,14 +14,14 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-if os.environ.get("KROUTER_REQUIRE_LANGGRAPH") != "1":
+if os.environ.get("LMEMORY_REQUIRE_LANGGRAPH") != "1":
     pytest.importorskip("langgraph.store.base")
 sys.path.insert(0, str(REPO / "sdk"))
 
 from langgraph.store.base import GetOp, InvalidNamespaceError, PutOp, SearchOp  # noqa: E402
 from langgraph.store.memory import InMemoryStore  # noqa: E402
 
-from krouter.integrations.langgraph import KRouterStore, _decode, _encode  # noqa: E402
+from lmemory.integrations.langgraph import LmemoryStore, _decode, _encode  # noqa: E402
 
 A = ("users", "alice", "memories")
 B = ("users", "bob", "memories")
@@ -29,9 +29,9 @@ B = ("users", "bob", "memories")
 
 @pytest.fixture()
 def store(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    return KRouterStore(tmp_path / "memory", cache_dir=tmp_path / "cache")
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    return LmemoryStore(tmp_path / "memory", cache_dir=tmp_path / "cache")
 
 
 def facts(store):
@@ -131,7 +131,7 @@ def test_list_namespaces(store):
 
 
 def test_matches_langgraphs_own_in_memory_store(store):
-    """The same writes on both stores give the same reads (search without a query; with one, embeddings and KRouter
+    """The same writes on both stores give the same reads (search without a query; with one, embeddings and Lmemory
     rank differently by design)."""
     ref = InMemoryStore()
     ops = [(A, "a", {"content": "one"}), (A, "b", {"n": 2, "tags": ["x", "y"]}), (B, "a", {"content": "two"}),
@@ -149,7 +149,7 @@ def test_matches_langgraphs_own_in_memory_store(store):
         mine = {(i.namespace, i.key, str(i.value)) for i in store.search(prefix, filter=flt, limit=100)}
         theirs = {(i.namespace, i.key, str(i.value)) for i in ref.search(prefix, filter=flt, limit=100)}
         assert mine == theirs, (prefix, flt)
-    # InMemoryStore 删到空的命名空间还会列出来；KRouterStore 只列还有记忆的命名空间
+    # InMemoryStore 删到空的命名空间还会列出来；LmemoryStore 只列还有记忆的命名空间
     assert set(store.list_namespaces()) <= set(ref.list_namespaces())
 
 
@@ -193,7 +193,7 @@ def test_keys_and_labels_that_are_awkward_file_names(store):
         assert _decode(_encode(lab, 10**6)) == lab
 
 
-# -- KRouter's part: sources, refusals, the superseded trail -----------------------------------------------------------
+# -- Lmemory's part: sources, refusals, the superseded trail -----------------------------------------------------------
 
 
 def test_search_returns_the_page_it_came_from(store):
@@ -302,13 +302,13 @@ def test_index_false_and_index_fields(store):
 
 
 def test_min_confidence(tmp_path):
-    strict = KRouterStore(tmp_path / "memory", cache_dir=tmp_path / "cache", min_confidence="high")
+    strict = LmemoryStore(tmp_path / "memory", cache_dir=tmp_path / "cache", min_confidence="high")
     facts(strict)
     assert strict.search(A, query="does she eat fish") == []  # 低于 high 的结果不给
     with pytest.raises(ValueError):
-        KRouterStore(tmp_path / "m2", min_confidence="sure")
+        LmemoryStore(tmp_path / "m2", min_confidence="sure")
     with pytest.raises(ValueError):
-        KRouterStore(tmp_path / "m3", cache_dir=tmp_path / "m3" / "cache")
+        LmemoryStore(tmp_path / "m3", cache_dir=tmp_path / "m3" / "cache")
 
 
 # -- async, threads, processes ------------------------------------------------------------------------------------
@@ -352,8 +352,8 @@ def test_concurrent_writers_keep_every_version(store):
 
 
 def test_two_processes_share_one_folder(store, tmp_path):
-    code = ("import sys; sys.path.insert(0, sys.argv[1]); from krouter.integrations.langgraph import KRouterStore; "
-            "s = KRouterStore(sys.argv[2], cache_dir=sys.argv[3]); "
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); from lmemory.integrations.langgraph import LmemoryStore; "
+            "s = LmemoryStore(sys.argv[2], cache_dir=sys.argv[3]); "
             "[s.put(('users', 'alice', 'memories'), 'shared', {'n': i, 'by': sys.argv[4]}) for i in range(10)]")
     procs = [subprocess.Popen([sys.executable, "-c", code, str(REPO / "sdk"), str(store.root), str(tmp_path / "c2"),
                                w]) for w in ("p1", "p2")]
@@ -419,10 +419,10 @@ def test_a_graph_remembers_across_threads(store):
 
 def test_the_demo_runs(tmp_path):
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY")}
-    env["KROUTER_NO_QUERY_LOG"] = "1"
-    env["KROUTER_CACHE_DIR"] = str(tmp_path / "cache")
+    env["LMEMORY_NO_QUERY_LOG"] = "1"
+    env["LMEMORY_CACHE_DIR"] = str(tmp_path / "cache")
     env["PYTHONPATH"] = str(REPO / "sdk")
-    out = subprocess.run([sys.executable, "-m", "krouter.integrations.langgraph_demo", str(tmp_path / "memory")],
+    out = subprocess.run([sys.executable, "-m", "lmemory.integrations.langgraph_demo", str(tmp_path / "memory")],
                          env=env, capture_output=True, text=True, timeout=300)
     assert out.returncode == 0, out.stderr
     lines = out.stdout.splitlines()
@@ -463,6 +463,6 @@ def test_a_knowledge_base_in_the_memory_folder_changes_no_search(store, tmp_path
     (root / "Research" / "Dogs.md").write_text("# Dogs afraid of thunder\n\nSource: https://example.org/dogs\n\nMany a dog "
                                                "called Biscuit is afraid of thunder; vegetarian owners never feed fish.\n",
                                                encoding="utf-8")
-    (root / "krouter-kb.txt").write_text("Research\n", encoding="utf-8")
+    (root / "lmemory-kb.txt").write_text("Research\n", encoding="utf-8")
     after = {q: [(h.key, h.confidence) for h in store.search(A, query=q)] for q in before}
     assert after == before

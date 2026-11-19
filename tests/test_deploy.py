@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SERVER = (REPO / "skill/krouter/scripts/mcp_server.py").read_text(encoding="utf-8")
+SERVER = (REPO / "skill/lmemory/scripts/mcp_server.py").read_text(encoding="utf-8")
 FLAGS = set(re.findall(r'add_argument\("(--[a-z-]+)"', SERVER))
 
 
@@ -21,8 +21,8 @@ def _flags(args: list[str]) -> set[str]:
 
 def test_server_flags_used_by_every_deployment_exist():
     compose = (REPO / "deploy/docker-compose.yml").read_text(encoding="utf-8")
-    kube = (REPO / "deploy/kubernetes/krouter.yaml").read_text(encoding="utf-8")
-    unit = (REPO / "deploy/systemd/krouter.service").read_text(encoding="utf-8")
+    kube = (REPO / "deploy/kubernetes/lmemory.yaml").read_text(encoding="utf-8")
+    unit = (REPO / "deploy/systemd/lmemory.service").read_text(encoding="utf-8")
     used = set(re.findall(r'"(--[a-z-]+)"', compose + kube))
     used |= {a for a in shlex.split(unit.split("ExecStart=", 1)[1].split("\nRestart", 1)[0].replace("\\\n", " "))
              if a.startswith("--")}
@@ -33,20 +33,20 @@ def test_server_flags_used_by_every_deployment_exist():
 def test_systemd_unit_is_hardened_and_reads_the_vault_only():
     cp = configparser.ConfigParser(strict=False, interpolation=None)
     cp.optionxform = str
-    cp.read_string((REPO / "deploy/systemd/krouter.service").read_text(encoding="utf-8"))
+    cp.read_string((REPO / "deploy/systemd/lmemory.service").read_text(encoding="utf-8"))
     svc = cp["Service"]
-    assert svc["User"] == "krouter" and svc["NoNewPrivileges"] == "yes" and svc["ProtectSystem"] == "strict"
-    assert "/srv/krouter" in svc["ReadOnlyPaths"] and svc["Restart"] == "on-failure"
+    assert svc["User"] == "lmemory" and svc["NoNewPrivileges"] == "yes" and svc["ProtectSystem"] == "strict"
+    assert "/srv/lmemory" in svc["ReadOnlyPaths"] and svc["Restart"] == "on-failure"
     assert "mcp_server.py --http" in svc["ExecStart"] and "--bank-token" in svc["ExecStart"]
 
 
 def test_kubernetes_manifest_shape():
     yaml = pytest.importorskip("yaml")
-    docs = list(yaml.safe_load_all((REPO / "deploy/kubernetes/krouter.yaml").read_text(encoding="utf-8")))
+    docs = list(yaml.safe_load_all((REPO / "deploy/kubernetes/lmemory.yaml").read_text(encoding="utf-8")))
     kinds = {d["kind"]: d for d in docs}
     assert set(kinds) == {"Deployment", "Service"}
     pod = kinds["Deployment"]["spec"]["template"]["spec"]
-    server = next(c for c in pod["containers"] if c["name"] == "krouter")
+    server = next(c for c in pod["containers"] if c["name"] == "lmemory")
     assert server["readinessProbe"]["httpGet"]["path"] == "/healthz"
     assert all(m.get("readOnly") for m in server["volumeMounts"] if m["mountPath"] == "/vault")
     assert server["securityContext"]["readOnlyRootFilesystem"] is True and pod["securityContext"]["runAsNonRoot"]

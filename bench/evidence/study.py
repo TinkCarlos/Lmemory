@@ -2,7 +2,7 @@
 """Set 39 (bench/memory_honesty/HELDOUT.md): paragraph-level evidence — does it hand over more answers and refuse more
 of what the memory does not hold, both at once?
 
-No model is called. Every lookup is KRouter's recall with `KROUTER_EVIDENCE_STUDY=1`, which adds to the result the
+No model is called. Every lookup is Lmemory's recall with `LMEMORY_EVIDENCE_STUDY=1`, which adds to the result the
 first 20 ranked pages (before the gate) with their paragraph evidence (`evidence.page_evidence`). The rules are then
 applied offline to those records (`simulate`), and the one chosen on development data is built in and run again.
 
@@ -13,7 +13,7 @@ applied offline to those records (`simulate`), and the one chosen on development
     python3 bench/evidence/study.py heldout                # the held-out halves, once, with the code as built
     python3 bench/evidence/study.py report TAG             # the registered counts for one collected run
 
-State: `~/.local/state/krouter-eval/engine/` (`KROUTER_ENGINE_STATE`); the index cache persists there between runs
+State: `~/.local/state/lmemory-eval/engine/` (`LMEMORY_ENGINE_STATE`); the index cache persists there between runs
 (one per vault, rebuilt when the schema changes). Sources are bench/refusal/study.py's, unchanged.
 """
 
@@ -28,7 +28,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-STATE = Path(os.environ.get("KROUTER_ENGINE_STATE") or Path.home() / ".local/state/krouter-eval/engine")
+STATE = Path(os.environ.get("LMEMORY_ENGINE_STATE") or Path.home() / ".local/state/lmemory-eval/engine")
 
 
 def _refusal_study():
@@ -68,25 +68,25 @@ HELD = {
 
 def own_code() -> bool:
     """Whether the lookups run this checkout's code (not a baseline unpacked with `git archive`, set with
-    KROUTER_REFUSAL_SCRIPTS)."""
-    return Path(RS.SCRIPTS).resolve() == (REPO / "skill/krouter/scripts").resolve()
+    LMEMORY_REFUSAL_SCRIPTS)."""
+    return Path(RS.SCRIPTS).resolve() == (REPO / "skill/lmemory/scripts").resolve()
 
 
 def _env() -> None:
-    os.environ["KROUTER_NO_QUERY_LOG"] = "1"
-    os.environ["KROUTER_CACHE_DIR"] = str(STATE / ("cache" if own_code() else "cache-baseline"))
-    os.environ["KROUTER_STATE_DIR"] = str(STATE / "state")
-    os.environ["KROUTER_EVIDENCE_STUDY"] = "1"
-    os.environ.pop("KROUTER_MAP", None)
+    os.environ["LMEMORY_NO_QUERY_LOG"] = "1"
+    os.environ["LMEMORY_CACHE_DIR"] = str(STATE / ("cache" if own_code() else "cache-baseline"))
+    os.environ["LMEMORY_STATE_DIR"] = str(STATE / "state")
+    os.environ["LMEMORY_EVIDENCE_STUDY"] = "1"
+    os.environ.pop("LMEMORY_MAP", None)
     sys.path.insert(0, str(RS.SCRIPTS))
 
 
 def lookup(ri, it: dict, dates: dict) -> dict:
     day = dates.get(it["id"], "")
     if day:
-        os.environ["KROUTER_TODAY"] = day
+        os.environ["LMEMORY_TODAY"] = day
     else:
-        os.environ.pop("KROUTER_TODAY", None)
+        os.environ.pop("LMEMORY_TODAY", None)
     t0 = time.perf_counter()
     res = ri.recall(Path(it["vault"]), it["q"])
     ms = (time.perf_counter() - t0) * 1000
@@ -170,12 +170,12 @@ def main(argv: list[str]) -> int:
         tag = argv[2] if len(argv) > 2 else argv[1]
         if argv[1] == "heldout" and own_code():  # 基线代码（44c041f）在留出部分上数一遍不算打开：它不调任何参数
             marker = STATE / "heldout.opened"
-            why = os.environ.get("KROUTER_HELDOUT_REASON", "").strip()
+            why = os.environ.get("LMEMORY_HELDOUT_REASON", "").strip()
             if marker.exists() and not why:
                 raise SystemExit(f"held-out halves already run ({marker.read_text().strip()}); a later run needs "
-                                 "KROUTER_HELDOUT_REASON (logged next to the first, and said in HELDOUT.md)")
+                                 "LMEMORY_HELDOUT_REASON (logged next to the first, and said in HELDOUT.md)")
             with marker.open("a", encoding="utf-8") as fh:
-                fh.write(time.strftime("%Y-%m-%dT%H:%M:%S") + f" {tag} evidence={os.environ.get('KROUTER_EVIDENCE', '')}"
+                fh.write(time.strftime("%Y-%m-%dT%H:%M:%S") + f" {tag} evidence={os.environ.get('LMEMORY_EVIDENCE', '')}"
                          + (f" reason: {why}" if why else "") + "\n")
         collect({k: v for k, v in which.items() if not only or k in only}, tag)
         return 0

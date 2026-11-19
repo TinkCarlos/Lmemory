@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Spawn KRouter. No vector store. Read-only routes only.
+ * Spawn Lmemory. No vector store. Read-only routes only.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -27,28 +27,28 @@ function isForeignLiveRouter(path) {
 export function resolveRouter(explicit) {
   const bundled = resolve(
     HERE,
-    "../../../skill/krouter/scripts/route_knowledge.sh",
+    "../../../skill/lmemory/scripts/route_knowledge.sh",
   );
   const bundledPy = resolve(
     HERE,
-    "../../../skill/krouter/scripts/route_knowledge.py",
+    "../../../skill/lmemory/scripts/route_knowledge.py",
   );
   const installed = join(
     homedir(),
-    ".agents/skills/krouter/scripts/route_knowledge.sh",
+    ".agents/skills/lmemory/scripts/route_knowledge.sh",
   );
   const installedPy = join(
     homedir(),
-    ".agents/skills/krouter/scripts/route_knowledge.py",
+    ".agents/skills/lmemory/scripts/route_knowledge.py",
   );
   // 2.0 以前的安装目录（升级后是指向新目录的链接）
-  const legacy = join(homedir(), ".agents/skills/krouter-obsidian/scripts/route_knowledge.sh");
-  const legacyPy = join(homedir(), ".agents/skills/krouter-obsidian/scripts/route_knowledge.py");
+  const legacy = join(homedir(), ".agents/skills/lmemory-obsidian/scripts/route_knowledge.sh");
+  const legacyPy = join(homedir(), ".agents/skills/lmemory-obsidian/scripts/route_knowledge.py");
   const preferPy = platform() === "win32";
   const candidates = (
     preferPy
-      ? [explicit, process.env.KROUTER_ROUTER, bundledPy, installedPy, bundled, installed, legacyPy, legacy]
-      : [explicit, process.env.KROUTER_ROUTER, bundled, installed, bundledPy, installedPy, legacy, legacyPy]
+      ? [explicit, process.env.LMEMORY_ROUTER, bundledPy, installedPy, bundled, installed, legacyPy, legacy]
+      : [explicit, process.env.LMEMORY_ROUTER, bundled, installed, bundledPy, installedPy, legacy, legacyPy]
   ).filter(Boolean);
   for (const path of candidates) {
     if (isForeignLiveRouter(path)) continue;
@@ -58,14 +58,14 @@ export function resolveRouter(explicit) {
 }
 
 function pythonArgv(script, args) {
-  const exe = process.env.PYTHON || process.env.KROUTER_PYTHON || "";
+  const exe = process.env.PYTHON || process.env.LMEMORY_PYTHON || "";
   if (exe) return [exe, [script, ...args]];
   if (platform() === "win32") return ["py", ["-3", script, ...args]];
   return ["python3", [script, ...args]];
 }
 
 export function resolveVault(explicit) {
-  return explicit || process.env.KROUTER_VAULT || process.env.OBSIDIAN_VAULT || "";
+  return explicit || process.env.LMEMORY_VAULT || process.env.OBSIDIAN_VAULT || "";
 }
 
 export function runRoute({ route, query = "", vault, router, timeoutMs = 20000 } = {}) {
@@ -79,7 +79,7 @@ export function runRoute({ route, query = "", vault, router, timeoutMs = 20000 }
   }
   const vaultRoot = resolveVault(vault);
   if (!vaultRoot) {
-    return { ok: false, code: 2, stdout: "", stderr: "set KROUTER_VAULT (or OBSIDIAN_VAULT) or vaultPath\n" };
+    return { ok: false, code: 2, stdout: "", stderr: "set LMEMORY_VAULT (or OBSIDIAN_VAULT) or vaultPath\n" };
   }
   const script = resolveRouter(router);
   if (!script) {
@@ -87,7 +87,7 @@ export function runRoute({ route, query = "", vault, router, timeoutMs = 20000 }
       ok: false,
       code: 2,
       stdout: "",
-      stderr: "route_knowledge.sh not found. run ./scripts/install.sh or set KROUTER_ROUTER\n",
+      stderr: "route_knowledge.sh not found. run ./scripts/install.sh or set LMEMORY_ROUTER\n",
     };
   }
   const args = [route];
@@ -98,12 +98,12 @@ export function runRoute({ route, query = "", vault, router, timeoutMs = 20000 }
         encoding: "utf8",
         timeout: timeoutMs,
         cwd: dirname(script),
-        env: { ...process.env, KROUTER_VAULT: vaultRoot, OBSIDIAN_VAULT: vaultRoot },
+        env: { ...process.env, LMEMORY_VAULT: vaultRoot, OBSIDIAN_VAULT: vaultRoot },
       })
     : spawnSync(script, args, {
         encoding: "utf8",
         timeout: timeoutMs,
-        env: { ...process.env, KROUTER_VAULT: vaultRoot, OBSIDIAN_VAULT: vaultRoot },
+        env: { ...process.env, LMEMORY_VAULT: vaultRoot, OBSIDIAN_VAULT: vaultRoot },
       });
   return {
     ok: result.status === 0,

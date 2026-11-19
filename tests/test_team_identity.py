@@ -1,6 +1,6 @@
 """Personal tokens on a team server: only hashes kept, the old shared token still works, read-only people cannot
 write, a token opens only its banks, the users file is re-read without a restart, every write says who made it (page,
-ledger, journal, git author, `krouter_changes`), and two contradicting corrections follow the later-one-holds rule."""
+ledger, journal, git author, `lmemory_changes`), and two contradicting corrections follow the later-one-holds rule."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 SERVER = SCRIPTS / "mcp_server.py"
 sys.path.insert(0, str(SCRIPTS))
 import corrections  # noqa: E402
@@ -28,9 +28,9 @@ SHARED = "shared-token-for-tests-0123456789"
 
 def _env(tmp: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.endswith(("_API_KEY", "_BASE_URL"))}
-    env.update({"HOME": str(tmp / "home"), "KROUTER_CACHE_DIR": str(tmp / "cache"),
-                "KROUTER_STATE_DIR": str(tmp / "state"), "KROUTER_VAULT_FILE": str(tmp / "no-vault-file"),
-                "KROUTER_NO_QUERY_LOG": "1", "GIT_CONFIG_GLOBAL": str(tmp / "home/.gitconfig"),
+    env.update({"HOME": str(tmp / "home"), "LMEMORY_CACHE_DIR": str(tmp / "cache"),
+                "LMEMORY_STATE_DIR": str(tmp / "state"), "LMEMORY_VAULT_FILE": str(tmp / "no-vault-file"),
+                "LMEMORY_NO_QUERY_LOG": "1", "GIT_CONFIG_GLOBAL": str(tmp / "home/.gitconfig"),
                 "GIT_CONFIG_NOSYSTEM": "1"})
     env.pop("OBSIDIAN_VAULT", None)
     (tmp / "home").mkdir(exist_ok=True)
@@ -116,11 +116,11 @@ def test_who_is_recorded_on_page_ledger_journal_and_git(team_server):
     url, vault, tok = team_server["url"], team_server["vault"], team_server["tokens"]
     _post(url, tok["alice"], "initialize", {"protocolVersion": "2025-06-18", "clientInfo": {"name": "claude-code"}})
     _post(url, tok["bob"], "initialize", {"protocolVersion": "2025-06-18", "clientInfo": {"name": "codex"}})
-    text, err = _tool(url, tok["alice"], "krouter_note", text="发版前先跑冒烟测试", kind="decision")
+    text, err = _tool(url, tok["alice"], "lmemory_note", text="发版前先跑冒烟测试", kind="decision")
     assert not err and "by: alice" in text
-    text, err = _tool(url, tok["bob"], "krouter_note", text="周会改到周二")
+    text, err = _tool(url, tok["bob"], "lmemory_note", text="周会改到周二")
     assert not err and "by: bob" in text
-    text, err = _tool(url, SHARED, "krouter_note", text="共享令牌也能记")
+    text, err = _tool(url, SHARED, "lmemory_note", text="共享令牌也能记")
     assert not err and "by:" not in text
     page = next((vault / "05 时间日志/会话摘录").glob("*agent 记下.md")).read_text(encoding="utf-8")
     assert "发版前先跑冒烟测试 — 来自 alice（MCP，claude-code）" in page  # 各人的客户端名不串
@@ -134,9 +134,9 @@ def test_who_is_recorded_on_page_ledger_journal_and_git(team_server):
     assert [r["seq"] for r in rows] == [1, 2, 3] and len({r["run"] for r in rows}) == 3
     authors = _git(vault, "log", "--format=%an", "-6").split()
     assert authors.count("alice") == 2 and authors.count("bob") == 2  # 笔记的提交和变更记录的提交
-    text, _ = _tool(url, tok["carol"], "krouter_changes", who="alice")
-    assert text.startswith("vault_label: team\n") and "changes: 1" in text and "alice via claude-code: krouter_note" in text
-    text, _ = _tool(url, tok["carol"], "krouter_changes", text="周会")
+    text, _ = _tool(url, tok["carol"], "lmemory_changes", who="alice")
+    assert text.startswith("vault_label: team\n") and "changes: 1" in text and "alice via claude-code: lmemory_note" in text
+    text, _ = _tool(url, tok["carol"], "lmemory_changes", text="周会")
     assert "bob via codex" in text and "alice" not in text
 
 
@@ -144,11 +144,11 @@ def test_read_role_cannot_write_and_tokens_never_reach_the_log(team_server):
     url, tok = team_server["url"], team_server["tokens"]
     code, reply = _post(url, tok["carol"], "tools/list")
     names = {t["name"] for t in reply["result"]["tools"]}
-    assert "krouter_note" not in names and "krouter_correct" not in names and "krouter_changes" in names
-    text, err = _tool(url, tok["carol"], "krouter_note", text="不该写进去")
+    assert "lmemory_note" not in names and "lmemory_correct" not in names and "lmemory_changes" in names
+    text, err = _tool(url, tok["carol"], "lmemory_note", text="不该写进去")
     assert err and "read-only" in text
     code, reply = _post(url, tok["alice"], "tools/list")
-    assert {"krouter_note", "krouter_correct", "krouter_changes"} <= {t["name"] for t in reply["result"]["tools"]}
+    assert {"lmemory_note", "lmemory_correct", "lmemory_changes"} <= {t["name"] for t in reply["result"]["tools"]}
     assert _post(url, "not-a-token-of-anyone-at-all", "ping")[0] == 401
     assert _post(url, None, "ping")[0] == 401
     team_server["proc"].terminate()
@@ -184,10 +184,10 @@ def test_a_token_opens_only_its_banks(tmp_path):
 def test_contradicting_corrections_later_one_holds_and_both_are_kept(team_server):
     url, vault, tok = team_server["url"], team_server["vault"], team_server["tokens"]
     old = dict(old="数据库用 SQLite", page="01 项目/数据库选型.md")
-    first, err = _tool(url, tok["alice"], "krouter_correct", new="数据库改用 Postgres", **old)
+    first, err = _tool(url, tok["alice"], "lmemory_correct", new="数据库改用 Postgres", **old)
     assert not err and "conflict:" not in first
     # bob 也是照着原来那页（他早先查到的）改的：那页已被 alice 取代
-    second, err = _tool(url, tok["bob"], "krouter_correct", new="数据库改用 MySQL", **old)
+    second, err = _tool(url, tok["bob"], "lmemory_correct", new="数据库改用 MySQL", **old)
     assert not err
     a_page = first.split("\n", 1)[0].removeprefix("corrected: ")
     b_page = second.split("\n", 1)[0].removeprefix("corrected: ")
@@ -201,9 +201,9 @@ def test_contradicting_corrections_later_one_holds_and_both_are_kept(team_server
     assert (b_meta["status"], b_meta["author"], b_meta["how"]) == ("active", "bob", "现在：数据库改用 MySQL")
     assert a_page.removesuffix(".md") in b_meta["supersedes"] and "01 项目/数据库选型" in b_meta["supersedes"]
     assert p_meta["superseded_by"] == f"[[{a_page.removesuffix('.md')}]]"  # 原页的链不改：P → alice → bob
-    text, _ = _tool(url, tok["carol"], "krouter_changes", page="01 项目/数据库选型.md")
+    text, _ = _tool(url, tok["carol"], "lmemory_changes", page="01 项目/数据库选型.md")
     assert "changes: 2" in text and "conflict: replaced" in text and text.index("bob") < text.index("alice")
-    ask, _ = _tool(url, tok["carol"], "krouter_ask", query="数据库选型现在用什么")
+    ask, _ = _tool(url, tok["carol"], "lmemory_ask", query="数据库选型现在用什么")
     assert f"- {b_page} " in ask and "how: 现在：数据库改用 MySQL" in ask
     assert f"- {a_page} tier=" not in ask or f"- {a_page} tier=dead status=superseded" in ask  # alice 那页只能以作废出现
 

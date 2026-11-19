@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 IMPORT = SCRIPTS / "import_sessions.py"
 FOLDER = "05 时间日志/会话摘录"
 KEY = "sk-" + "Abc123XyZ" * 4
@@ -97,9 +97,9 @@ def env(tmp_path):
     vault = tmp_path / "vault"
     (vault / "05 时间日志").mkdir(parents=True)
     claude, codex, cursor = tmp_path / "claude", tmp_path / "codex", tmp_path / "cursor"
-    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CLAUDE_PROJECTS": str(claude),
-         "KROUTER_CODEX_SESSIONS": str(codex), "KROUTER_CURSOR_PROJECTS": str(cursor),
-         "KROUTER_STATE_DIR": str(tmp_path / "state"), "KROUTER_NO_QUERY_LOG": "1"}
+    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CLAUDE_PROJECTS": str(claude),
+         "LMEMORY_CODEX_SESSIONS": str(codex), "LMEMORY_CURSOR_PROJECTS": str(cursor),
+         "LMEMORY_STATE_DIR": str(tmp_path / "state"), "LMEMORY_NO_QUERY_LOG": "1"}
     return {"vault": vault, "claude": claude, "codex": codex, "cursor": cursor, "env": e}
 
 
@@ -123,7 +123,7 @@ def test_import_keeps_asks_and_closing_answers_only_and_redacts(env):
     assert out["pages"] == 2 and out["agents"] == ["claude-code", "codex"] and out["chars"] == 0
     pages = _pages(env)
     claude_page = next(v for k, v in pages.items() if "发版流程" in k)
-    assert "source: krouter-import" in claude_page and "title: 发版流程" in claude_page
+    assert "source: lmemory-import" in claude_page and "title: 发版流程" in claude_page
     assert "发版流程怎么定" in claude_page and "定了：发版只从 main 打 tag。" in claude_page
     assert KEY not in claude_page and "<redacted>" in claude_page
     for noise in ("secret plan", "tool output here", "subagent prompt", "background task", "/clear"):
@@ -207,8 +207,8 @@ def test_distill_puts_decisions_on_top_and_keeps_them(env, monkeypatch):
     sent = []
     monkeypatch.setattr(llm, "complete", lambda prompt, vault=None: sent.append(prompt) or
                         "好的：\n- 发版只从 main 打 tag（10:05）\n- 原来手动发 → 改成 CI 发（10:05）\n总结完毕")
-    for k in ("OBSIDIAN_VAULT", "KROUTER_CLAUDE_PROJECTS", "KROUTER_CODEX_SESSIONS", "KROUTER_CURSOR_PROJECTS",
-              "KROUTER_STATE_DIR"):
+    for k in ("OBSIDIAN_VAULT", "LMEMORY_CLAUDE_PROJECTS", "LMEMORY_CODEX_SESSIONS", "LMEMORY_CURSOR_PROJECTS",
+              "LMEMORY_STATE_DIR"):
         monkeypatch.setenv(k, env["env"][k])
     monkeypatch.setattr(sys, "argv", ["import_sessions.py", "--distill"])
     assert imp.main() == 0
@@ -232,7 +232,7 @@ def test_imported_page_answers_a_question_through_the_router(env, tmp_path):
     _claude_session(env["claude"], "aaaa1111-s", 1, title="发版流程")
     _run(env)
     res = subprocess.run([sys.executable, str(SCRIPTS / "route_knowledge.py"), "search", "发版只从 main 打 tag 吗"],
-                         env={**env["env"], "KROUTER_CACHE_DIR": str(tmp_path / "cache")},
+                         env={**env["env"], "LMEMORY_CACHE_DIR": str(tmp_path / "cache")},
                          capture_output=True, text=True, timeout=120)
     assert res.returncode == 0, res.stderr
     assert "05 时间日志/会话摘录/" in res.stdout.split("recall:", 1)[1].splitlines()[1]
@@ -363,8 +363,8 @@ def test_a_session_that_grew_sends_only_its_new_turns(env, monkeypatch):
         return "- 发版只从 main 打 tag（09:05）" if reply["n"] <= 2 else "- 灰度先放 10%（11:05）"
 
     monkeypatch.setattr(llm, "complete", fake)
-    for k in ("OBSIDIAN_VAULT", "KROUTER_CLAUDE_PROJECTS", "KROUTER_CODEX_SESSIONS", "KROUTER_CURSOR_PROJECTS",
-              "KROUTER_STATE_DIR"):
+    for k in ("OBSIDIAN_VAULT", "LMEMORY_CLAUDE_PROJECTS", "LMEMORY_CODEX_SESSIONS", "LMEMORY_CURSOR_PROJECTS",
+              "LMEMORY_STATE_DIR"):
         monkeypatch.setenv(k, env["env"][k])
     monkeypatch.setattr(sys, "argv", ["import_sessions.py", "--distill"])
     assert imp.main() == 0

@@ -1,5 +1,7 @@
 # A memory for a team
 
+> Historical benchmark and client records on this page come from upstream. The README specifies the Lmemory build and its verification.
+
 > **Experimental.** Tested on one machine only; no real team has used it over weeks; the Kubernetes manifest and the systemd unit are checked by tests and have never been run on a cluster or a host.
 
 One person's memory stays on their machine. A team shares a second memory: a folder of Markdown in its own git
@@ -18,6 +20,8 @@ service; you run the server.
 Every answer from the team server starts with `vault_label: team`, and the personal server can say
 `vault_label: personal` (`--label personal`), so an answer always says which memory it came from.
 
+Build the example image from this checkout with `docker build -t lmemory:local .`. Kubernetes nodes need access to the image you build.
+
 ## 1. The team vault
 
 A git repository with the same layout as a personal vault (copy `template/` or `template-zh/` to start). Decisions
@@ -34,18 +38,18 @@ On any machine the team can reach (a small VM is plenty; see the numbers below):
 
 ```bash
 git clone git@github.com:your-org/team-vault.git /srv/team-vault
-openssl rand -hex 24 > /etc/krouter/token && chmod 600 /etc/krouter/token
-python3 skill/krouter/scripts/mcp_server.py --http 0.0.0.0:8787 \
-  --vault /srv/team-vault --label team --token-file /etc/krouter/token
+openssl rand -hex 24 > /etc/lmemory/token && chmod 600 /etc/lmemory/token
+python3 skill/lmemory/scripts/mcp_server.py --http 0.0.0.0:8787 \
+  --vault /srv/team-vault --label team --token-file /etc/lmemory/token
 ```
 
 or with Docker (the image is built and smoke-tested on every release, with a build-provenance attestation). The
-container runs as user 10001, so give it the token file (`chown 10001 /etc/krouter/token`):
+container runs as user 10001, so give it the token file (`chown 10001 /etc/lmemory/token`):
 
 ```bash
-docker run -d --name krouter-team --restart unless-stopped -p 8787:8787 \
-  -v /srv/team-vault:/vault:ro -v /etc/krouter/token:/run/secrets/krouter_token:ro \
-  ghcr.io/398894496-arch/krouter:v2.1.2
+docker run -d --name lmemory-team --restart unless-stopped -p 8787:8787 \
+  -v /srv/team-vault:/vault:ro -v /etc/lmemory/token:/run/secrets/lmemory_token:ro \
+  lmemory:local
 ```
 
 Keep the vault current with a pull every few minutes (cron, a systemd timer, or a CI job):
@@ -62,7 +66,7 @@ itself speaks plain HTTP. What the server does on its own:
 - binds to `127.0.0.1` unless you name another address, and refuses to start on another address without
   `--token-file`; every `POST /mcp` must carry `Authorization: Bearer <token>` (compared in constant time);
 - rejects browser origins other than localhost unless you list them with `--allow-origin` (DNS-rebinding guard);
-- serves only the two read-only tools, `krouter_ask` and `krouter_status` (`--allow-write` adds `krouter_note`);
+- serves only the two read-only tools, `lmemory_ask` and `lmemory_status` (`--allow-write` adds `lmemory_note`);
   bodies over 1 MB are refused;
 - logs one JSON line per request to stderr with a SHA-256 prefix of the question, never the question; it does not
   write questions to the query log either (`--log-queries` turns that on, for a team that wants nightly learning);
@@ -77,10 +81,10 @@ To change the token, write a new one to the file and restart the server.
 customer, each at its own URL and, if you like, with its own token.
 
 ```bash
-python3 skill/krouter/scripts/mcp_server.py --http 0.0.0.0:8787 \
-  --bank team=/srv/team-vault --bank-token team=/etc/krouter/team.token \
-  --bank ops=/srv/ops-vault   --bank-token ops=/etc/krouter/ops.token
-# → https://krouter.your-team.example/mcp/team and …/mcp/ops
+python3 skill/lmemory/scripts/mcp_server.py --http 0.0.0.0:8787 \
+  --bank team=/srv/team-vault --bank-token team=/etc/lmemory/team.token \
+  --bank ops=/srv/ops-vault   --bank-token ops=/etc/lmemory/ops.token
+# → https://lmemory.your-team.example/mcp/team and …/mcp/ops
 ```
 
 Each bank has its own index (the cache is keyed by the vault's path), answers only from its own pages, and stamps its
@@ -88,10 +92,10 @@ name on every receipt (`vault_label: ops`). A token opens only its own bank; a b
 `--token-file`, and the server refuses to start off loopback while any bank has neither. With banks there is no bare
 `/mcp`. `GET /healthz` lists each bank and whether its folder is there.
 
-**Monitoring.** `GET /metrics` is Prometheus text: `krouter_tool_calls_total{vault,tool,outcome}`,
-`krouter_refusals_total{vault}` (answers that were `recall: none`), `krouter_request_seconds` (a histogram per vault),
-`krouter_index_build_seconds{vault}`, `krouter_lookup_workers{vault}` (resident lookup processes) and
-`krouter_uptime_seconds`. It holds counts only, never a question; when the
+**Monitoring.** `GET /metrics` is Prometheus text: `lmemory_tool_calls_total{vault,tool,outcome}`,
+`lmemory_refusals_total{vault}` (answers that were `recall: none`), `lmemory_request_seconds` (a histogram per vault),
+`lmemory_index_build_seconds{vault}`, `lmemory_lookup_workers{vault}` (resident lookup processes) and
+`lmemory_uptime_seconds`. It holds counts only, never a question; when the
 server has tokens, it takes any of them (`authorization: {credentials_file: …}` in the Prometheus scrape config).
 
 **Resident lookups.** Each bank keeps up to 4 lookup processes (`--workers N`; started as callers arrive, so an
@@ -102,20 +106,20 @@ is the old way for every call.
 
 **Compose, Kubernetes, systemd.** [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) runs the server with
 two banks, read-only and as user 10001, next to a small container that pulls each vault every five minutes.
-[`deploy/kubernetes/krouter.yaml`](../deploy/kubernetes/krouter.yaml) is the same as a Deployment (an init container
+[`deploy/kubernetes/lmemory.yaml`](../deploy/kubernetes/lmemory.yaml) is the same as a Deployment (an init container
 clones each vault, a sidecar pulls it, tokens and the deploy key from Secrets, read-only root filesystem, `/healthz`
-probes, Prometheus annotations) and a Service. [`deploy/systemd/krouter.service`](../deploy/systemd/krouter.service)
+probes, Prometheus annotations) and a Service. [`deploy/systemd/lmemory.service`](../deploy/systemd/lmemory.service)
 runs it on a Linux host with the vaults on disk, as its own user with `ProtectSystem=strict` and the vaults read-only.
 The Compose file is checked with `docker compose config`; the Kubernetes manifest and the unit are checked by
 `tests/test_deploy.py` (shape, probes, read-only mounts, and that every flag they pass exists), not yet applied to a
 cluster or a systemd host by us. The multi-bank server itself is tested in `tests/test_mcp_banks.py`.
 
-| Running it | What KRouter does |
+| Running it | What Lmemory does |
 |---|---|
 | Storage | Markdown files in a git repository you own; the index is a rebuildable SQLite cache |
 | Isolation | one bank per memory: own URL, own token, own index, own label on every answer |
 | Access | a token per person or agent (`--users`: only hashes kept, `read` or `write`, which banks), or one shared token per bank or server; constant-time compare; loopback only without one; origin check |
-| Attribution | every write names its person on the page, in the change ledger, in a journal (`krouter_changes`) and as the git author; two corrections of one thing: the later holds, the earlier is kept and named ([§2c](#2c-one-token-per-person-who-changed-what-and-conflicting-corrections)) |
+| Attribution | every write names its person on the page, in the change ledger, in a journal (`lmemory_changes`) and as the git author; two corrections of one thing: the later holds, the earlier is kept and named ([§2c](#2c-one-token-per-person-who-changed-what-and-conflicting-corrections)) |
 | Monitoring | `/metrics` (Prometheus), `/healthz`, one JSON access-log line per request with a hash of the question |
 | Deployment | `python3 mcp_server.py --http`, the Docker image (non-root, read-only vault, provenance attestation), Compose, Kubernetes, systemd |
 | Scale | over HTTP, 10,000 pages: 13 ms per lookup (median), 301 answers/s with 32 callers; 50,000: 54 ms, 75/s ([§4](#4-how-big-it-can-get)); ten people reading and writing at once: [§5](#5-ten-people-at-once) |
@@ -128,17 +132,17 @@ cluster or a systemd host by us. The multi-bank server itself is tested in `test
 the token goes to a new file (mode 600) for you to hand over:
 
 ```bash
-python3 skill/krouter/scripts/team.py add-user --users /etc/krouter/users alice --token-out alice.token
-python3 skill/krouter/scripts/team.py add-user --users /etc/krouter/users ci-bot --role read --banks team --token-out ci.token
-python3 skill/krouter/scripts/mcp_server.py --http 0.0.0.0:8787 --vault /srv/team-vault --label team \
-  --users /etc/krouter/users --allow-write
-python3 skill/krouter/scripts/team.py remove-user --users /etc/krouter/users alice   # her token stops at once
+python3 skill/lmemory/scripts/team.py add-user --users /etc/lmemory/users alice --token-out alice.token
+python3 skill/lmemory/scripts/team.py add-user --users /etc/lmemory/users ci-bot --role read --banks team --token-out ci.token
+python3 skill/lmemory/scripts/mcp_server.py --http 0.0.0.0:8787 --vault /srv/team-vault --label team \
+  --users /etc/lmemory/users --allow-write
+python3 skill/lmemory/scripts/team.py remove-user --users /etc/lmemory/users alice   # her token stops at once
 ```
 
-In Docker, mount the file read-only too (`-v /etc/krouter/users:/run/secrets/krouter_users:ro`) and end the `docker
-run` line with `--label team --users /run/secrets/krouter_users` (plus `--allow-write` and a read-write vault mount,
+In Docker, mount the file read-only too (`-v /etc/lmemory/users:/run/secrets/lmemory_users:ro`) and end the `docker
+run` line with `--label team --users /run/secrets/lmemory_users` (plus `--allow-write` and a read-write vault mount,
 not `:ro`, for a server that writes). The image's entry point still reads the shared token at
-`/run/secrets/krouter_token`, which keeps working beside the personal ones. (Personal tokens were tested with the
+`/run/secrets/lmemory_token`, which keeps working beside the personal ones. (Personal tokens were tested with the
 Python server; not yet inside the image.)
 
 One line per person: `name|sha256:<hex>|write or read|* or bank names`. The server re-reads the file when it changes,
@@ -156,9 +160,9 @@ name.
 | The page | a note ends `— 来自 alice（MCP，claude-code）`; a correction page has `author:` and `written_at:`; a page it replaces gets `superseded_by_author:` |
 | The change ledger | `90 系统文件/自动化/记忆变更记录.md`: the person, their app, the pages, the undo command |
 | The journal | `90 系统文件/自动化/团队变更.jsonl`, one JSON line per write: `seq` (arrival order), `at` (UTC, ms), `who`, `via` (app), `auth` (`user`, `shared-token`, `open`), `tool`, `run`, `pages`, `text` (redacted, 200 characters), `supersedes`, `conflicts` |
-| git | the commit's author is the person (`alice <alice@krouter.invalid>`; the committer stays `krouter-capture`), tagged `[krouter-run <id>]` |
+| git | the commit's author is the person (`alice <alice@lmemory.invalid>`; the committer stays `lmemory-capture`), tagged `[lmemory-run <id>]` |
 
-"Who changed this page, and when": the `krouter_changes` tool (by page, by person, or by words of the note; read-only,
+"Who changed this page, and when": the `lmemory_changes` tool (by page, by person, or by words of the note; read-only,
 offered on a team server that has a users file or allows writes), `team.py changes --vault /srv/team-vault --page
 "01 项目/数据库选型.md"`, or `git log`.
 
@@ -180,7 +184,7 @@ named in the later one's reply. Concretely, when a correction names a page:
 The reply then has a line such as `conflict: 05 时间日志/会话摘录/…｜纠正｜数据库改用 Postgres.md by alice at
 2026-11-10T09:12:03.120+08:00 said "数据库改用 Postgres"; stale: the page named was already superseded. Rule: the
 later correction holds; that page is kept, marked superseded.` The journal row carries the same, and `/metrics`
-counts `krouter_correction_conflicts_total`. Nothing is deleted: every correction stays on disk and in git, and one
+counts `lmemory_correction_conflicts_total`. Nothing is deleted: every correction stays on disk and in git, and one
 run can be undone on its own. A page in force that is long and is not a correction page is never voided whole: the
 reply says `still active (a long page): read both`. "Later" means arrival at the server, not when the person typed it;
 the rule settles which correction is in force, not which one is right.
@@ -201,11 +205,11 @@ Add the team server as a second MCP server, next to the personal one:
 
 ```bash
 # Claude Code (tested end to end against this server)
-claude mcp add --transport http krouter-team https://krouter.your-team.example/mcp \
-  --header "Authorization: Bearer $KROUTER_TEAM_TOKEN"
+claude mcp add --transport http lmemory-team https://lmemory.your-team.example/mcp \
+  --header "Authorization: Bearer $LMEMORY_TEAM_TOKEN"
 
 # Codex
-codex mcp add krouter-team --url https://krouter.your-team.example/mcp --bearer-token-env-var KROUTER_TEAM_TOKEN
+codex mcp add lmemory-team --url https://lmemory.your-team.example/mcp --bearer-token-env-var LMEMORY_TEAM_TOKEN
 ```
 
 Any app that takes a remote ("Streamable HTTP") MCP server with a header takes the same URL and token. Questions to
@@ -214,7 +218,7 @@ go only to the server you run.
 
 **Tested:** the HTTP transport with a plain client (`tests/test_mcp_http.py`: token, health, bad requests, parallel
 calls during an index update, the access log), the Docker image (`scripts/docker_smoke.sh`), and Claude Code 2.1
-calling `krouter_ask` through `--transport http` with a bearer header. **Not yet:** Codex end to end (our one run
+calling `lmemory_ask` through `--transport http` with a bearer header. **Not yet:** Codex end to end (our one run
 timed out before the first call), and other remote-MCP apps.
 
 ## 4. How big it can get
@@ -222,7 +226,7 @@ timed out before the first call), and other remote-MCP apps.
 Measured on synthetic vaults (the template plus N generated pages) on an Apple M2 laptop with 8 GB of memory, the
 server and its callers on the same machine.
 
-**The server**, as a team uses it (`bench/scale/serve_load.py`: `krouter_ask` over HTTP, 4 resident lookup processes,
+**The server**, as a team uses it (`bench/scale/serve_load.py`: `lmemory_ask` over HTTP, 4 resident lookup processes,
 300 calls per row, none failed):
 
 | Pages | One caller: median, answers/s | 8 callers: answers/s | 32 callers: median, p95, answers/s | Resident memory | Ready after |
@@ -240,7 +244,7 @@ hold the question, found in the index, instead of every file; it prints the same
 on 2,442 pieces of real page text and in `tests/test_resident_lookups.py`). A resident process also no longer keeps
 every SQLite connection it opened (each was about 2.7 MB until the garbage collector ran).
 
-**One lookup in its own process**, as an agent's skill rule or `krouter ask` runs it (`bench/scale/run.py`, 30
+**One lookup in its own process**, as an agent's skill rule or `lmemory ask` runs it (`bench/scale/run.py`, 30
 lookups):
 
 | Pages | First lookup (builds the index) | Later lookups, p50 / p95 | Peak memory | Index on disk |
@@ -278,7 +282,7 @@ correct one shared line of a long page; correct one decision, all naming its ori
 the first contradicts one already in force), then a seeded mix of 40 operations each (60 % asks, 20 % notes, 10 %
 corrections of the client's own lines on the shared page, 5 % of the decision, 5 % of the shared line). Apple M2,
 8 GB, server and clients on one machine, which was busy with other test runs (load average 5 to 14). Default server
-settings (4 lookup processes). KRouter at `c255760`.
+settings (4 lookup processes). Lmemory at `c255760`.
 
 | Pages | Reads p50 / p95 / p99 | Writes p50 / p95 / p99 | Done per second (mix): all, reads, writes | Errors | Ready after |
 |---|---|---|---|---|---|
@@ -317,7 +321,7 @@ among 544 replaced ones. All three are fixed (§2c) and have tests.
 **The CI test** (`tests/test_team_concurrency.py`) runs the same harness on the template vault with 8 mixed operations
 per client and two seeds, and asserts every property above, on Linux, macOS and Windows. **Identity and the conflict
 rule** are tested in `tests/test_team_identity.py` (hashes only, the shared token still working, read-only tokens,
-bank limits, re-reading the users file, the journal, git authors, `krouter_changes`, both conflict cases).
+bank limits, re-reading the users file, the journal, git authors, `lmemory_changes`, both conflict cases).
 
 Rerun:
 
@@ -346,18 +350,18 @@ pushes from people to the same git remote.
 ## The team server at a glance (moved from the README)
 
 One server holds the memories of a team, each one a folder of Markdown in its own git repository; everyone's agent
-asks it over MCP. It is self-hosted: there is no KRouter cloud.
+asks it over MCP. It is self-hosted: there is no Lmemory cloud.
 
 | | |
 |---|---|
-| **Deploy** | `mcp_server.py --http` (standard-library Python, no packages), the Docker image `ghcr.io/398894496-arch/krouter`, [Compose](../deploy/docker-compose.yml) (two memories and a git-pull sidecar), a [Kubernetes manifest](../deploy/kubernetes/krouter.yaml), a hardened [systemd unit](../deploy/systemd/krouter.service) |
+| **Deploy** | `mcp_server.py --http` (standard-library Python, no packages), the Docker image `lmemory:local`, [Compose](../deploy/docker-compose.yml) (two memories and a git-pull sidecar), a [Kubernetes manifest](../deploy/kubernetes/lmemory.yaml), a hardened [systemd unit](../deploy/systemd/lmemory.service) |
 | **Isolation** | several memories ("banks") on one server, each at `/mcp/NAME` with its own index, its own label on every answer and its own token; one bank's lookups never read another's folder |
 | **Auth** | a token per person or agent (`--users`: only hashes kept, read or write, limited to some memories if you like), or one shared token per memory, or both; the server refuses to listen beyond this machine while any memory has none; browser Origins allow-listed; the access log keeps a hash of each question and the person's name, never the text or a token |
-| **Attribution** | every write names who made it: on the page, in the change ledger, in a journal (`krouter_changes`: who changed this, and when) and as the git author; two people correcting one thing in opposite ways: the later holds, the earlier is kept as superseded and named in the reply |
+| **Attribution** | every write names who made it: on the page, in the change ledger, in a journal (`lmemory_changes`: who changed this, and when) and as the git author; two people correcting one thing in opposite ways: the later holds, the earlier is kept as superseded and named in the reply |
 | **Speed** | below, measured; 4 resident lookup processes per memory (`--workers`), so a lookup does not start Python |
 | **Freshness** | files re-checked at most every 2 s (`--refresh-every`); a note written through the server is found by the very next lookup; Compose and Kubernetes pull each repository every 5 minutes |
 | **Monitoring** | `GET /healthz`; Prometheus `GET /metrics`: calls by memory, tool and outcome, refusals, a latency histogram, index build time, lookup processes |
-| **Writes** | read-only by default; `--allow-write` offers `krouter_note` and `krouter_correct`: one write at a time, one git commit each, listed in the change ledger; a `read` token is not offered them |
+| **Writes** | read-only by default; `--allow-write` offers `lmemory_note` and `lmemory_correct`: one write at a time, one git commit each, listed in the change ledger; a `read` token is not offered them |
 | **Backup, rollback** | the memory is the git repository: back it up like code, take a change back with `git revert`; the index is a cache rebuilt from the folder |
 
 Measured with [`bench/scale/serve_load.py`](../bench/scale/serve_load.py) on synthetic memories, one Apple M2 laptop

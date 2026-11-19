@@ -1,7 +1,7 @@
 {
-  "name": "dsh-krouter",
+  "name": "dsh-lmemory",
   "version": "2.1.2",
-  "description": "KRouter DSH socket (same product as the repo root: router + writer). Not a second project.",
+  "description": "Lmemory DSH socket (same product as the repo root: router + writer). Not a second project.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -32,17 +32,18 @@
     "dsh-plugin",
     "deepseek-harness",
     "obsidian",
-    "krouter",
+    "lmemory",
     "knowledge-base",
     "memory-system",
     "second-brain",
     "self-evolution",
     "agent-memory"
   ],
+  "author": "Tink",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/398894496-arch/KRouter.git",
+    "url": "https://github.com/TinkCarlos/Lmemory.git",
     "directory": "extras/dsh"
   }
 }

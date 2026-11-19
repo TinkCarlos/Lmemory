@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 IMPORT = SCRIPTS / "import_claude_mem.py"
 KEY = "sk-" + "Zyx987AbC" * 4
 DAY = 86_400_000
@@ -65,9 +65,9 @@ def _db(path: Path, old: bool = False) -> Path:
 def env(tmp_path):
     vault = tmp_path / "vault"
     shutil.copytree(REPO / "template", vault)
-    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(tmp_path / "state"),
-         "KROUTER_NO_QUERY_LOG": "1", "KROUTER_CACHE_DIR": str(tmp_path / "cache"),
-         "KROUTER_CLAUDE_MEM_DB": str(_db(tmp_path / "claude-mem.db"))}
+    e = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(tmp_path / "state"),
+         "LMEMORY_NO_QUERY_LOG": "1", "LMEMORY_CACHE_DIR": str(tmp_path / "cache"),
+         "LMEMORY_CLAUDE_MEM_DB": str(_db(tmp_path / "claude-mem.db"))}
     return {"vault": vault, "env": e, "tmp": tmp_path}
 
 
@@ -86,7 +86,7 @@ def _pages(vault: Path, folder: str) -> dict[str, str]:
 @pytest.mark.parametrize("old", [False, True])
 def test_import_both_schema_generations(env, old):
     if old:
-        env["env"]["KROUTER_CLAUDE_MEM_DB"] = str(_db(env["tmp"] / "old.db", old=True))
+        env["env"]["LMEMORY_CLAUDE_MEM_DB"] = str(_db(env["tmp"] / "old.db", old=True))
     out = _run(env)
     assert out["sessions"] == 3 and out["projects"] == 2 and out["decisions"] == 4 and out["chars"] == 0  # 3 条 decision + 1 条 bugfix；discovery 不收
     logs = _pages(env["vault"], "05 时间日志/claude-mem")
@@ -96,12 +96,12 @@ def test_import_both_schema_generations(env, old):
     assert KEY not in release and "<redacted>" in release
     rules = _pages(env["vault"], "02 经验与方法/从 claude-mem 导入")
     shop = rules["shop 的决定（claude-mem）.md"]
-    assert "status: candidate" in shop and "source: krouter-claude-mem" in shop
+    assert "status: candidate" in shop and "source: lmemory-claude-mem" in shop
     assert shop.index("Ship only from a tag on main") < shop.index("Ship from any branch")  # 新的在前
 
 
 def test_read_only_dry_run_and_foreign_pages(env):
-    db = Path(env["env"]["KROUTER_CLAUDE_MEM_DB"])
+    db = Path(env["env"]["LMEMORY_CLAUDE_MEM_DB"])
     before = db.read_bytes()
     out = _run(env, "--dry-run")
     assert out["claude_mem"] == "dry-run" and not (env["vault"] / "05 时间日志/claude-mem").exists()
@@ -115,7 +115,7 @@ def test_read_only_dry_run_and_foreign_pages(env):
 
 
 def test_absent_database_and_nightly_consent(env):
-    assert _run(env, extra={"KROUTER_CLAUDE_MEM_DB": str(env["tmp"] / "nope.db")})["claude_mem"] == "absent"
+    assert _run(env, extra={"LMEMORY_CLAUDE_MEM_DB": str(env["tmp"] / "nope.db")})["claude_mem"] == "absent"
     assert _run(env, "--nightly")["claude_mem"] == "off"
     _run(env, "--consent")
     assert _run(env, "--nightly")["claude_mem"] == "done"
@@ -131,7 +131,7 @@ def test_distill_sorts_out_what_was_replaced(env, monkeypatch):
     sent = []
     monkeypatch.setattr(llm, "complete", lambda prompt, vault=None: sent.append(prompt) or
                         "- 只从 main 上的 tag 发版，CI 发布（#3，近日）\n- 原来手动打 tag → 改成 CI 发版（#1 → #3）\n以上")
-    for k in ("OBSIDIAN_VAULT", "KROUTER_STATE_DIR", "KROUTER_CLAUDE_MEM_DB"):
+    for k in ("OBSIDIAN_VAULT", "LMEMORY_STATE_DIR", "LMEMORY_CLAUDE_MEM_DB"):
         monkeypatch.setenv(k, env["env"][k])
     monkeypatch.setattr(sys, "argv", ["import_claude_mem.py", "--distill"])
     assert icm.main() == 0
@@ -171,7 +171,7 @@ def test_same_project_name_in_two_repos_stays_two_pages(env):
                     (i, f"m{i}", f"{who} decision", now))
     con.commit()
     con.close()
-    out = _run(env, extra={"KROUTER_CLAUDE_MEM_DB": str(db)})
+    out = _run(env, extra={"LMEMORY_CLAUDE_MEM_DB": str(db)})
     assert out["projects"] == 2
     pages = _pages(env["vault"], "02 经验与方法/从 claude-mem 导入")
     assert len(pages) == 2

@@ -6,7 +6,7 @@ card_id: C01
 when: changed it but nothing happened; still the old behaviour; the edit did not take
 source_ref: "[[05 时间日志/会话摘录/example C01]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When a change has no effect, check which copy is actually read

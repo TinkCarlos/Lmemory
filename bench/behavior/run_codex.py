@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run one behaviour set on the Codex CLI: every scenario once, in its own throwaway project, memory folder and Codex
-home, with KRouter installed the way the README says (`scripts/bootstrap.py --apps codex`, so its MCP server and its
-session hooks are what Codex gets). Nothing says "use krouter": the prompt is the scenario's own sentence.
+home, with Lmemory installed the way the README says (`scripts/bootstrap.py --apps codex`, so its MCP server and its
+session hooks are what Codex gets). Nothing says "use lmemory": the prompt is the scenario's own sentence.
 
     python3 bench/behavior/run_codex.py SET.json WORKDIR [--only ID,ID] [--jobs 4]
 
@@ -9,7 +9,7 @@ WORKDIR must be outside the user's home tree (Codex reads `.codex/config.toml` a
 HOME is a folder of its own, so none of the user's skills (`~/.agents/skills`), instructions or memory folders load
 (a first run with the real HOME read the user's real vault through their skill: do not do that). The Codex login is
 reached through a symlink to the real auth file (never copied, never printed), `~/Library` through another (Codex's
-helper process needs it), and KROUTER_VAULT / XDG_CONFIG_HOME / KROUTER_STATE_DIR point the hooks and the MCP server at
+helper process needs it), and LMEMORY_VAULT / XDG_CONFIG_HOME / LMEMORY_STATE_DIR point the hooks and the MCP server at
 the scenario's folders. Writes WORKDIR/<id>/record.json.
 """
 from __future__ import annotations
@@ -57,8 +57,8 @@ def run_one(sc: dict, work: Path, base: Path, timeout: int) -> dict:
     os.symlink(Path.home() / "Library", home / "Library")  # Codex's helper process needs it; without it the call times out
     shutil.copytree(base, mem, symlinks=True)
     write_project(proj, sc["files"])
-    env = clean_env({"HOME": str(home), "CODEX_HOME": str(home / ".codex"), "KROUTER_VAULT": str(mem), "XDG_CONFIG_HOME": str(home / ".config"),
-                     "KROUTER_STATE_DIR": str(d / "state"), "KROUTER_NO_QUERY_LOG": "1", "KROUTER_NO_PROMPT": "1"})
+    env = clean_env({"HOME": str(home), "CODEX_HOME": str(home / ".codex"), "LMEMORY_VAULT": str(mem), "XDG_CONFIG_HOME": str(home / ".config"),
+                     "LMEMORY_STATE_DIR": str(d / "state"), "LMEMORY_NO_QUERY_LOG": "1", "LMEMORY_NO_PROMPT": "1"})
     inst = subprocess.run([sys.executable, str(ROOT / "scripts/bootstrap.py"), "--vault", str(mem), "--lang", "en",
                            "--apps", "codex", "--no-open", "--no-timer"],
                           env=env, capture_output=True, text=True, timeout=300)

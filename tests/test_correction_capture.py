@@ -1,5 +1,5 @@
-"""`session_hook.py prompt`: a correction typed in a session is written down at once as a provisional candidate —
-local pattern match, redacted, never a model call, never a failed session; rhetorical questions and KRouter's own
+"""`lmemory_capture.py prompt`: a correction typed in a session is written down at once as a provisional candidate —
+local pattern match, redacted, never a model call, never a failed session; rhetorical questions and Lmemory's own
 model calls are not corrections."""
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-HOOK = REPO / "skill/krouter/scripts/session_hook.py"
+HOOK = REPO / "skill/lmemory/scripts/lmemory_capture.py"
 KEY = "sk-" + "Abc123XyZ" * 4
 
 
@@ -25,8 +25,8 @@ def box(tmp_path):
     state = tmp_path / "state"
     state.mkdir()
     (state / "import.json").write_text(json.dumps({"consent": True}), encoding="utf-8")
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(state), "KROUTER_NO_QUERY_LOG": "1"}
-    env.pop("KROUTER_IN_DISTILL", None)
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(state), "LMEMORY_NO_QUERY_LOG": "1"}
+    env.pop("LMEMORY_IN_DISTILL", None)
     page = vault / "05 时间日志/会话摘录" / f"{date.today().isoformat()}｜纠正候选.md"
     return {"vault": vault, "state": state, "env": env, "page": page, "tmp": tmp_path}
 
@@ -70,7 +70,7 @@ def test_two_corrections_append_to_one_page(box):
     "所以还是定时蒸馏更可靠 不是吗！",
     "这个改成 B 对不对？",
     "检查一下我本机的第二大脑 是否正常运作",
-    "给我们的KRouter跟目前市场上热门的记忆系统作一个横向对比",
+    "给我们的Lmemory跟目前市场上热门的记忆系统作一个横向对比",
 ])
 def test_questions_and_plain_requests_are_not_corrections(box, text):
     _say(box, text)
@@ -91,8 +91,8 @@ def test_nothing_without_consent(box):
     assert not box["page"].exists()
 
 
-def test_krouter_model_calls_are_not_captured(box):
-    _say(box, "下面是会话摘录：原来 A，改成 B。", env={**box["env"], "KROUTER_IN_DISTILL": "1"})
+def test_lmemory_model_calls_are_not_captured(box):
+    _say(box, "下面是会话摘录：原来 A，改成 B。", env={**box["env"], "LMEMORY_IN_DISTILL": "1"})
     assert not box["page"].exists()
 
 
@@ -129,7 +129,7 @@ def test_bad_input_never_fails_the_session(box):
 
 def test_questions_attached_blocks_and_suggestions_are_not_corrections():
     sys.path.insert(0, str(HOOK.parent))
-    import session_hook as h
+    import lmemory_capture as h
     for text in ("另外我们有 ECC 纠错吗", "这两套机器性能上应该是一样的吗？", "你要不要再去社交媒体上查一下！",
                  '<pasted_content id="p1">验收改成只记录速度</pasted_content>',
                  '<artifact-view-context artifact="a">{"mode":"edit"}</artifact-view-context>'):

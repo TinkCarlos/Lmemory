@@ -12,7 +12,7 @@ log = d / "calls.jsonl"
 if log.exists():
     for line in log.read_text(encoding="utf-8").splitlines():
         c = json.loads(line)
-        calls.append({"tool": c["tool"], "server": "krouter", "arguments": c["arguments"],
+        calls.append({"tool": c["tool"], "server": "lmemory", "arguments": c["arguments"],
                       "status": "failed" if c["error"] else "completed", "result": c["result"]})
 msg = Path(sys.argv[4]).read_text(encoding="utf-8")
 (d / "record.json").write_text(json.dumps({"id": sc["id"], "group": sc["group"], "rc": 0, "calls": calls, "messages": [msg]},

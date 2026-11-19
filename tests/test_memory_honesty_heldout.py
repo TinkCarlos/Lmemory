@@ -1,13 +1,13 @@
 """Held-out set of the memory honesty bench (bench/memory_honesty/heldout.jsonl). Rules: bench/memory_honesty/HELDOUT.md.
 
-These tests keep the set honest; they do not grade KRouter against a target. There is deliberately no floor on the
+These tests keep the set honest; they do not grade Lmemory against a target. There is deliberately no floor on the
 held-out score: a floor is something to tune toward. What is checked:
 
 - the questions, golds and the bench vault are frozen (normalized SHA-256): changing either one is a visible edit to
   this file, which HELDOUT.md says must come with a burn-log entry;
 - the set does not overlap the development questions;
 - every gold / stale path exists, and the kinds are what the set was written with;
-- a sanity guard far from any tuning target: KRouter must cite wrong pages less often, and refuse neighbours at
+- a sanity guard far from any tuning target: Lmemory must cite wrong pages less often, and refuse neighbours at
   least as often, as plain full-text search that always answers, on the same run.
 
 Assertion messages carry aggregate numbers only, never which question was missed.
@@ -25,7 +25,7 @@ spec = importlib.util.spec_from_file_location("mh_bench_heldout", HERE / "run.py
 bench = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bench)
 
-# Frozen 2026-10-12 at KRouter 1.0.1 (8c2e0cb). Do not update these to make a change pass: see HELDOUT.md.
+# Frozen 2026-10-12 at Lmemory 1.0.1 (8c2e0cb). Do not update these to make a change pass: see HELDOUT.md.
 HELDOUT_SHA256 = "4ce6fe8f2fd900e4ce77ea6a16cb9732d9d5aadad6bce886200ee6ce0ca60a2b"
 VAULT_SHA256 = "304604b9070db205b4b5fe24109b37f82660503c20b8f0cabefd42036faea1be"
 
@@ -72,9 +72,9 @@ def test_heldout_shape_and_disjoint_from_dev():
 
 def test_heldout_sanity_guard_against_plain_full_text_search():
     rows = bench.questions("heldout")
-    kr = bench.aggregate(bench.score(rows, bench.krouter_answers(rows)))
+    kr = bench.aggregate(bench.score(rows, bench.lmemory_answers(rows)))
     bm = bench.aggregate(bench.score(rows, bench.bm25_answers(rows)))
-    msg = f"held-out aggregates: krouter={kr} bm25={bm}"
+    msg = f"held-out aggregates: lmemory={kr} bm25={bm}"
     assert kr["wrong_citation_rate"] < bm["wrong_citation_rate"], msg
     assert int(kr["refused"].split("/")[0]) >= int(bm["refused"].split("/")[0]), msg
     print(msg)

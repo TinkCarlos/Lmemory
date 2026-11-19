@@ -21,7 +21,7 @@ N = len(GOLD)
 
 def test_lock_never_returns_a_neighbor_on_this_fixture():
     result = run()
-    k = result["systems"]["krouter"]
+    k = result["systems"]["lmemory"]
     assert k["n"] == N
     assert k["false_neighbor"] == 0
     assert k["slices"]["hit"]["n"] == N_HIT
@@ -55,7 +55,7 @@ def test_metadata_ablation_closes_the_supersede_gap():
 def test_after_ablation_unthresholded_cosine_does_not_refuse():
     """Same live map, no similarity floor: cosine always returns a page on the negatives."""
     result = run()
-    k = result["systems"]["krouter"]
+    k = result["systems"]["lmemory"]
     mapped = result["systems"]["tfidf_map"]
     assert k["slices"]["negative"]["n"] == N_NEGATIVE
     assert N_NEGATIVE >= 12
@@ -179,7 +179,7 @@ def test_bge_m3_floor_040_leftover_is_neighbor_b03():
     assert later["missed_hits"]
 
 
-def test_krouter_is_deterministic_on_this_map():
+def test_lmemory_is_deterministic_on_this_map():
     a = run()
     b = run()
-    assert a["systems"]["krouter"]["cases"] == b["systems"]["krouter"]["cases"]
+    assert a["systems"]["lmemory"]["cases"] == b["systems"]["lmemory"]["cases"]

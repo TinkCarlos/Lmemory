@@ -16,10 +16,10 @@ CJK = re.compile(r"[一-鿿]")
 def english(tmp_path, monkeypatch):
     import zones
 
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
     vault = tmp_path / "en"
-    zones.lay_out(REPO / "template", vault, alias_sample=REPO / "skill/krouter/scripts/canonical_sources.psv")
+    zones.lay_out(REPO / "template", vault, alias_sample=REPO / "skill/lmemory/scripts/canonical_sources.psv")
     from test_session_start import own_row
 
     own_row(vault)  # a vault in use: the index lists its topics

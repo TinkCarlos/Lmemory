@@ -1,4 +1,4 @@
-"""A correction holds in the same turn, with no key: the agent calls krouter_correct (or corrections.py apply), the
+"""A correction holds in the same turn, with no key: the agent calls lmemory_correct (or corrections.py apply), the
 vault's own supersede rule does the rest, and the next lookup no longer puts the old answer first."""
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 sys.path.insert(0, str(SCRIPTS))
 import corrections  # noqa: E402
 
@@ -28,8 +28,8 @@ def _vault(tmp_path: Path) -> Path:
 
 
 def _ask(vault: Path, tmp_path: Path, q: str) -> str:
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1",
-           "KROUTER_CACHE_DIR": str(tmp_path / "cache")}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1",
+           "LMEMORY_CACHE_DIR": str(tmp_path / "cache")}
     res = subprocess.run([sys.executable, str(SCRIPTS / "route_knowledge.py"), "search", q], env=env,
                          capture_output=True, text=True, timeout=120)
     assert res.returncode == 0, res.stderr
@@ -38,8 +38,8 @@ def _ask(vault: Path, tmp_path: Path, q: str) -> str:
 
 
 def _mcp(vault: Path, tmp_path: Path, *msgs: dict) -> list[dict]:
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1",
-           "KROUTER_CACHE_DIR": str(tmp_path / "cache")}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1",
+           "LMEMORY_CACHE_DIR": str(tmp_path / "cache")}
     data = "\n".join(json.dumps(m, ensure_ascii=False) for m in msgs) + "\n"
     res = subprocess.run([sys.executable, str(SCRIPTS / "mcp_server.py")], input=data, env=env, capture_output=True,
                          text=True, timeout=120)
@@ -53,10 +53,10 @@ def test_correct_in_session_puts_the_new_answer_before_the_old(tmp_path):
     assert _ask(vault, tmp_path, q) == OLD_PAGE  # 改之前：旧答案排第一
     out = _mcp(vault, tmp_path,
                {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-06-18"}},
-               {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "krouter_correct", "arguments": {
+               {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "lmemory_correct", "arguments": {
                    "new": "本地开发数据库以后改用 SQLite", "old": "本地开发数据库用 Postgres 16，端口 5432。",
                    "page": OLD_PAGE}}})
-    assert "krouter_correct" in out[0]["result"]["instructions"]
+    assert "lmemory_correct" in out[0]["result"]["instructions"]
     text = out[1]["result"]["content"][0]["text"]
     assert out[1]["result"]["isError"] is False and "(page)" in text
     old = (vault / OLD_PAGE).read_text(encoding="utf-8")
@@ -110,7 +110,7 @@ def test_command_line_twin(tmp_path):
 
 def _session_page(folder: Path, name: str, root: str, lines: list[str], day: str) -> Path:
     path = folder / f"{day}｜{name}.md"
-    path.write_text(f"---\ntype: session-excerpt\nsource: krouter-import\nstatus: imported\ndate: {day}\nproject: shop\n"
+    path.write_text(f"---\ntype: session-excerpt\nsource: lmemory-import\nstatus: imported\ndate: {day}\nproject: shop\n"
                     f"project_root: {root}\nhow: {lines[0]}\n---\n\n# {name}\n\n## 定了什么、改了什么（模型提炼）\n\n"
                     + "\n".join(f"- {ln}" for ln in lines) + "\n\n## 摘录\n\n- **问**：…\n", encoding="utf-8")
     return path
@@ -138,7 +138,7 @@ def test_distilled_change_of_mind_supersedes_the_page_it_replaced(tmp_path):
     text = old.read_text(encoding="utf-8")
     assert "status: superseded" in text and "superseded_by:" in text and "bbbb0002" in text
     assert "status: imported" in keep.read_text(encoding="utf-8")  # 还有一条决定没被改掉：整页不动
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_NO_QUERY_LOG": "1", "KROUTER_CACHE_DIR": str(tmp_path / "cache")}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_NO_QUERY_LOG": "1", "LMEMORY_CACHE_DIR": str(tmp_path / "cache")}
     out = subprocess.run([sys.executable, str(SCRIPTS / "route_knowledge.py"), "search", q], env=env,
                          capture_output=True, text=True, timeout=120).stdout
     hits = [ln for ln in out.split("recall:", 1)[1].splitlines() if ln.startswith("- ")]

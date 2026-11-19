@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 SAMPLE = SCRIPTS / "canonical_sources.psv"
 MY_ROW = "Q99|我的名词;my noun|02 经验与方法/经验与方法.md|Methods\n"
 
@@ -24,13 +24,13 @@ def _env(tmp: Path, vault: Path | None) -> dict:
         "HOME": str(tmp / "home"),
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
         "LANG": "en_US.UTF-8",
-        "KROUTER_SKILL_HOME": str(tmp / "home/.agents/skills/krouter"),
-        "KROUTER_CURSOR_RULE": str(tmp / "home/.cursor/rules/krouter.mdc"),
-        "KROUTER_ASK_RULE": str(tmp / "home/.cursor/rules/ask-product.mdc"),
-        "KROUTER_KEYS_ENV": str(tmp / "home/keys.env"),
-        "KROUTER_SKIP_LAUNCHD": "1",
-        "KROUTER_SKIP_TIMER": "1",
-        "KROUTER_WRITER": "/nonexistent/grok",
+        "LMEMORY_SKILL_HOME": str(tmp / "home/.agents/skills/lmemory"),
+        "LMEMORY_CURSOR_RULE": str(tmp / "home/.cursor/rules/lmemory.mdc"),
+        "LMEMORY_ASK_RULE": str(tmp / "home/.cursor/rules/lmemory-ask-product.mdc"),
+        "LMEMORY_KEYS_ENV": str(tmp / "home/keys.env"),
+        "LMEMORY_SKIP_LAUNCHD": "1",
+        "LMEMORY_SKIP_TIMER": "1",
+        "LMEMORY_WRITER": "/nonexistent/grok",
     }
     (tmp / "home").mkdir(exist_ok=True)
     if vault is not None:
@@ -46,7 +46,7 @@ def _sh(script: str, env: dict, *args: str) -> subprocess.CompletedProcess:
 def test_upgrade_keeps_the_table_and_moves_it_into_the_vault(tmp_path):
     vault = tmp_path / "vault"
     shutil.copytree(REPO / "template", vault)
-    skill = tmp_path / "home/.agents/skills/krouter"
+    skill = tmp_path / "home/.agents/skills/lmemory"
     # an old install whose table the host edited, before tables lived in the vault
     first = _sh("install.sh", _env(tmp_path, None))
     assert first.returncode == 0, first.stderr
@@ -83,7 +83,7 @@ def test_install_records_the_vault_for_hooks_and_keeps_an_existing_record(tmp_pa
     shutil.copytree(REPO / "template", vault)
     res = _sh("install.sh", _env(tmp_path, vault))
     assert res.returncode == 0, res.stderr
-    record = tmp_path / "home/.config/krouter/vault"
+    record = tmp_path / "home/.config/lmemory/vault"
     assert record.read_text(encoding="utf-8").strip() == str(vault)
     record.write_text("/somewhere/else\n", encoding="utf-8")
     assert _sh("install.sh", _env(tmp_path, vault), "--upgrade").returncode == 0
@@ -95,14 +95,14 @@ def test_uninstall_saves_an_unsaved_table_and_leaves_the_vault(tmp_path):
     shutil.copytree(REPO / "template", vault)
     env = _env(tmp_path, None)
     assert _sh("install.sh", env).returncode == 0
-    skill = Path(env["KROUTER_SKILL_HOME"])
+    skill = Path(env["LMEMORY_SKILL_HOME"])
     (skill / "scripts/canonical_sources.psv").write_text(SAMPLE.read_text(encoding="utf-8") + MY_ROW, encoding="utf-8")
     before = sorted(p.relative_to(vault).as_posix() for p in vault.rglob("*"))
     dry = _sh("uninstall.sh", {**env, "OBSIDIAN_VAULT": str(vault)}, "--dry-run")
     assert dry.returncode == 0 and skill.exists() and "would: rm -rf" in dry.stdout
     res = _sh("uninstall.sh", {**env, "OBSIDIAN_VAULT": str(vault)})
     assert res.returncode == 0, res.stderr
-    assert not skill.exists() and not Path(env["KROUTER_CURSOR_RULE"]).exists()
+    assert not skill.exists() and not Path(env["LMEMORY_CURSOR_RULE"]).exists()
     saved = vault / "90 系统文件/canonical_sources.psv"
     assert MY_ROW in saved.read_text(encoding="utf-8")
     after = sorted(p.relative_to(vault).as_posix() for p in vault.rglob("*"))
@@ -111,10 +111,10 @@ def test_uninstall_saves_an_unsaved_table_and_leaves_the_vault(tmp_path):
 
 def _nightly_env(tmp: Path, vault: Path) -> dict:
     env = {k: v for k, v in os.environ.items() if not k.endswith(("_API_KEY", "_BASE_URL", "_MODEL"))}
-    env.update({"OBSIDIAN_VAULT": str(vault), "HOME": str(tmp), "KROUTER_KEYS_ENV": str(tmp / "none.env"),
-                "KROUTER_WRITER": "/nonexistent/grok", "KROUTER_CACHE_DIR": str(tmp / "cache"),
-                "KROUTER_NO_QUERY_LOG": "1"})
-    env.pop("KROUTER_LEARN_CLI", None)
+    env.update({"OBSIDIAN_VAULT": str(vault), "HOME": str(tmp), "LMEMORY_KEYS_ENV": str(tmp / "none.env"),
+                "LMEMORY_WRITER": "/nonexistent/grok", "LMEMORY_CACHE_DIR": str(tmp / "cache"),
+                "LMEMORY_NO_QUERY_LOG": "1"})
+    env.pop("LMEMORY_LEARN_CLI", None)
     return env
 
 
@@ -133,7 +133,7 @@ def test_nightly_outcome_reaches_health_page_and_status(tmp_path):
     assert "nightly: skipped" in health and "nightly_at:" in health
     for sh_only in ("0", "1"):
         status = subprocess.run(["/bin/sh", str(SCRIPTS / "route_knowledge.sh"), "status"],
-                                env={**env, "KROUTER_SH_ONLY": sh_only}, capture_output=True, text=True).stdout
+                                env={**env, "LMEMORY_SH_ONLY": sh_only}, capture_output=True, text=True).stdout
         assert "nightly: skipped" in status and "host_action: Nightly upkeep skipped" in status, sh_only
 
 
@@ -143,7 +143,7 @@ def test_nightly_dry_run_calls_nothing_and_writes_nothing(tmp_path):
     before = {p.relative_to(vault).as_posix(): p.stat().st_mtime_ns for p in vault.rglob("*") if p.is_file()}
     usage = tmp_path / "usage.jsonl"
     res = subprocess.run([sys.executable, str(SCRIPTS / "nightly.py"), "--vault", str(vault), "--dry-run"],
-                         env={**_nightly_env(tmp_path, vault), "KROUTER_USAGE_LOG": str(usage)},
+                         env={**_nightly_env(tmp_path, vault), "LMEMORY_USAGE_LOG": str(usage)},
                          capture_output=True, text=True, timeout=600)
     assert res.returncode == 0, res.stderr
     plan = json.loads(res.stdout)
@@ -164,7 +164,7 @@ def test_run_py_matches_run_sh_contract(tmp_path):
     env = _nightly_env(tmp_path, tmp_path / "unused")
     env.pop("OBSIDIAN_VAULT")
     res = subprocess.run([sys.executable, str(run_py)], env=env, capture_output=True, text=True, timeout=60)
-    assert res.returncode == 0 and "KROUTER_VAULT (or OBSIDIAN_VAULT) is not set" in res.stderr
+    assert res.returncode == 0 and "LMEMORY_VAULT (or OBSIDIAN_VAULT) is not set" in res.stderr
     vault = tmp_path / "vault"
     shutil.copytree(REPO / "template", vault)
     before = {p.relative_to(vault).as_posix(): p.stat().st_mtime_ns for p in vault.rglob("*") if p.is_file()}
@@ -181,7 +181,7 @@ def test_propose_aliases_drafts_and_apply_adds_only_ticked_rows(tmp_path, monkey
     shutil.copytree(REPO / "template", vault)
     table = vault / "90 系统文件/canonical_sources.psv"
     shutil.copy(SAMPLE, table)
-    monkeypatch.delenv("KROUTER_MAP", raising=False)
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
     sys.path.insert(0, str(SCRIPTS))
     import propose_aliases as pa
 
@@ -206,8 +206,8 @@ def test_propose_aliases_drafts_and_apply_adds_only_ticked_rows(tmp_path, monkey
 def test_first_run_does_not_write_the_query_log(tmp_path):
     """The demo on the template is not the host's traffic; the nightly learning must never see it."""
     state = tmp_path / "state"
-    env = {**os.environ, "KROUTER_STATE_DIR": str(state), "KROUTER_CACHE_DIR": str(tmp_path / "cache")}
-    env.pop("KROUTER_NO_QUERY_LOG", None)
+    env = {**os.environ, "LMEMORY_STATE_DIR": str(state), "LMEMORY_CACHE_DIR": str(tmp_path / "cache")}
+    env.pop("LMEMORY_NO_QUERY_LOG", None)
     res = subprocess.run(["/bin/sh", str(REPO / "scripts/first_run.sh")], env=env, capture_output=True,
                          text=True, timeout=600, cwd=REPO)
     assert res.returncode == 0, res.stdout[-800:] + res.stderr[-800:]
@@ -219,13 +219,13 @@ def test_notify_once_a_day_and_off_switch(tmp_path, monkeypatch):
     import notify
 
     sent = []
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setattr(notify.subprocess, "run", lambda *a, **k: sent.append(a) or subprocess.CompletedProcess(a, 0))
     monkeypatch.setattr(notify.subprocess, "Popen", lambda *a, **k: sent.append(a))
     monkeypatch.setattr(notify.shutil, "which", lambda name: "/usr/bin/notify-send")
-    monkeypatch.setenv("KROUTER_NOTIFY", "0")
+    monkeypatch.setenv("LMEMORY_NOTIFY", "0")
     assert notify.send("x", kind="t") is False and not sent
-    monkeypatch.setenv("KROUTER_NOTIFY", "1")
+    monkeypatch.setenv("LMEMORY_NOTIFY", "1")
     assert notify.send("x", kind="t") is True and len(sent) == 1
     assert notify.send("x", kind="t") is False and len(sent) == 1  # once per kind per day
     assert notify.send("y", kind="other") is True

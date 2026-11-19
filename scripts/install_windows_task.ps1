@@ -1,16 +1,16 @@
-# KRouter daily timer on Windows: one scheduled task, 09:10 local time, runs extras\host-daily-evolution\run.py.
+# Lmemory daily timer on Windows: one scheduled task, 09:10 local time, runs extras\host-daily-evolution\run.py.
 # Usage (PowerShell, as yourself - no admin needed):
-#   $env:KROUTER_VAULT = "D:\Notes\Memory"; .\scripts\install_windows_task.ps1   (OBSIDIAN_VAULT also works)
+#   $env:LMEMORY_VAULT = "D:\Notes\Memory"; .\scripts\install_windows_task.ps1   (OBSIDIAN_VAULT also works)
 #   .\scripts\install_windows_task.ps1 -Uninstall
-# Output goes to %LOCALAPPDATA%\dsh-krouter\daily.log. The vault is never touched by this script.
+# Output goes to %LOCALAPPDATA%\dsh-lmemory\daily.log. The vault is never touched by this script.
 param(
     [switch]$Uninstall,
-    [string]$Vault = $(if ($env:KROUTER_VAULT) { $env:KROUTER_VAULT } else { $env:OBSIDIAN_VAULT }),
+    [string]$Vault = $(if ($env:LMEMORY_VAULT) { $env:LMEMORY_VAULT } else { $env:OBSIDIAN_VAULT }),
     [string]$Python = "",
     [string]$At = "09:10"
 )
 $ErrorActionPreference = "Stop"
-$TaskName = "KRouter daily evolution"
+$TaskName = "Lmemory daily evolution"
 
 if ($Uninstall) {
     if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
@@ -23,7 +23,7 @@ if ($Uninstall) {
 }
 
 if (-not $Vault) {
-    Write-Output "timer not registered: set KROUTER_VAULT to YOUR memory folder (or pass -Vault), then re-run."
+    Write-Output "timer not registered: set LMEMORY_VAULT to YOUR memory folder (or pass -Vault), then re-run."
     exit 1
 }
 if (-not $Python) {
@@ -34,7 +34,7 @@ if (-not $Python) {
 }
 $Root = Split-Path -Parent $PSScriptRoot
 $RunPy = Join-Path $Root "extras\host-daily-evolution\run.py"
-$LogDir = Join-Path $env:LOCALAPPDATA "dsh-krouter"
+$LogDir = Join-Path $env:LOCALAPPDATA "dsh-lmemory"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $Log = Join-Path $LogDir "daily.log"
 

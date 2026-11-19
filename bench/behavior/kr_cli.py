@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""KRouter's MCP tools from a shell, for a host that cannot be given an MCP server (a Claude Code subagent here):
+"""Lmemory's MCP tools from a shell, for a host that cannot be given an MCP server (a Claude Code subagent here):
 
-    kr_cli.py TOOL '{"json": "arguments"}'      # TOOL is krouter_ask, krouter_note, krouter_status, krouter_correct, krouter_learn
+    kr_cli.py TOOL '{"json": "arguments"}'      # TOOL is lmemory_ask, lmemory_note, lmemory_status, lmemory_correct, lmemory_learn
     kr_cli.py --context                         # server instructions + tool descriptions + the SessionStart digest
 
-It calls the same functions the MCP server answers with (`mcp_server.call`), on the memory folder in KROUTER_VAULT, and
+It calls the same functions the MCP server answers with (`mcp_server.call`), on the memory folder in LMEMORY_VAULT, and
 appends every call to $KR_CALL_LOG. The host sees the same words an MCP host would show it, but it reaches the tools
 through Bash: an approximation of a Claude Code session with the MCP server, not that session.
 """
@@ -18,17 +18,17 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "skill/krouter/scripts"))
+sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
 
 
 def context() -> str:
     import mcp_server as m
 
-    parts = ["## KRouter (MCP server instructions)\n" + m.INSTRUCTIONS + m.CORRECT_INSTRUCTION + m.LEARN_INSTRUCTION,
-             "## KRouter tools (call one with: $KR <tool> '<json arguments>')"]
+    parts = ["## Lmemory (MCP server instructions)\n" + m.INSTRUCTIONS + m.CORRECT_INSTRUCTION + m.LEARN_INSTRUCTION,
+             "## Lmemory tools (call one with: $KR <tool> '<json arguments>')"]
     for t in m.tools():
         parts.append(f"- {t['name']}: {t['description']}\n  arguments (JSON schema): {json.dumps(t['inputSchema'])}")
-    hook = subprocess.run([sys.executable, str(ROOT / "skill/krouter/scripts/session_hook.py"), "start"], input="{}",
+    hook = subprocess.run([sys.executable, str(ROOT / "skill/lmemory/scripts/lmemory_capture.py"), "start"], input="{}",
                           capture_output=True, text=True, env=os.environ)
     try:
         extra = json.loads(hook.stdout)["hookSpecificOutput"]["additionalContext"]

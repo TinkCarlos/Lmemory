@@ -6,7 +6,7 @@ card_id: D14
 when: 
 source_ref: "[[05 时间日志/会话摘录/示例｜D14]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # 经验｜一页只讲一个意思，字能删就删，讲的话留给嘴

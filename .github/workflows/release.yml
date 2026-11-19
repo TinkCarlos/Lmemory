@@ -50,14 +50,14 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
-            dsh-krouter-*.tgz
+            dsh-lmemory-*.tgz
             bootstrap.sh
             bootstrap.ps1
-            KRouter.mcpb
+            Lmemory.mcpb
       - name: Attach to the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" dsh-krouter-*.tgz bootstrap.sh bootstrap.ps1 KRouter.mcpb SHA256SUMS --clobber
+        run: gh release upload "${{ github.event.release.tag_name }}" dsh-lmemory-*.tgz bootstrap.sh bootstrap.ps1 Lmemory.mcpb SHA256SUMS --clobber
 
   smoke:
     # 发出去之后，照 README 两种语言里的每条安装命令去真实地址取一遍：任何一条取不到、跑不起来就失败
@@ -82,9 +82,9 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
       - name: Build
-        run: docker build -t krouter:release .
+        run: docker build -t lmemory:release .
       - name: Smoke test
-        run: sh scripts/docker_smoke.sh krouter:release
+        run: sh scripts/docker_smoke.sh lmemory:release
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -96,15 +96,15 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          IMG=ghcr.io/398894496-arch/krouter
-          docker tag krouter:release "$IMG:$TAG"
-          docker tag krouter:release "$IMG:latest"
+          IMG=ghcr.io/tinkcarlos/lmemory
+          docker tag lmemory:release "$IMG:$TAG"
+          docker tag lmemory:release "$IMG:latest"
           docker push "$IMG:$TAG"
           docker push "$IMG:latest"
           echo "digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMG:$TAG" | cut -d@ -f2)" >> "$GITHUB_OUTPUT"
       - name: Attest the image
         uses: actions/attest-build-provenance@v2
         with:
-          subject-name: ghcr.io/398894496-arch/krouter
+          subject-name: ghcr.io/tinkcarlos/lmemory
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true

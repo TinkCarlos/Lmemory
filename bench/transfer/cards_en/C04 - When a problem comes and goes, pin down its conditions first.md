@@ -6,7 +6,7 @@ card_id: C04
 when: fails now and then; works sometimes; cannot reproduce it
 source_ref: "[[05 时间日志/会话摘录/example C04]]"
 date: 2026-01-01
-source: krouter-bench
+source: lmemory-bench
 ---
 
 # Lesson: When a problem comes and goes, pin down its conditions first

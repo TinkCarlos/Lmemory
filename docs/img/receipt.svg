@@ -9,7 +9,7 @@
   <text x="440" y="23" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#7d8590">one short noun, one page, one receipt</text>
 
   <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13.5">
-    <text x="24" y="70" fill="#7d8590">$ <tspan fill="#e6edf3">krouter search sealed</tspan></text>
+    <text x="24" y="70" fill="#7d8590">$ <tspan fill="#e6edf3">lmemory search sealed</tspan></text>
 
     <text x="24" y="98" fill="#7d8590">retrieval_status: <tspan fill="#3fb950"> canonical-match</tspan></text>
     <text x="24" y="120" fill="#7d8590">canonical_source: <tspan fill="#e6edf3"> /YourVault/.../Automation/Seal the day from the log file.md</tspan></text>
@@ -20,7 +20,7 @@
     <text x="24" y="230" fill="#7d8590">canonical_map_sha256: <tspan fill="#a371f7"> c55b8715b83aff9ecdd40297dc0f138bc017944d15983a9710cda5439</tspan></text>
     <text x="24" y="252" fill="#7d8590">canonical_match: <tspan fill="#3fb950"> true</tspan></text>
 
-    <text x="24" y="298" fill="#7d8590">$ <tspan fill="#e6edf3">krouter search "how to deploy"</tspan></text>
+    <text x="24" y="298" fill="#7d8590">$ <tspan fill="#e6edf3">lmemory search "how to deploy"</tspan></text>
     <text x="24" y="326" fill="#7d8590">canonical_match: <tspan fill="#f85149"> false</tspan></text>
     <text x="24" y="348" fill="#7d8590">suggestions: <tspan fill="#d29922"> Q09 sealed, Q10 timer fired</tspan><tspan fill="#7d8590"> (hints, not hits)</tspan></text>
     <text x="24" y="372" fill="#6e7681">a wrong noun gets a miss, never a plausible neighbour</text>

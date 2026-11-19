@@ -1,5 +1,7 @@
 # 每个数字和它的测法
 
+> 这里保留上游 KRouter 的历史评测。Lmemory 当前构建和复测结果见[中文 README](../README.zh.md)。
+
 [English](NUMBERS.md) · 回到 [README](../README.zh.md#用数字说话)
 
 一行一项测量：属于哪一套（写着「先登记」的，方案在跑之前就记进了

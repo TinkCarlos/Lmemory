@@ -13,7 +13,7 @@ def main() -> None:
     path = Path(sys.argv[1])
     field = sys.argv[2]
     value = sys.argv[3]
-    if field not in {"lamp", "self_evolution_key", "krouter_writer"}:
+    if field not in {"lamp", "self_evolution_key", "lmemory_writer"}:
         raise SystemExit("field not allowed")
     if value not in {"running", "unused", "missing", "present", "dead", "unknown"}:
         raise SystemExit("value not allowed")

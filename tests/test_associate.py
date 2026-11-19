@@ -14,17 +14,17 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
+SCRIPTS = REPO / "skill/lmemory/scripts"
 IMPORT = SCRIPTS / "import_sessions.py"
 ROUTE = SCRIPTS / "route_knowledge.py"
 
 
 @pytest.fixture()
 def ri(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_NO_QUERY_LOG", "1")
-    monkeypatch.delenv("KROUTER_CONFLICT", raising=False)
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_CONFLICT", raising=False)
     import recall_index
 
     return importlib.reload(recall_index)
@@ -162,7 +162,7 @@ def test_nightly_cocite_step_learns_from_confident_lookups_only(ri, tmp_path):
         {**row, "pages": ["a/Deploy window.md", "a/Gone.md"]},  # a page no longer there: no pair
         {**row, "status": "bounded-literal-search-complete"},
     ]) + "\n", encoding="utf-8")
-    env = {**os.environ, "KROUTER_STATE_DIR": str(state), "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "LMEMORY_STATE_DIR": str(state), "LMEMORY_NO_QUERY_LOG": "1"}
     run = lambda *a: json.loads(subprocess.run([sys.executable, str(SCRIPTS / "cocite.py"), "--vault", str(v), *a],
                                                env=env, capture_output=True, text=True, timeout=60).stdout)
     assert run("--dry-run") == {"cocite": "dry-run", "lookups": 8, "groups": 5, "pairs": 5,
@@ -176,9 +176,9 @@ def test_nightly_cocite_step_learns_from_confident_lookups_only(ri, tmp_path):
 
 def test_router_logs_direct_hits_for_the_nightly_step(tmp_path):
     v = _vault(tmp_path)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "KROUTER_CACHE_DIR": str(tmp_path / "c"),
-           "KROUTER_STATE_DIR": str(tmp_path / "s")}
-    env.pop("KROUTER_NO_QUERY_LOG", None)
+    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "LMEMORY_CACHE_DIR": str(tmp_path / "c"),
+           "LMEMORY_STATE_DIR": str(tmp_path / "s")}
+    env.pop("LMEMORY_NO_QUERY_LOG", None)
     subprocess.run([sys.executable, str(ROUTE), "search", "how many times do failed invoice charges retry"],
                    env=env, capture_output=True, text=True, timeout=60)
     row = json.loads((tmp_path / "s/queries.jsonl").read_text(encoding="utf-8").splitlines()[-1])
@@ -188,8 +188,8 @@ def test_router_logs_direct_hits_for_the_nightly_step(tmp_path):
 
 def test_route_prints_associated_block_after_hits(tmp_path):
     v = _vault(tmp_path)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "KROUTER_CACHE_DIR": str(tmp_path / "c"),
-           "KROUTER_STATE_DIR": str(tmp_path / "s"), "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "LMEMORY_CACHE_DIR": str(tmp_path / "c"),
+           "LMEMORY_STATE_DIR": str(tmp_path / "s"), "LMEMORY_NO_QUERY_LOG": "1"}
     out = subprocess.run([sys.executable, str(ROUTE), "search", "how many times do failed invoice charges retry"],
                          env=env, capture_output=True, text=True, timeout=60).stdout
     recall_block, _, assoc_block = out.partition("\nassociated: ")
@@ -197,9 +197,9 @@ def test_route_prints_associated_block_after_hits(tmp_path):
     assert assoc_block and "- 01 项目/Billing/Dunning emails.md" in assoc_block
     assert "  via: linked with 01 项目/Billing/Invoice retries.md; shares words with" in assoc_block
     sys.path.insert(0, str(REPO / "sdk"))
-    import krouter
+    import lmemory
 
-    hits = krouter.Answer(text=out).hits  # the SDK reads only the direct hits
+    hits = lmemory.Answer(text=out).hits  # the SDK reads only the direct hits
     assert [h["page"] for h in hits][0] == "01 项目/Billing/Invoice retries.md"
     assert "01 项目/Billing/Dunning emails.md" not in [h["page"] for h in hits]
 
@@ -242,10 +242,10 @@ def changed_mind(tmp_path):
         (_ts(7, 15), "PostgreSQL is too heavy for the demo app. Switch the demo app database to SQLite instead.",
          "Switched: the demo app now uses SQLite (demo.db). The docker-compose database service is gone."),
         (_ts(7, 16), "Does the seed script still work?", "Yes, seed.sql runs against SQLite now.")])
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_CLAUDE_PROJECTS": str(claude),
-           "KROUTER_CODEX_SESSIONS": str(tmp_path / "codex"), "KROUTER_CURSOR_PROJECTS": str(tmp_path / "cursor"),
-           "KROUTER_STATE_DIR": str(tmp_path / "state"), "KROUTER_CACHE_DIR": str(tmp_path / "cache"),
-           "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_CLAUDE_PROJECTS": str(claude),
+           "LMEMORY_CODEX_SESSIONS": str(tmp_path / "codex"), "LMEMORY_CURSOR_PROJECTS": str(tmp_path / "cursor"),
+           "LMEMORY_STATE_DIR": str(tmp_path / "state"), "LMEMORY_CACHE_DIR": str(tmp_path / "cache"),
+           "LMEMORY_NO_QUERY_LOG": "1"}
     for k in [k for k in env if k.endswith("_API_KEY")]:
         env.pop(k)
     res = subprocess.run([sys.executable, str(IMPORT), "--days", "14"], env=env, capture_output=True, text=True,
@@ -272,7 +272,7 @@ def test_newer_page_first_and_conflict_named_without_any_model(changed_mind):
     vault = changed_mind["vault"]
     old = changed_mind["monday"].relative_to(vault).as_posix()
     new = changed_mind["wednesday"].relative_to(vault).as_posix()
-    before = _route(changed_mind["env"], q, KROUTER_CONFLICT="0")
+    before = _route(changed_mind["env"], q, LMEMORY_CONFLICT="0")
     assert _hits(before)[0] == old and "recall_conflict" not in before  # what the audit saw (B6)
     out = _route(changed_mind["env"], q)
     assert _hits(out)[:2] == [new, old]
@@ -332,7 +332,7 @@ def test_conflict_tie_break_can_be_turned_off(ri, tmp_path, monkeypatch):
            "to SQLite.\n")
     on = ri.recall(v, "which database does the demo app use", limit=3)
     assert on["hits"][0]["rel"] == "05 时间日志/2026-11-04 db.md" and on["conflict"]["sure"]
-    monkeypatch.setenv("KROUTER_CONFLICT", "0")
+    monkeypatch.setenv("LMEMORY_CONFLICT", "0")
     off = ri.recall(v, "which database does the demo app use", limit=3)
     assert "conflict" not in off and off["hits"][0]["rel"] == "05 时间日志/2026-11-02 db.md"
 
@@ -366,8 +366,8 @@ def test_english_question_matched_only_by_clippings_is_refused(tmp_path):
     """The words the question is about (`database`, `password`) are nowhere in the vault; three clipped articles share
     `production`, `billing`, `service` with it. That used to come back `medium`; now it is `recall: none`."""
     v = _clip_vault(tmp_path)
-    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "KROUTER_CACHE_DIR": str(tmp_path / "c"),
-           "KROUTER_STATE_DIR": str(tmp_path / "s"), "KROUTER_NO_QUERY_LOG": "1"}
+    env = {**os.environ, "OBSIDIAN_VAULT": str(v), "LMEMORY_CACHE_DIR": str(tmp_path / "c"),
+           "LMEMORY_STATE_DIR": str(tmp_path / "s"), "LMEMORY_NO_QUERY_LOG": "1"}
     out = subprocess.run([sys.executable, str(ROUTE), "search",
                           "What is the production database password of the billing service?"],
                          env=env, capture_output=True, text=True, timeout=60).stdout

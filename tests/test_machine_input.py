@@ -1,5 +1,5 @@
 """What a machine put into the user's turn is not the user's words: messages from another session, background task
-notices, system reminders, sub-session and CI events, and text a KRouter hook injected. The prompt hook does not
+notices, system reminders, sub-session and CI events, and text a Lmemory hook injected. The prompt hook does not
 note them as corrections or look them up, and the session import does not record them as a turn.
 
 Found on the maintainer's own vault (not a registered set): a message from another agent session, starting
@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-SCRIPTS = REPO / "skill/krouter/scripts"
-HOOK = SCRIPTS / "session_hook.py"
+SCRIPTS = REPO / "skill/lmemory/scripts"
+HOOK = SCRIPTS / "lmemory_capture.py"
 IMPORT = SCRIPTS / "import_sessions.py"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -30,13 +30,13 @@ MACHINE = [
     "<system-reminder>The user switched models. From now on use the other one.</system-reminder>",
     "<side-sessions-event>session finished; from now on report in English</side-sessions-event>",
     "<ci-monitor-event>checks failed; 以后一律先跑测试</ci-monitor-event>",
-    "KRouter memory note (recalled from the user's vault, not typed by the user): from now on …",
-    "KRouter 记忆提示（从用户的记忆库里想起的）：以后改成 B",
+    "Lmemory memory note (recalled from the user's vault, not typed by the user): from now on …",
+    "Lmemory 记忆提示（从用户的记忆库里想起的）：以后改成 B",
 ]
 
 
 def test_human_words_keeps_only_what_a_person_said():
-    from krouter_redact import human_words
+    from lmemory_redact import human_words
 
     for text in MACHINE:
         assert human_words(text) == "", text
@@ -52,9 +52,9 @@ def box(tmp_path):
     state = tmp_path / "state"
     state.mkdir()
     (state / "import.json").write_text(json.dumps({"consent": True}), encoding="utf-8")
-    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "KROUTER_STATE_DIR": str(state),
-           "KROUTER_CACHE_DIR": str(tmp_path / "cache"), "KROUTER_NO_QUERY_LOG": "1"}
-    env.pop("KROUTER_IN_DISTILL", None)
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_STATE_DIR": str(state),
+           "LMEMORY_CACHE_DIR": str(tmp_path / "cache"), "LMEMORY_NO_QUERY_LOG": "1"}
+    env.pop("LMEMORY_IN_DISTILL", None)
     return {"vault": vault, "env": env, "tmp": tmp_path,
             "page": vault / "05 时间日志/会话摘录" / f"{date.today().isoformat()}｜纠正候选.md"}
 
@@ -87,8 +87,8 @@ def test_the_import_records_no_machine_turn(box):
     path = claude / "-work-demo" / "dddd4444-mixed.jsonl"
     path.parent.mkdir(parents=True)
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
-    env = {**box["env"], "KROUTER_CLAUDE_PROJECTS": str(claude), "KROUTER_CODEX_SESSIONS": str(box["tmp"] / "codex"),
-           "KROUTER_CURSOR_PROJECTS": str(box["tmp"] / "cursor")}
+    env = {**box["env"], "LMEMORY_CLAUDE_PROJECTS": str(claude), "LMEMORY_CODEX_SESSIONS": str(box["tmp"] / "codex"),
+           "LMEMORY_CURSOR_PROJECTS": str(box["tmp"] / "cursor")}
     res = subprocess.run([sys.executable, str(IMPORT), "--days", "7"], env=env, capture_output=True, text=True,
                          timeout=120)
     assert res.returncode == 0, res.stderr
@@ -96,5 +96,5 @@ def test_the_import_records_no_machine_turn(box):
     text = page.read_text(encoding="utf-8")
     assert "Set up the demo database." in text and "turns: 1" in text, text
     for word in ("cross-session-message", "WP3", "task-notification", "system-reminder", "Fridays", "以后一律先跑测试",
-                 "KRouter memory note", "KRouter 记忆提示"):
+                 "Lmemory memory note", "Lmemory 记忆提示"):
         assert word not in text, word

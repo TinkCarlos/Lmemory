@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """**Needs commit 4fa4f29 of the unmerged branch `feat/subconscious-calibrated`** (page_keys.py, the `kw` table, the
-`KROUTER_RECALL_MARGIN_LOW` switch); on `main` the switch does not exist and `rungs` gives C0 for every rung.
+`LMEMORY_RECALL_MARGIN_LOW` switch); on `main` the switch does not exist and `rungs` gives C0 for every rung.
 
 Set 45, C1a (keywords computed with no model corroborate a full-text top page that is not `RECALL_MARGIN` ahead):
 the bench side.
@@ -10,7 +10,7 @@ the bench side.
     python3 bench/subconscious/c1a.py bigvault DIR      # 10,000 pages + 2,000 alias rows + 10,000 trigger lines (for speed.py)
 
 `diff` runs `session_hook.py prompt` as the app runs it (one process per message, a new session id each) for the engine at
-`--ref` (extracted with `git archive`) and for this checkout with `KROUTER_RECALL_MARGIN_LOW` unset, on vault3 + overlay,
+`--ref` (extracted with `git archive`) and for this checkout with `LMEMORY_RECALL_MARGIN_LOW` unset, on vault3 + overlay,
 each engine with its own cache and state, no `*_API_KEY` in the environment; it prints the number of messages and of
 outputs that differ. Built in: sets 32 and 35 (both halves) and set 36's pairs; `--cases` adds more files (JSON Lines with
 `text`, or gzip). `rungs` calls `recollect.recollect()` per rung, as `run.py` does, and scores with `run.score`.
@@ -33,7 +33,7 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import run  # noqa: E402  (run.py puts this checkout's scripts on the path)
 
-ENV_LOW, ENV_MIN = "KROUTER_RECALL_MARGIN_LOW", "KROUTER_RECALL_KEYWORDS_MIN"
+ENV_LOW, ENV_MIN = "LMEMORY_RECALL_MARGIN_LOW", "LMEMORY_RECALL_KEYWORDS_MIN"
 
 
 def load(path: Path) -> list[dict]:
@@ -54,18 +54,21 @@ def texts(extra: list[str]) -> list[str]:
 
 def base_env() -> dict:
     env = {k: v for k, v in os.environ.items() if not k.endswith("_API_KEY") and k not in (ENV_LOW, ENV_MIN)}
-    env.update(KROUTER_NO_QUERY_LOG="1", KROUTER_RECALL_PROMPT="1")
+    env.update(LMEMORY_NO_QUERY_LOG="1", LMEMORY_RECALL_PROMPT="1")
     return env
 
 
 def hook_outputs(scripts: Path, vault: Path, msgs: list[str], tmp: Path) -> list[bytes]:
-    env = {**base_env(), "KROUTER_VAULT": str(vault), "KROUTER_CACHE_DIR": str(tmp / "cache"),
-           "KROUTER_STATE_DIR": str(tmp / "state")}
+    env = {**base_env(), "LMEMORY_VAULT": str(vault), "LMEMORY_CACHE_DIR": str(tmp / "cache"),
+           "LMEMORY_STATE_DIR": str(tmp / "state")}
     subprocess.run([sys.executable, str(scripts / "recall_index.py"), "--vault", str(vault), "--stats"], env=env,
                    capture_output=True, check=True)
     out = []
     for i, m in enumerate(msgs):
-        r = subprocess.run([sys.executable, str(scripts / "session_hook.py"), "prompt"], env=env, capture_output=True,
+        hook_path = scripts / "lmemory_capture.py"
+        if not hook_path.exists():
+            hook_path = scripts / "session_hook.py"
+        r = subprocess.run([sys.executable, str(hook_path), "prompt"], env=env, capture_output=True,
                            input=json.dumps({"prompt": m, "session_id": f"s{i}"}).encode())
         out.append(r.stdout)
     return out
@@ -81,8 +84,8 @@ def diff(a) -> int:
         subprocess.run(["tar", "-x", "-C", str(old)], input=tar, check=True)
         v = run.make_vault(tmp)
         (tmp / "a").mkdir(), (tmp / "b").mkdir()
-        before = hook_outputs(old / "skill/krouter/scripts", v, msgs, tmp / "a")
-        after = hook_outputs(REPO / "skill/krouter/scripts", v, msgs, tmp / "b")
+        before = hook_outputs(old / "skill/lmemory/scripts", v, msgs, tmp / "a")
+        after = hook_outputs(REPO / "skill/lmemory/scripts", v, msgs, tmp / "b")
     differ = [i for i, (x, y) in enumerate(zip(before, after)) if x != y]
     print(json.dumps({"ref": a.ref, "messages": len(msgs), "printed_c0": sum(bool(x.strip()) for x in before),
                       "differ": len(differ), "bytes_c0": sum(map(len, before)), "bytes_new": sum(map(len, after))}))
@@ -97,8 +100,8 @@ def rungs(a) -> int:
         rows += load(Path(f))
     plan = [("off", None, None)] + [(r, *(r.split(":") + ["1"])[:2]) for r in a.rung]
     with tempfile.TemporaryDirectory() as t:
-        os.environ.update(KROUTER_CACHE_DIR=str(Path(t) / "cache"), KROUTER_STATE_DIR=str(Path(t) / "state"),
-                          KROUTER_NO_QUERY_LOG="1")
+        os.environ.update(LMEMORY_CACHE_DIR=str(Path(t) / "cache"), LMEMORY_STATE_DIR=str(Path(t) / "state"),
+                          LMEMORY_NO_QUERY_LOG="1")
         v = run.make_vault(Path(t))
         import recall_index
 

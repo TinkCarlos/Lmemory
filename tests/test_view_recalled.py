@@ -1,4 +1,4 @@
-"""`krouter view` and `krouter why` read the data the subconscious and skills write: the prompt hook's deliveries
+"""`lmemory view` and `lmemory why` read the data the subconscious and skills write: the prompt hook's deliveries
 (`recalled.jsonl`), the skills folder and its use counts. Missing data shows as empty, never as an error."""
 
 from __future__ import annotations
@@ -17,9 +17,9 @@ SEALED = "02 经验与方法/自动化/按日志文件判断封账.md"
 
 @pytest.fixture()
 def vault(tmp_path, monkeypatch):
-    monkeypatch.setenv("KROUTER_STATE_DIR", str(tmp_path / "state"))
-    monkeypatch.setenv("KROUTER_CACHE_DIR", str(tmp_path / "cache"))
-    for k in ("KROUTER_RECALL_PROMPT", "KROUTER_RECALL_INDEX", "KROUTER_SKILLS"):
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(tmp_path / "state"))
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    for k in ("LMEMORY_RECALL_PROMPT", "LMEMORY_RECALL_INDEX", "LMEMORY_SKILLS"):
         monkeypatch.delenv(k, raising=False)
     v = tmp_path / "vault"
     shutil.copytree(REPO / "template-zh", v)
@@ -30,7 +30,7 @@ def vault(tmp_path, monkeypatch):
 
 
 def _store(vault):
-    from krouter.viewdata import Store
+    from lmemory.viewdata import Store
 
     return Store(vault)
 
@@ -71,7 +71,7 @@ def test_skills_with_counts_and_none_when_there_is_no_folder(vault):
 
 
 def test_why_says_whether_the_hook_brings_it_or_the_host_reads_the_index(vault, tmp_path):
-    from krouter import why
+    from lmemory import why
 
     brought = why.explain(vault, "昨天封账了吗，我得先确认日志文件")
     assert [h["rel"] for h in brought["mention"]["hook"]] == [SEALED]
@@ -89,9 +89,9 @@ def test_why_says_whether_the_hook_brings_it_or_the_host_reads_the_index(vault, 
 
 
 def test_why_with_the_hook_and_index_off(vault, monkeypatch):
-    from krouter import why
+    from lmemory import why
 
-    monkeypatch.setenv("KROUTER_RECALL_PROMPT", "0")
-    monkeypatch.setenv("KROUTER_RECALL_INDEX", "0")
+    monkeypatch.setenv("LMEMORY_RECALL_PROMPT", "0")
+    monkeypatch.setenv("LMEMORY_RECALL_INDEX", "0")
     text = why.render(why.explain(vault, "昨天封账了吗"))
-    assert "KROUTER_RECALL_PROMPT=0" in text and "KROUTER_RECALL_INDEX=0" in text
+    assert "LMEMORY_RECALL_PROMPT=0" in text and "LMEMORY_RECALL_INDEX=0" in text
