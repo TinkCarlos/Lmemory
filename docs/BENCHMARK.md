@@ -31,7 +31,7 @@ questions, a runner, and a scorer that grades any system's output.
 
 ## Results
 
-Four systems, both question sets, run on 2026-10-12. Held-out means the 25 questions in `heldout.jsonl` that Lmemory was
+Four systems, both question sets, run on 2026-10-12. Held-out means the 25 questions in `heldout.jsonl` that KRouter was
 never tuned on ([`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md)); dev means the 30 bench questions, on which Lmemory
 was fixed once (see below). Each cell gives the wrong-citation rate, refusals out of 10 neighbour questions, and right
 answers on correction and current questions.
@@ -41,7 +41,7 @@ answers on correction and current questions.
 | Plain full-text search (SQLite FTS5 BM25), always answers | 61% (14 / 23) | 1 / 10 | 4 / 9 | 5 / 6 | 63% (19 / 30) | 0 / 10 | 1 / 10 | 10 / 10 |
 | basic-memory 0.22.1, default search (vector) | 60% (15 / 25) | 0 / 10 | 4 / 9 | 6 / 6 | 39% (11 / 28) | 2 / 10 | 7 / 10 | 10 / 10 |
 | claude-mem 13.35.0, its search over what it observed | 60% (15 / 25) | 0 / 10 | 5 / 9 | 5 / 6 | 43% (13 / 30) | 0 / 10 | 7 / 10 | 10 / 10 |
-| **Lmemory 1.0.1** | **25% (3 / 12)** | **8 / 10** | 5 / 9 | 4 / 6 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
+| **KRouter 1.0.1** | **25% (3 / 12)** | **8 / 10** | 5 / 9 | 4 / 6 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
 
 That table compares systems at their defaults, and at their defaults the other three have no way to refuse and no
 notion of a replaced page, so "neighbours refused 0 / 10" is settled before the first question. An outside review
@@ -59,7 +59,7 @@ output. claude-mem's search returns no score, so it has no row here.
 |---|---|---|---|
 | BM25 + skip superseded + dev floor | 19% (3 / 16) | 7 / 10 | 13 |
 | basic-memory 0.22.1 + skip superseded + dev floor | 30% (6 / 20) | 4 / 10 | 14 |
-| Lmemory 1.0.1 (as shipped) | 25% (3 / 12) | 8 / 10 | 9 |
+| KRouter 1.0.1 (as shipped) | 25% (3 / 12) | 8 / 10 | 9 |
 
 Systems that answer more questions also cite more wrong pages, so the fair comparison is at the **same coverage**:
 each baseline's floor set so that it answers as many questions as Lmemory does (12 on held-out, 17 on dev). Choosing
@@ -69,7 +69,7 @@ an operating point on held-out is done here for baselines only, never for Lmemor
 |---|---|---|
 | BM25 + skip superseded | 2 / 10 | 1 / 16 |
 | basic-memory + skip superseded | 2 / 10 | 1 / 16 |
-| Lmemory 1.0.1 | 3 / 9 | 0 / 17 (tuned on dev) |
+| KRouter 1.0.1 | 3 / 9 | 0 / 17 (tuned on dev) |
 
 **What this says.** On this bench, Lmemory's retrieval is not better than plain full-text search or basic-memory's
 embedding search once they are given the same two rules; at the same coverage it is slightly worse on held-out. Almost
@@ -131,8 +131,8 @@ needs an LLM and a vector store configured, and has no default to compare agains
 
 | System | Wrong-citation rate | Refused | Correction hit | Current hit |
 |---|---|---|---|---|
-| Lmemory 0.12.1 (first run, before any change) | 22% (4 / 18) | 7 / 10 | 5 / 10 | 9 / 10 |
-| Lmemory 0.13.0 to 1.0.1 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
+| KRouter 0.12.1 (first run, before any change) | 22% (4 / 18) | 7 / 10 | 5 / 10 | 9 / 10 |
+| KRouter 0.13.0 to 1.0.1 | 0% (0 / 17) | 10 / 10 | 8 / 10 | 9 / 10 |
 
 **Who the "outside reviewer" is.** Every held-out set here, and the outside reviews in `CHANGELOG.md`, come from
 Claude Opus in claude.ai chat sessions that the maintainer starts and relays: not a human, and not the Claude Code
@@ -140,14 +140,14 @@ sessions that change Lmemory, but the same model family. "Outside" means a separ
 code it reviews; it does not mean independent of Anthropic's models, so question wording may share that family's
 habits. A set written by a person is planned and will be logged here before it is run.
 
-**Held-out, on questions Lmemory was never tuned on.** An outside reviewer wrote 25 new questions for the same 30-page vault: 15 answerable ones phrased differently, and 10 neighbour questions. They were written independently of any tuning. Lmemory 1.0: 25% wrong citations (3 / 12), 8 / 10 neighbours refused, 9 / 15 answerable right. Plain BM25 that always answers: 61%, 1 / 10. The questions are in [`bench/memory_honesty/heldout.jsonl`](../bench/memory_honesty/heldout.jsonl), frozen at 1.0.1; the rules for using them (aggregates only, no tuning toward them, what burns the set) and a log of who has seen what are in [`bench/memory_honesty/HELDOUT.md`](../bench/memory_honesty/HELDOUT.md). CI pins the questions and the vault and checks only a sanity guard against plain full-text search, never a floor. Quote this figure, or the 0.12.1 row (22%), as Lmemory's wrong-citation rate, not the 0% above. The three wrong citations: a git branch-name format question cited the date-format page (both say "format"); a release-tag naming question and a checkout-page load-budget question each cited a neighbouring page.
+**Held-out, on questions KRouter was never tuned on.** An outside reviewer wrote 25 new questions for the same 30-page vault: 15 answerable ones phrased differently, and 10 neighbour questions. They were written independently of any tuning. Lmemory 1.0: 25% wrong citations (3 / 12), 8 / 10 neighbours refused, 9 / 15 answerable right. Plain BM25 that always answers: 61%, 1 / 10. The questions are in [`bench/memory_honesty/heldout.jsonl`](../bench/memory_honesty/heldout.jsonl), frozen at 1.0.1; the rules for using them (aggregates only, no tuning toward them, what burns the set) and a log of who has seen what are in [`bench/memory_honesty/HELDOUT.md`](../bench/memory_honesty/HELDOUT.md). CI pins the questions and the vault and checks only a sanity guard against plain full-text search, never a floor. Quote this figure, or the 0.12.1 row (22%), as Lmemory's wrong-citation rate, not the 0% above. The three wrong citations: a git branch-name format question cited the date-format page (both say "format"); a release-tag naming question and a checkout-page load-budget question each cited a neighbouring page.
 
 **Read the 0.13.0 row as a development-set number.** The bench was written for 0.13.0, and its first run found a bug:
 English function words (`what`, `which`, `does`, `should`) were counted as words "the vault has never seen", so a
 plain English question about a page that was there got refused, while a neighbour question that happened to share
 `what` and `do` with a page got answered. 0.13.0 drops those words from ranking and refusal and lets `services` match
 `service`. The fix is general, not shaped to these 30 questions: on the author's Chinese vault the recall eval is
-identical before and after. Still, Lmemory was changed after seeing the bench, so the honest held-out figure is the
+identical before and after. Still, KRouter was changed after seeing the bench, so the honest held-out figure is the
 0.12.1 row.
 
 The 0.13.0 misses are all refusals, never wrong answers. Each one asks with a word the page does not use: a pull
@@ -172,7 +172,7 @@ for having no Latin words, which flatters the baseline), and `bm25-floor` picks 
 |---|---|---|---|---|---|---|
 | Plain BM25, always answers | 61% (30 / 49) | 1 / 20 | 19 / 30 | 55% (27 / 49) | 1 / 20 | 22 / 30 |
 | BM25 + skip superseded + dev3-picked floor | 23% (5 / 22) | 15 / 20 | 17 / 30 | 4% (1 / 22) | 19 / 20 | 21 / 30 |
-| Lmemory 1.0.3 | 33% (12 / 36) | 9 / 20 | 24 / 30 | 24% (8 / 34) | 13 / 20 | 26 / 30 |
+| KRouter 1.0.3 | 33% (12 / 36) | 9 / 20 | 24 / 30 | 24% (8 / 34) | 13 / 20 | 26 / 30 |
 
 Read plainly: on questions written by someone else, on a vault nobody tuned for, Lmemory answers more questions right
 than the careful BM25 baseline (24 vs 17 of 30) but cites a wrong page more often (33% vs 23%) and refuses fewer
@@ -188,7 +188,7 @@ the dense model put the same page first, both with superseded pages left out and
 
 | heldout2, 50 questions | Wrong citations | Neighbours refused | Answerable right |
 |---|---|---|---|
-| Lmemory 1.0.3 (shipped) | 33% (12 / 36) | 9 / 20 | 24 / 30 |
+| KRouter 1.0.3 (shipped) | 33% (12 / 36) | 9 / 20 | 24 / 30 |
 | BM25 + skip superseded + dev3 floor | 19% (4 / 21) | 16 / 20 | 17 / 30 |
 | **`agree`: BM25 and dense must agree** | **18% (5 / 28)** | **15 / 20** | **23 / 30** |
 | dense + skip superseded + dev3 floor | 23% (7 / 30) | 13 / 20 | 23 / 30 |
@@ -205,7 +205,7 @@ Fifty questions cannot separate two systems: a 5 / 28 against a 5 / 22 wrong-cit
 110 pages (English and Chinese rule pages, their replaced versions, and 20 daily logs as distractors) and 200
 held-out questions, 80 of them neighbours, with **no dev set**: it stands for a vault Lmemory has never seen. `run.py`
 now gives 95% bootstrap intervals (`--ci`), paired intervals against another system (`--vs`), a comparison at equal
-coverage (`--vs-matched`) and the coverage curve (`--curve`). Baseline at freeze, Lmemory 1.0.3 minus BM25 with the two
+coverage (`--vs-matched`) and the coverage curve (`--curve`). Baseline at freeze, KRouter 1.0.3 minus BM25 with the two
 rules at Lmemory's coverage: wrong-citation rate −4.3 points [−10.2, +1.4], answerable right +6 [−2, +14]. Ahead
 on every point estimate, significant on none. The rule for claiming "surpasses BM25", and for shipping a new default,
 was written down before any candidate ran: [`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md), "Held-out set 3".
@@ -218,7 +218,7 @@ HELDOUT.md before each run.
 
 | System | wrong citations | neighbours refused (of 80) | corrections right (of 60) | current right (of 60) |
 |---|---|---|---|---|
-| Lmemory 1.0.3, default | 27% (37 / 139) [19, 34] | 46 | 50 | 52 |
+| KRouter 1.0.3, default | 27% (37 / 139) [19, 34] | 46 | 50 | 52 |
 | claude-mem 13.39.0, default | 64% (128 / 200) [58, 71] | 0 | 34 | 38 |
 | basic-memory 0.23.2, default | 78% (155 / 200) [72, 84] | 0 | 16 | 29 |
 | basic-memory + the two rules (floor from dev3) | 19% (5 / 27) [4, 33] | 76 | 3 | 19 |

@@ -57,6 +57,7 @@ def build(out: Path, vault: str = "", python: str = "") -> Path:
     tmp = out.with_name(out.name + ".tmp")
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", json.dumps(manifest(vault, python), ensure_ascii=False, indent=2) + "\n")
+        z.write(ROOT / "LICENSE", "LICENSE")
         for src in sorted(SCRIPTS.iterdir()):
             if src.is_file() and not src.name.endswith(".pyc") and src.name != ".DS_Store":
                 info = zipfile.ZipInfo.from_file(src, f"server/{src.name}")
@@ -117,6 +118,8 @@ def check(bundle: Path) -> list[str]:
     names = set(z.namelist())
     if "manifest.json" not in names:
         return ["no manifest.json at the root"]
+    if "LICENSE" not in names or z.read("LICENSE") != (ROOT / "LICENSE").read_bytes():
+        problems.append("bundle does not contain the repository LICENSE")
     try:
         m = json.loads(z.read("manifest.json"))
     except ValueError as exc:

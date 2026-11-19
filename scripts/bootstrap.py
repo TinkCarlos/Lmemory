@@ -296,7 +296,7 @@ import zones  # noqa: E402
 def layout_for(vault: Path, lang: str) -> Path | None:
     """The names a vault is laid down with: its own `lmemory-zones.psv`; else, for an English vault that does not
     already use the default (Chinese) names, `zones_en.psv`; else None (the default names)."""
-    own = vault / zones.ZONES_FILE
+    own = zones._file(vault)
     if own.is_file():
         return own
     if lang == "en" and not any((vault / m).exists() for m in DEFAULT_MARKS):
@@ -307,7 +307,7 @@ def layout_for(vault: Path, lang: str) -> Path | None:
 def vault_state(vault: Path) -> str:
     if not vault.exists() or (vault.is_dir() and not any(p for p in vault.iterdir() if p.name != ".DS_Store")):
         return "new"
-    if (vault / "Agent第二大脑.md").is_file() or (vault / "lmemory-zones.psv").is_file() \
+    if (vault / "Agent第二大脑.md").is_file() or zones._file(vault).is_file() \
             or (vault / "90 系统文件" / "自动化" / "日更健康.md").is_file():
         return "ours"
     return "merge"
@@ -365,7 +365,7 @@ def legacy_timer() -> bool:
     return any("lmemory-obsidian" in t for t in texts)
 
 
-def install_posix(vault: Path, dry: bool) -> int:
+def install_posix(vault: Path, dry: bool, lookup_only: bool = False) -> int:
     skill = skill_home()
     upgrade = skill.exists() or legacy_skill_home() is not None
     argv = ["/bin/sh", str(ROOT / "scripts/install.sh")] + (["--upgrade"] if upgrade else [])
@@ -381,9 +381,12 @@ def install_posix(vault: Path, dry: bool) -> int:
                 print(f"    write: {f}")
         vf = os.environ.get("LMEMORY_VAULT_FILE") or Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "lmemory/vault"
         print(f"    write: {vf} (where the vault is, for hooks and the MCP server)")
-        print(f"    set: lamp, self_evolution_key, lmemory_writer on {zones.path(vault, '90 系统文件/自动化/日更健康.md')}")
+        if not lookup_only:
+            print(f"    set: lamp, self_evolution_key, lmemory_writer on {zones.path(vault, '90 系统文件/自动化/日更健康.md')}")
         return 0
-    return subprocess.run(argv, env={**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_BOOTSTRAP": "1"}).returncode
+    env = {**os.environ, "OBSIDIAN_VAULT": str(vault), "LMEMORY_BOOTSTRAP": "1",
+           "LMEMORY_LOOKUP_ONLY": "1" if lookup_only else "0"}
+    return subprocess.run(argv, env=env).returncode
 
 
 def install_windows(vault: Path, dry: bool, timer: bool) -> int:
@@ -1269,6 +1272,7 @@ def main() -> int:
         args.import_sessions = True
     if args.minimal:
         args.no_import, args.no_timer, args.ask = True, True, False
+        args.timer = False
         if apps is not None and "cursor" not in apps:
             os.environ["LMEMORY_NO_CURSOR_RULES"] = "1"
         os.environ["LMEMORY_NO_PLUGIN"] = "1"
@@ -1292,7 +1296,7 @@ def main() -> int:
                   Path(os.environ.get("LMEMORY_ASK_RULE") or Path.home() / ".cursor/rules/lmemory-ask-product.mdc")]
     had_rules = [f.exists() for f in rule_files]
     os.environ["LMEMORY_NO_TIMER"] = "1"  # 先只装只读部分：库、路由、规则；夜间任务等宿主点头再装
-    rc = install_windows(vault, args.dry_run, False) if WINDOWS else install_posix(vault, args.dry_run)
+    rc = install_windows(vault, args.dry_run, False) if WINDOWS else install_posix(vault, args.dry_run, args.minimal)
     if rc != 0:
         return rc
     if args.dry_run:
@@ -1332,9 +1336,10 @@ def main() -> int:
     elif args.ask:
         cmd = f"{'python' if WINDOWS else 'python3'} \"{ROOT / 'scripts' / 'bootstrap.py'}\" --timer --vault \"{vault}\""
         print((t["timer_off"] if asked else t["timer_skip_noninteractive"]).format(cmd=cmd))
-    lane = model_lane(vault)
-    keys = os.environ.get("LMEMORY_KEYS_ENV") or str(Path.home() / ".dsh-lmemory-keys.env")
-    print(f"{t['model_ok']}: {lane}" if lane else t["model_none"].format(keys=keys))
+    lane = "" if args.minimal else model_lane(vault)
+    if not args.minimal:
+        keys = os.environ.get("LMEMORY_KEYS_ENV") or str(Path.home() / ".dsh-lmemory-keys.env")
+        print(f"{t['model_ok']}: {lane}" if lane else t["model_none"].format(keys=keys))
     lane_kind = "" if not lane else ("key" if lane == "API key" else lane.split(" ")[0])
     capture_only = not (args.no_import or os.environ.get("LMEMORY_NO_IMPORT") == "1" or args.ask or args.import_sessions
                         or args.import_distill)
@@ -1371,10 +1376,11 @@ def main() -> int:
     elif tell_later:
         cmd = f"{'python' if WINDOWS else 'python3'} \"{IMPORT}\" --consent --vault \"{vault}\""
         print(t["import_off"].format(cmd=cmd))
-    if not do_import and not capture_only and capture_consented():
+    if not args.minimal and not do_import and not capture_only and capture_consented():
         hooked = register_hooks(t, False, apps)  # 升级：以前同意过导入，钩子照样接上（换成这一版的路径）
-    cmem = offer_claude_mem(args, vault, t, do_distill)
-    set_lamp(vault, timer or remembering_timer())
+    cmem = {} if args.minimal else offer_claude_mem(args, vault, t, do_distill)
+    if not args.minimal:
+        set_lamp(vault, timer or remembering_timer())
     if args.minimal:
         print(t["minimal"].format(apps=", ".join(mcp) or "-"))
     elif not (timer or do_import or args.ask or remembering_already()):

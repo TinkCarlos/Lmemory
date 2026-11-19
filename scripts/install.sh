@@ -95,36 +95,38 @@ chmod +x "$RUN_SH" "$ROOT/extras/host-daily-evolution/check.sh" \
   "$ROOT/extras/host-daily-evolution/resolve.py" "$ROOT/extras/host-daily-evolution/wire_keys.py"
 WRITER="${LMEMORY_WRITER:-}"
 KEYS_ENV="${LMEMORY_KEYS_ENV:-$HOME/.dsh-lmemory-keys.env}"
-if [ -z "$WRITER" ]; then
-  WRITER=$(python3 "$ROOT/extras/host-daily-evolution/wire_keys.py" --detect) || WRITER=""
-  if [ -n "$WRITER" ]; then
-    export LMEMORY_WRITER=$WRITER
-    printf '%s\n' "detected writer: $WRITER"
+if [ "${LMEMORY_LOOKUP_ONLY:-}" != "1" ]; then
+  if [ -z "$WRITER" ]; then
+    WRITER=$(python3 "$ROOT/extras/host-daily-evolution/wire_keys.py" --detect) || WRITER=""
+    if [ -n "$WRITER" ]; then
+      export LMEMORY_WRITER=$WRITER
+      printf '%s\n' "detected writer: $WRITER"
+    fi
   fi
+  printf '%s\n' "self-evolution writer: $RUN_SH"
+  printf '%s\n' "keys file: $KEYS_ENV (chmod 600). never written into the memory folder."
+  wire=$(python3 "$ROOT/extras/host-daily-evolution/wire_keys.py") || wire="missing path=$KEYS_ENV"
+  printf '%s\n' "key wire: $wire"
+  case "$wire" in
+    present\ *)
+      printf '%s\n' "HOST: live graft probed (CLI login or API key). Marker in $KEYS_ENV."
+      key_field=present
+      ;;
+    dead\ *)
+      printf '%s\n' "HOST ACTION: existing key failed probe. Replace the API key in $KEYS_ENV, or re-login the CLI."
+      key_field=dead
+      ;;
+    unknown\ *)
+      printf '%s\n' "HOST ACTION: could not probe (network). Re-run install.sh when online."
+      key_field=missing
+      ;;
+    *)
+      printf '%s\n' "HOST ACTION: self-evolution key missing. Login grok / official Codex / claude, or put *_API_KEY in $KEYS_ENV or on the vault page."
+      key_field=missing
+      ;;
+  esac
+  printf '%s\n' "mounted agent runs status and must tell the host if host_action is present."
 fi
-printf '%s\n' "self-evolution writer: $RUN_SH"
-printf '%s\n' "keys file: $KEYS_ENV (chmod 600). never written into the memory folder."
-wire=$(python3 "$ROOT/extras/host-daily-evolution/wire_keys.py") || wire="missing path=$KEYS_ENV"
-printf '%s\n' "key wire: $wire"
-case "$wire" in
-  present\ *)
-    printf '%s\n' "HOST: live graft probed (CLI login or API key). Marker in $KEYS_ENV."
-    key_field=present
-    ;;
-  dead\ *)
-    printf '%s\n' "HOST ACTION: existing key failed probe. Replace the API key in $KEYS_ENV, or re-login the CLI."
-    key_field=dead
-    ;;
-  unknown\ *)
-    printf '%s\n' "HOST ACTION: could not probe (network). Re-run install.sh when online."
-    key_field=missing
-    ;;
-  *)
-    printf '%s\n' "HOST ACTION: self-evolution key missing. Login grok / official Codex / claude, or put *_API_KEY in $KEYS_ENV or on the vault page."
-    key_field=missing
-    ;;
-esac
-printf '%s\n' "mounted agent runs status and must tell the host if host_action is present."
 if [ -z "${OBSIDIAN_VAULT:-}" ]; then
   printf '%s\n' "timer not loaded: export LMEMORY_VAULT to YOUR memory folder (copy template/ there first), then re-run install.sh."
   printf '%s\n' "do not point the timer at the clone template."
@@ -160,7 +162,7 @@ else
     printf '%s\n' "alias table: $VAULT_MAP (kept)"
   fi
   HEALTH=$(python3 "$ZONES" real "$VAULT" "90 系统文件/自动化/日更健康.md")
-  if [ -f "$HEALTH" ]; then
+  if [ "${LMEMORY_LOOKUP_ONLY:-}" != "1" ] && [ -f "$HEALTH" ]; then
     python3 "$ROOT/extras/host-daily-evolution/patch_health.py" "$HEALTH" self_evolution_key "$key_field" || true
     if [ -n "$WRITER" ]; then
       python3 "$ROOT/extras/host-daily-evolution/patch_health.py" "$HEALTH" lmemory_writer present || true

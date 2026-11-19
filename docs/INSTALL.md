@@ -23,6 +23,8 @@ On Windows run the same bootstrap with `python .\scripts\bootstrap.py` in PowerS
 | Nightly job, distilling with your model (the steps that send text out) | no: `--ask` asks, `--timer` turns the job on | no |
 | Opens the new memory in Obsidian | only when you run it from a terminal (`--open` always, `--no-open` never); run by an agent, no | same |
 
+`--minimal` only connects the requested lookup tools. It skips credential probes, capture hooks, and background jobs, even when capture is enabled in an earlier Lmemory install. When you explicitly select an existing vault, Lmemory can read its upstream folder map. A new Lmemory folder map takes precedence.
+
 `--all` does everything the install can do without a model, as the default used to: it also imports the last 7 days
 of sessions and claude-mem's memory, if you have one.
 

@@ -133,7 +133,7 @@ def test_english_install_writes_no_chinese_path_or_line_and_the_lamp_tells_the_t
     res, out = _boot(env, "--lang", "en")
     assert res.returncode == 0, res.stdout[-1500:] + res.stderr[-1500:]
     vault = Path(out["vault"])
-    assert vault.name == "Second Brain" and (vault / zones.ZONES_FILE).is_file()
+    assert vault.name == "Lmemory Vault" and (vault / zones.ZONES_FILE).is_file()
     made = [p.relative_to(vault).as_posix() for p in vault.rglob("*") if p.is_file()]
     assert not [f for f in made if CJK.search(f)]
     printed = "\n".join(ln for ln in res.stdout.splitlines() if not ln.startswith("{"))
@@ -155,6 +155,48 @@ def test_minimal_install_only_looks_up(tmp_path):
     assert not (home / ".cursor").exists()  # no Cursor rules unless Cursor is named
     assert (home / ".agents/skills/lmemory/scripts/route_knowledge.sh").is_file()
     assert "Minimal install" in res.stdout and "keeps up by itself" not in res.stdout
+
+
+@POSIX
+def test_minimal_upgrade_keeps_prior_capture_and_writer_configuration(tmp_path):
+    env = _env(tmp_path)
+    home = tmp_path / "home"
+    codex = home / ".codex"
+    codex.mkdir()
+    config = codex / "config.toml"
+    config.write_text("# existing configuration\n", encoding="utf-8")
+    env["CODEX_HOME"] = str(codex)
+    state = Path(env["LMEMORY_STATE_DIR"])
+    state.mkdir()
+    consent = state / "import.json"
+    consent.write_text('{"consent": true}\n', encoding="utf-8")
+    keys = Path(env["LMEMORY_KEYS_ENV"])
+    keys.write_text("# existing writer values\n", encoding="utf-8")
+    res, out = _boot(env, "--lang", "en", "--minimal", "--apps", "codex", "--timer")
+    assert res.returncode == 0, res.stderr
+    assert out["hooks"] == [] and out["model"] is None and out["timer"] is False
+    assert "key wire:" not in res.stdout
+    assert not (codex / "hooks.json").exists()
+    assert consent.read_text(encoding="utf-8") == '{"consent": true}\n'
+    assert keys.read_text(encoding="utf-8") == "# existing writer values\n"
+
+
+@POSIX
+def test_explicit_upstream_vault_uses_its_custom_layout(tmp_path):
+    vault = _english_vault(tmp_path)
+    current = vault / zones.ZONES_FILE
+    legacy = vault / zones.LEGACY_ZONES_FILE
+    current.rename(legacy)
+    layout = legacy.read_bytes()
+    mapped = zones.path(vault, "90 系统文件/canonical_sources.psv")
+    aliases = mapped.read_bytes()
+    assert zones.lang(vault) == "en" and not current.exists()
+    res, out = _boot(_env(tmp_path), "--lang", "en", "--minimal", "--vault", str(vault))
+    assert res.returncode == 0, res.stderr
+    assert out["state"] == "ours"
+    assert legacy.read_bytes() == current.read_bytes() == layout
+    assert mapped.read_bytes() == aliases
+    assert not (vault / "90 系统文件").exists()
 
 
 @POSIX
@@ -388,6 +430,9 @@ def test_the_release_extension_passes_its_structure_check_and_answers(tmp_path):
 
     bundle = build_mcpb.build(tmp_path / "Lmemory.mcpb")
     assert build_mcpb.check(bundle) == []
+    import zipfile
+    with zipfile.ZipFile(bundle) as archive:
+        assert archive.read("LICENSE") == (REPO / "LICENSE").read_bytes()
 
 
 @POSIX

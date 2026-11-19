@@ -31,12 +31,17 @@ from pathlib import Path
 import lmemory_home  # noqa: F401,E402  导入时把 LMEMORY_VAULT 接成 OBSIDIAN_VAULT（记忆文件夹的正式名字是前者）
 
 ZONES_FILE = "lmemory-zones.psv"
+LEGACY_ZONES_FILE = "krouter-zones.psv"
 _CACHE: dict[str, tuple[float, list[tuple[str, str]]]] = {}
 
 
 def _file(vault: Path) -> Path:
     raw = os.environ.get("LMEMORY_ZONES", "").strip()
-    return Path(raw) if raw else Path(vault) / ZONES_FILE
+    if raw:
+        return Path(raw)
+    current = vault / ZONES_FILE
+    legacy = vault / LEGACY_ZONES_FILE
+    return legacy if not current.exists() and legacy.is_file() else current
 
 
 def pairs(vault: Path | None) -> list[tuple[str, str]]:
