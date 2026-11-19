@@ -614,7 +614,8 @@ def note_correction(payload: dict, agent: str, text: str) -> None:
         said = said[:CANDIDATE_MAX].rstrip() + " …"
     cwd = str(payload.get("cwd") or "")
     project = Path(project_root(cwd)).name if cwd else ""
-    sess = f"{AGENTS.get(agent, 'claude')}:{sid[:8] or '?'}"
+    ident = sid if agent == "codex" and re.fullmatch(r"[a-zA-Z0-9-]+", sid) else sid[:8]
+    sess = f"{AGENTS.get(agent, 'claude')}:{ident or '?'}"
     if en:  # 同一行的英文写法，corrections.LINE_EN 认它
         line = (f"- ({now.strftime('%H:%M')}) {said} — project {project or 'unknown'}, session `{sess}`, "
                 f"cue \"{cue}\", pending the next distill\n")

@@ -13,7 +13,8 @@ what an agent's question lands on. `--dry-run` says how many characters that wou
 
 A page this script did not write is never touched (`source: lmemory-import` in its frontmatter marks ours). Re-running
 rewrites only our pages, so the excerpt follows the transcript; a page already distilled keeps its digest until the
-session grows. `--consent` records your yes for the nightly job, which then imports yesterday on its own; `--revoke`
+session grows. Rewriting a session-day page also carries forward its manually restored `## 补录原对话` sections.
+`--consent` records your yes for the nightly job, which then imports yesterday on its own; `--revoke`
 takes it back. The nightly job imports nothing without that yes.
 
 Living next to another collector. A host that already logs its sessions day by day (a `type: daily-log` page under
@@ -53,7 +54,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import zones  # noqa: E402
 from lmemory_home import project_root, vault_path  # noqa: E402
-from lmemory_redact import human_words, redact  # noqa: E402
+from lmemory_redact import human_words, is_secret_page, redact  # noqa: E402
 
 FOLDER = "05 时间日志/会话摘录"
 PAGE_LANG = "zh"  # 库的语言（zones.lang）：英文库里召回给的 how 是英文；main() 里按库设
@@ -123,6 +124,10 @@ def clean(text: str, limit: int) -> str:
     if len(text) > limit:
         text = text[:limit].rstrip() + " …"
     return text
+
+
+def role_lines(text: str) -> str:
+    return "\n    ".join(text.replace("\r\n", "\n").splitlines())
 
 
 def _texts(content, kinds: tuple[str, ...]) -> list[str]:
@@ -474,20 +479,40 @@ def daily_coverage(vault: Path) -> tuple[dict[tuple[str, str], str], dict[str, s
     return ids, days
 
 
-def covered_by(e: dict, ids: dict[str, str], days: dict[str, str]) -> str:
+def covered_by(e: dict, ids: dict[tuple[str, str], str], days: dict[str, str],
+               peers: set[str] | frozenset[str] = frozenset()) -> str:
     """The daily log that already has this session-day, or ''."""
     sid, day = e["id"], e["day"].isoformat()
     if (sid, day) in ids:
         return ids[(sid, day)]
+    ambiguous = False
     for (known, d), rel in ids.items():
         if d == day and sid.startswith(known):
+            if any(other != sid and other.startswith(known) for other in peers):
+                ambiguous = True
+                continue
             return rel
-    return days.get(day, "")
+    return "" if ambiguous else days.get(day, "")
+
+
+CODEX_FILE_ID = re.compile(r"([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\.jsonl(?:\.zst)?$", re.I)
+
+
+def codex_prefix_peers(prefix: str) -> set[str]:
+    """Find potential owners even when a session-end import was given just one transcript."""
+    if not re.fullmatch(r"[0-9a-f]{8}", prefix, re.I):
+        return set()
+    root = roots()["codex"]
+    return {hit[1] for folder in (root, root.with_name("archived_sessions"))
+            for path in folder.rglob(f"rollout-*{prefix}*.jsonl*")
+            if (hit := CODEX_FILE_ID.search(path.name)) and hit[1].startswith(prefix)}
 
 
 def file_name(e: dict) -> str:
     title = UNSAFE.sub(" ", e["title"]).strip(" .") or "会话"
-    return f"{e['day'].isoformat()}｜{title[:40].strip()}（{e['id'][:8]}）.md"
+    sid = e["id"] if e["agent"] == "codex" else e["id"][:8]
+    sid = re.sub(r"[^a-zA-Z0-9_-]", "_", sid)
+    return f"{e['day'].isoformat()}｜{title[:40].strip()}（{sid}）.md"
 
 
 def frontmatter(path: Path) -> dict[str, str]:
@@ -514,6 +539,17 @@ def existing(folder: Path) -> dict[tuple[str, str], Path]:
             if meta.get("source") == MARK and meta.get("session"):
                 found[(meta["session"], meta.get("date", ""))] = path
     return found
+
+
+def saved_supplements(path: Path) -> tuple[str, bool]:
+    """Keep manually restored transcript sections with their original roles and protection."""
+    text = path.read_text(encoding="utf-8")
+    sections = re.split(r"(?m)(?=^#{1,2}[ \t])", text)
+    supplement = "\n\n".join(section.rstrip("\n") for section in sections
+                             if section.partition("\n")[0].rstrip() == "## 补录原对话")
+    from recall_index import split_frontmatter
+
+    return supplement, is_secret_page(path.name, split_frontmatter(text)[0])
 
 
 def old_digest(path: Path | None, turns: int) -> str:
@@ -558,7 +594,8 @@ def render(e: dict, digest: str = "", covers: int | None = None) -> str:
     """The page for one session and day. `covers`: how many turns the digest was made from (all of them by default)."""
     turns = e["turns"]
     status = "superseded" if e.get("superseded_by") else "imported"  # 后来的会话整页改掉了它：重新导入也照旧标着
-    meta = ["---", "type: session-excerpt", f"source: {MARK}", f"status: {status}", f"date: {e['day'].isoformat()}",
+    meta = ["---", "type: session-excerpt", f"source: {MARK}", "excerpt_format: role-lines-v2",
+            f"status: {status}", f"date: {e['day'].isoformat()}",
             f"agent: {e['agent']}", f"session: {e['id']}", f"project: {e['project'] or '-'}",
             *([f"project_root: {e['root']}"] if e.get("root") else []), f"turns: {len(turns)}",
             f"first_turn: {e.get('first_key') or turn_key(turns[0])}"]
@@ -602,10 +639,10 @@ def render(e: dict, digest: str = "", covers: int | None = None) -> str:
             out.append(f"- ({len(turns) - i} more turns, past the page's limit, not shown)" if en
                        else f"- （还有 {len(turns) - i} 轮，超出一页的摘录上限，未展开）")
             break
-        ask = clean(t["ask"], ASK_MAX).replace("\n", "\n  ")
+        ask = role_lines(clean(t["ask"], ASK_MAX))
         block = [f"- **Q** ({local_hm(t['ts'])}): {ask}" if en else f"- **问**（{local_hm(t['ts'])}）：{ask}"]
         if t["answer"]:
-            block.append(("  **A**: " if en else "  **答**：") + clean(t["answer"], ANSWER_MAX).replace("\n", "\n  "))
+            block.append(("  **A**: " if en else "  **答**：") + role_lines(clean(t["answer"], ANSWER_MAX)))
         out += block
         size += sum(len(b) for b in block)
     return "\n".join(out).rstrip() + "\n"
@@ -868,22 +905,33 @@ def main() -> int:
     entries, forked_pages, forks_dropped = dedupe_forks(entries, folder)
     overlap = args.overlap or st.get("overlap") or "link"
     ids, days = daily_coverage(vault)
+    import corrections
+
+    cands = corrections.pending(folder)
+    have = existing(folder)
+    sessions_by_day: dict[str, set[str]] = defaultdict(set)
+    for sid, day in have:
+        sessions_by_day[day].add(sid)
+    for e in entries:
+        day, sid = e["day"].isoformat(), e["id"]
+        peers = sessions_by_day[day]
+        peers.add(sid)
+        if args.file and e["agent"] == "codex" and ((day, sid[:8]) in cands or any(
+                d == day and known != sid and sid.startswith(known) for known, d in ids)):
+            peers.update(codex_prefix_peers(sid[:8]))
     covered = skipped_covered = 0
     for e in entries:
-        e["covered_by"] = covered_by(e, ids, days)
+        e["covered_by"] = covered_by(e, ids, days, sessions_by_day[e["day"].isoformat()])
         covered += bool(e["covered_by"])
     if overlap == "skip":
         skipped_covered = sum(1 for e in entries if e["covered_by"])
         entries = [e for e in entries if not e["covered_by"]]
-    have = existing(folder)
     removed = [path for (sid, _day), path in have.items() if sid in dropped]
     to_distill = {id(e) for e in sorted((e for e in entries if len(e["turns"]) >= DISTILL_MIN_TURNS),
                                         key=lambda e: e["turns"][-1]["ts"], reverse=True)[:max(args.distill_max, 0)]}
     import capture_ledger
-    import corrections
 
     rid = capture_ledger.run_id()
-    cands = corrections.pending(folder)
     changed_pages: list[dict] = []   # 这一轮新写进提炼的行，记进变更记录
     verdicts: list[dict] = []
     touched: list[Path] = []          # 这一轮写过或删过的文件，进同一个提交
@@ -898,11 +946,13 @@ def main() -> int:
                 exp_uses += experience.record_uses(vault, f"{e['agent']}:{e['id'][:8]}", e["turns"])
             except Exception as exc:  # noqa: BLE001
                 print(f"experience uses: {str(exc)[:200]}", file=sys.stderr)
+        before = have.get((e["id"], e["day"].isoformat()))
         target = folder / file_name(e)
+        if before and e["agent"] == "codex" and before.name.endswith(f"（{e['id'][:8]}）.md"):
+            target = before  # Existing links to an uncontested short name stay valid.
         if target.exists() and frontmatter(target).get("source") != MARK:
             kept.append(target.name)
             continue
-        before = have.get((e["id"], e["day"].isoformat()))
         if before and before.exists():
             e["superseded_by"] = frontmatter(before).get("superseded_by", "")
         page = render(e)
@@ -944,7 +994,13 @@ def main() -> int:
                 except Exception as exc:  # noqa: BLE001
                     exp_failed += 1
                     print(f"experience {target.name}: {str(exc)[:200]}", file=sys.stderr)
-        mine = cands.pop((e["day"].isoformat(), e["id"][:8]), []) if fresh and not args.dry_run else []
+        mine = []
+        if fresh and not args.dry_run:
+            day, sid = e["day"].isoformat(), e["id"]
+            mine = cands.pop((day, sid), [])
+            prefix = sid[:8]
+            if prefix != sid and not any(other != sid and other.startswith(prefix) for other in sessions_by_day[day]):
+                mine += cands.pop((day, prefix), [])
         if mine:
             # 你当场说的纠正，提炼里有对应的行就挂上那一行；没有就用你的原话补记进提炼（提炼漏掉的往往正是这一句）
             link = f"[[{zones.canon(vault, str(target.relative_to(vault)).replace(os.sep, '/')).removesuffix('.md')}]]"
@@ -970,6 +1026,12 @@ def main() -> int:
             if added:
                 changed_pages.append({"path": target, "agent": e["agent"], "session": e["id"], "added": added})
         if not args.dry_run:
+            if before and before.exists():
+                supplement, protected = saved_supplements(before)
+                if protected:
+                    page = page.replace("---\n", "---\nsecret: true\n", 1)
+                if supplement:
+                    page += "\n" + redact(supplement) + "\n"
             folder.mkdir(parents=True, exist_ok=True)
             tmp = target.with_name(target.name + ".tmp")
             tmp.write_text(page, encoding="utf-8")

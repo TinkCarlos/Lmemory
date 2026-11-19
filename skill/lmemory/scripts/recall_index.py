@@ -18,6 +18,10 @@ import sqlite3
 import sys
 import time
 import unicodedata
+from collections.abc import Set as AbstractSet
+from functools import lru_cache
+from itertools import chain
+from operator import add
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -30,7 +34,8 @@ import evidence  # noqa: E402
 redact = lmemory_redact.redact
 is_secret_page = lmemory_redact.is_secret_page  # 其他夜间脚本经 ri.is_secret_page 用它
 
-SCHEMA_VERSION = "recall-v19"  # v19：来历分数要正面证据（来源要有网址；没有正面证据又不成段叙述的页不算资料）； v18：段落证据带每页的标题和触发词； v17：段落表、每页的日期和说话人（段落级证据，evidence.py），每页的来历（kb.py 自动识别）； v15：边表（链接、取代、同会话、同一天、共同的词、一起被引用），给联想通路用； v14：多存每页 frontmatter 的文字（字面检索预筛用）；v13：机密页不存 how、脱敏规则扩大
+SCHEMA_VERSION = "recall-v22"  # Also index dated turns from pre-rename imports.
+IMPORTED_SOURCES = {"lmemory-import", "krouter-import"}
 STRONG_W = 0.5  # 软权重 ≥ 此值才算"有效匹配词"
 MIN_STRONG_MATCH = 2
 SCORE_MIN = 8.5  # bm25×分层权重的绝对下限
@@ -83,20 +88,33 @@ LATIN_RE = re.compile(r"[a-z0-9]+")  # 与 FTS5 unicode61 的切分一致
 
 def cache_path(vault: Path) -> Path:
     base = Path(os.environ.get("LMEMORY_CACHE_DIR") or Path.home() / ".cache" / "lmemory")
-    digest = hashlib.sha1(str(vault.resolve()).encode("utf-8")).hexdigest()[:12]
+    # Running workers from another release must never rebuild this version's index in place.
+    digest = hashlib.sha1(f"{SCHEMA_VERSION}:{vault.resolve()}".encode("utf-8")).hexdigest()[:12]
     return base / f"recall-{digest}.sqlite"
 
 
-def tokens(text: str) -> list[str]:
-    text = unicodedata.normalize("NFKC", text or "").lower()
+def _pairs(run: str) -> tuple[str, ...]:
+    return tuple(map(add, run, run[1:])) if len(run) > 1 else (run,)
+
+
+_short_pairs = lru_cache(maxsize=8192)(_pairs)
+
+
+def token_parts(text: str) -> tuple[list[str], list[str]]:
+    return normalized_token_parts(unicodedata.normalize("NFKC", text or ""))
+
+
+def normalized_token_parts(text: str) -> tuple[list[str], list[str]]:
+    text = text.lower()
     out: list[str] = []
     for run in CJK_RE.findall(text):
-        if len(run) == 1:
-            out.append(run)
-        else:
-            out.extend(run[i : i + 2] for i in range(len(run) - 1))
-    out.extend(w for w in LATIN_RE.findall(text) if len(w) >= 2)
-    return out
+        out.extend(_short_pairs(run) if len(run) <= 32 else _pairs(run))
+    return out, [w for w in LATIN_RE.findall(text) if len(w) >= 2]
+
+
+def tokens(text: str) -> list[str]:
+    cjk, latin = token_parts(text)
+    return cjk + latin
 
 
 def split_frontmatter(text: str) -> tuple[dict[str, str], str]:
@@ -111,13 +129,20 @@ def split_frontmatter(text: str) -> tuple[dict[str, str], str]:
     for line in text[4:end].splitlines():
         if ":" in line and not line.startswith((" ", "-", "\t")):
             key, _, value = line.partition(":")
-            meta[key.strip()] = value.strip().strip('"').strip("'")
+            key, value = key.strip(), value.strip()
+            if key == "project_root":
+                # Imported absolute paths are unquoted and can end in a literal quote.
+                if len(value) >= 2 and value[0] in "\"'" and value[0] == value[-1]:
+                    value = value[1:-1]
+                meta[key] = value
+            else:
+                meta[key] = value.strip('"').strip("'")
     return meta, text[end + 4 :].lstrip("-\n")
 
 
 def unigrams(text: str) -> list[str]:
     text = unicodedata.normalize("NFKC", text or "").lower()
-    return sorted({c for run in CJK_RE.findall(text) for c in run})
+    return sorted(set("".join(CJK_RE.findall(text))))
 
 
 def _clean(line: str) -> str:
@@ -239,13 +264,22 @@ def iter_markdown(vault: Path):
 def connect(db: Path) -> sqlite3.Connection:
     db.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(db, timeout=60)  # 另一个进程在重建索引时等它（五万页全量约 25 秒）
-    con.execute("PRAGMA journal_mode=WAL")
     con.execute("CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT)")
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.OperationalError as exc:
+        if getattr(exc, "sqlite_errorcode", None) != sqlite3.SQLITE_BUSY and str(exc) != "database is locked":
+            raise
     row = con.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
     if not row or row[0] != SCHEMA_VERSION:
-        con.executescript(
-            """
+        con.execute("BEGIN IMMEDIATE")
+        row = con.execute("SELECT v FROM meta WHERE k='schema'").fetchone()
+        if row and row[0] == SCHEMA_VERSION:
+            con.commit()
+            return con
+        schema = """
             DROP TABLE IF EXISTS vcol; DROP TABLE IF EXISTS vinst; DROP TABLE IF EXISTS vrow; DROP TABLE IF EXISTS docs; DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS fm;
+            DROP TABLE IF EXISTS history_turns;
             CREATE VIRTUAL TABLE docs USING fts5(
                 rel UNINDEXED, title, triggers, body, uni, tier UNINDEXED, status UNINDEXED, how UNINDEXED, name UNINDEXED,
                 tokenize='unicode61');
@@ -255,12 +289,19 @@ def connect(db: Path) -> sqlite3.Connection:
             CREATE TABLE files(rel TEXT PRIMARY KEY, mtime_ns INTEGER, size INTEGER, rid INTEGER);
             -- 每页 frontmatter 的原文（已脱敏、小写），只给字面检索预筛用：frontmatter 不进全文索引
             CREATE TABLE fm(rel TEXT PRIMARY KEY, text TEXT);
+            CREATE TABLE history_turns(rid INTEGER, day TEXT, project TEXT, question TEXT);
+            CREATE INDEX history_turn_question ON history_turns(question, day);
+            CREATE INDEX history_turn_rid ON history_turns(rid);
+            CREATE INDEX history_turn_project ON history_turns(project);
             """
-            + associate.DROP + associate.SCHEMA + evidence.DROP + evidence.SCHEMA + kb.ORIGIN_DROP + kb.ORIGIN_SCHEMA
-        )
+        schema += associate.DROP + associate.SCHEMA + evidence.DROP + evidence.SCHEMA + kb.ORIGIN_DROP + kb.ORIGIN_SCHEMA
+        for statement in schema.split(";"):
+            if statement.strip():
+                con.execute(statement)
         con.execute("INSERT OR REPLACE INTO meta VALUES('schema', ?)", (SCHEMA_VERSION,))
         con.commit()
-        con.execute("VACUUM")  # 旧表的页还留在文件里（旧版本存的是未脱敏的原文），一并清掉
+        if row:
+            con.execute("VACUUM")  # 旧表可能含脱敏前的原文，新缓存没有旧页。
     return con
 
 
@@ -284,7 +325,7 @@ def refresh(vault: Path, con: sqlite3.Connection, only=None) -> dict[str, int]:
     """Bring the index up to the vault's files. `only` (absolute paths a writer just changed): re-check just those,
     with no walk over the vault; the next full refresh still catches anything else (a git pull)."""
     secret_how = "(secret page: path only, never quoted)" if zones.lang(vault) == "en" else "（机密页：只给路径，不引用原文）"
-    seen: dict[str, tuple[int, int, Path]] = {}
+    seen: dict[str, tuple[int, int, str]] = {}
     rels = None if only is None else _only_rels(vault, only)
     base = str(vault).rstrip("/")
     for full, rel in (walk_md(vault) if rels is None else ((f"{base}/{r}", r) for r in rels)):
@@ -326,11 +367,21 @@ def refresh(vault: Path, con: sqlite3.Connection, only=None) -> dict[str, int]:
         con.execute("INSERT OR REPLACE INTO meta VALUES('map_sha', ?)", (map_sha,))
     changed = added = removed = 0
     vault_lang = zones.lang(vault)
+
+    # Identical paragraphs can occur on multiple pages. Reuse only within this refresh.
+    @lru_cache(maxsize=4096)
+    def paragraph(chunk: str) -> tuple[str, str]:
+        normalized = unicodedata.normalize("NFKC", chunk)
+        cjk, latin = normalized_token_parts(normalized)
+        words = " ".join(dict.fromkeys(cjk + latin))
+        return words, evidence.normalized_type_tags(normalized) if words else ""
+
     for rel, (_m, _s, rid) in known.items():
         if rel not in seen:
             con.execute("DELETE FROM docs WHERE rowid=?", (rid,))
             con.execute("DELETE FROM files WHERE rel=?", (rel,))
             con.execute("DELETE FROM fm WHERE rel=?", (rel,))
+            con.execute("DELETE FROM history_turns WHERE rid=?", (rid,))
             associate.forget(con, rel, rid)
             evidence.forget(con, rid)
             con.execute("DELETE FROM origin WHERE rel=?", (rel,))
@@ -347,20 +398,27 @@ def refresh(vault: Path, con: sqlite3.Connection, only=None) -> dict[str, int]:
         # 索引、how、问答卡核对用的都是脱敏后的文字：密钥值不进缓存，也不会从这里被打印或外发
         text = redact(raw_bytes.decode("utf-8", errors="replace"))
         meta, body = split_frontmatter(text)
-        page_hash = card_hashes(raw_bytes)
         title = meta.get("title") or path.stem
         status = (meta.get("status") or "").lower()
         # 卡片问题只在卡片还对得上这一页当前内容、且核对得过时才算触发词：页面一改旧卡不再影响排序，
         # 答案对不上原文或问题跟这页无关的卡也不能把这页顶上来
-        mine = [c for c in cards.get(rel, []) if c.get("sha") in page_hash]
+        mine = cards.get(rel, [])
+        if mine:
+            page_hash = card_hashes(raw_bytes)
+            mine = [c for c in mine if c.get("sha") in page_hash]
         terms = set(tokens(text)) if mine else set()
         live_cards = [c["q"] for c in mine if grounded(c, text, terms)]
         trig = " ".join([meta.get("triggers") or meta.get("aliases") or ""] + aliases.get(rel, []) + live_cards)
-        secret = is_secret_page(zones.canon(vault, rel), meta)
+        canon = zones.canon(vault, rel)
+        tier = tier_of(canon, status)
+        secret = is_secret_page(canon, meta)
         how = secret_how if secret else (meta.get("how") or first_rule_line(body))
         dirs = " ".join(rel.split("/")[:-1])
+        dir_cjk, dir_latin = token_parts(dirs)
+        body_cjk, body_latin = token_parts(body)
         if old:
             con.execute("DELETE FROM docs WHERE rowid=?", (old[2],))
+            con.execute("DELETE FROM history_turns WHERE rid=?", (old[2],))
             associate.forget(con, rel, old[2])
             evidence.forget(con, old[2])
             changed += 1
@@ -372,19 +430,28 @@ def refresh(vault: Path, con: sqlite3.Connection, only=None) -> dict[str, int]:
                 rel,
                 " ".join(tokens(title + " " + path.stem + " " + meta.get("topic_terms", ""))),
                 " ".join(tokens(trig)),
-                " ".join(tokens(dirs + "\n" + body)),
+                " ".join(dir_cjk + body_cjk + dir_latin + body_latin),
                 " ".join(unigrams(title + " " + trig + " " + body)),
-                tier_of(zones.canon(vault, rel), status),
+                tier,
                 status,
                 how,
                 compact(title + "|" + path.stem + "|" + meta.get("topic_terms", "")),
             ),
         )
-        con.execute("INSERT OR REPLACE INTO files VALUES(?,?,?,?)", (rel, mtime, size, cur.lastrowid))
-        associate.index_page(con, sys.modules[__name__], rel, cur.lastrowid, text.replace("\r\n", "\n"), meta, body)
-        evidence.index_page(con, tokens, cur.lastrowid, rel, text.replace("\r\n", "\n"), meta, body,
+        rid = cur.lastrowid
+        if rid is None:
+            raise sqlite3.DatabaseError("FTS insert did not return a row ID")
+        con.execute("INSERT OR REPLACE INTO files VALUES(?,?,?,?)", (rel, mtime, size, rid))
+        if not secret and tier != "dead":
+            if is_dated_excerpt(meta):
+                dates = (rid, meta["date"], meta.get("project", ""))
+                keys = dict.fromkeys(key for key, *_ in answered_turns(meta, text))
+                con.executemany("INSERT INTO history_turns VALUES(?,?,?,?)", (dates + (key,) for key in keys or ("",)))
+        associate.index_page(con, sys.modules[__name__], rel, rid, text.replace("\r\n", "\n"), meta, body,
+                             body_cjk + body_latin)
+        evidence.index_page(con, tokens, paragraph, rid, rel, text.replace("\r\n", "\n"), meta, body,
                             title + " " + path.stem + " " + meta.get("topic_terms", "") + " " + trig)
-        kb.index_origin(con, rel, zones.canon(vault, rel), text.replace("\r\n", "\n"), vault_lang, False)
+        kb.index_origin(con, rel, canon, text.replace("\r\n", "\n"), vault_lang, False)
         head = text.replace("\r\n", "\n")
         end = head.find("\n---", 4) if head.startswith("---\n") else -1
         con.execute("INSERT OR REPLACE INTO fm VALUES(?,?)", (rel, head[:end + 4].lower() if end >= 0 else ""))
@@ -431,8 +498,9 @@ def unseen_words(vault: Path, res: dict, query: str) -> list[str]:
         body = (vault / res["hits"][0]["rel"]).read_text(encoding="utf-8", errors="replace")
     except OSError:
         return []
-    page = set(tokens(body))
-    page_latin = [w for w in page if not is_cjk_bigram(w)]
+    cjk, latin = token_parts(body)
+    page_latin = set(latin)
+    page = set(cjk) | page_latin
     kept = set(res.get("query_tokens") or [])
     out: list[str] = []
     for t in tokens(query):
@@ -543,6 +611,8 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
         only = sorted(_TOUCHED)
         _TOUCHED.clear()
         stats = refresh(vault, con, only=only)
+    if gate and limit > 0 and (match := historical_recall(con, vault, query, scope, limit)):
+        return {**match, "stats": stats}
     raw: list[str] = []
     for t in tokens(query):
         if len(t) == 1 and CJK_RE.fullmatch(t):
@@ -564,12 +634,13 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
     if not qtok:
         return {"hits": [], "stats": stats, "query_tokens": [], "confidence": "none", "margin": 0.0}
     match = "{title triggers body} : (" + " OR ".join('"' + t.replace('"', "") + '"' for t in qtok) + ")"
+    scope = scope.strip("/")
+    # Filter before LIMIT so matches outside the requested page or folder cannot take its candidate slots.
     rows = con.execute(
         "SELECT rowid, rel, tier, status, how, title, name, bm25(docs, 0, 4.0, 4.0, 1.0, 0, 0, 0, 0, 0) AS s "
-        "FROM docs WHERE docs MATCH ? ORDER BY s LIMIT 80",
-        (match,),
+        "FROM docs WHERE docs MATCH ? AND (? = '' OR rel = ? OR instr(rel, ?) = 1) ORDER BY s LIMIT 80",
+        (match, scope, scope, scope + "/"),
     ).fetchall()
-    scope = scope.strip("/")
     hits = []
     qset = set(raw)
     qname = compact(query)
@@ -578,8 +649,6 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
     skills_dir = skills_rel(vault) + "/"
     own_cards = bool(scope) and (scope + "/").startswith((cards_dir, skills_dir))
     for rid, rel, tier, status, how, title, name, s in rows:
-        if scope and not (rel == scope or rel.startswith(scope + "/")):
-            continue
         if not own_cards and rel.startswith((cards_dir, skills_dir)):
             continue  # 经验卡只走建议通路（experience.py），不当事实出现在召回里
         boost = TIER_BOOST.get(tier, 1.0)
@@ -675,13 +744,14 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
     for h in ([] if library else hits[:ASKED_CHECK]):
         if h["status"] == "imported" and asked_only(vault, h["rel"], qset):
             asked.append(h["rel"])
+    asked_lead = bool(hits and hits[0]["rel"] in asked)
+    asked_meta = {"asked": asked, "asked_lead": asked_lead} if asked else {}
     if asked:
         hits = [h for h in hits if h["rel"] not in asked]
     ranked = hits
     hits = hits[:limit]
     if not hits:
-        return {"hits": [], "stats": stats, "query_tokens": qtok, "confidence": "none", "margin": 0.0,
-                **({"asked": asked} if asked else {})}
+        return {"hits": [], "stats": stats, "query_tokens": qtok, "confidence": "none", "margin": 0.0, **asked_meta}
     n_docs = con.execute("SELECT count(*) FROM files").fetchone()[0] or 1
     strong = strong_matches(con, hits[0]["rid"], present, df, titled, small=n_docs < SMALL_VAULT, known=named)
     top = hits[0]["score"]
@@ -725,8 +795,8 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
         conf = "none" if gate and absent_stems(con, raw, df) else "low"
     if crowded and conf != "none":
         conf = "none" if gate and absent_stems(con, raw, df) else "low"
-    if asked and gate and conf == "low":
-        conf = "none"  # 排在前面的只是你以前的提问，剩下的又只是弱匹配：库里没有
+    if asked_lead and gate and conf == "low":
+        conf = "none"  # 首位只有你以前的提问，剩下的又只是弱匹配：库里没有
     # 段落证据（evidence.py）：门槛照旧按整页排序算；交出去的页按最好的一段重排，再看证据补拒或补答
     ev_none = rescued = ""
     if order is not None:
@@ -738,7 +808,7 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
             ev_none = evidence.veto(top3)
             if ev_none:
                 conf = "none"
-        elif gate and ev_gate and refuse and not clipped and not crowded and not asked and evidence.rescue(top3):
+        elif gate and ev_gate and refuse and not clipped and not crowded and not asked_lead and evidence.rescue(top3):
             conf, rescued = "low", "1"
         if conf == "high" and hits and hits[0] is not first:
             conf = "medium"  # 整页排第一的不是证据最好的那页：不说「直接」
@@ -747,7 +817,7 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
     if conf != "none":
         if conflict:
             # 没有模型、还没提炼时，同一件事的新旧两页：新页在前，并说明较早的一页说法不同（拿不准只标不排）
-            found = associate.conflicts(sys.modules[__name__], con, vault, ranked, qtok)
+            found = associate.conflicts(sys.modules[__name__], con, vault, ranked, qtok, query)
             if found:
                 associate.apply_conflict(ranked, found)
         # 前 DIRECT_FIRST 个位置永远是直接命中；联想只填后面的位置（直接命中不够时可以往前补），
@@ -757,7 +827,7 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
         if assoc_cap is not None:
             n = min(n, assoc_cap)
         if n:
-            spread = associate.spread(con, ranked, {h["rel"] for h in ranked[:keep]}, scope)
+            spread = associate.spread(con, ranked, {h["rel"] for h in ranked[:keep]} | set(asked), scope)
             # 联想也不带出经验卡和技能；也不从记忆扩散到知识库的页，占掉记忆的位置
             away = kb.classify(con, vault, [p["rel"] for p in spread]) if spread else {}
             picks = [p for p in spread if (own_cards or not p["rel"].startswith((cards_dir, skills_dir)))
@@ -784,8 +854,7 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
         out["assoc"] = picks
     if found:
         out["conflict"] = found
-    if asked:
-        out["asked"] = asked
+    out.update(asked_meta)
     return out
 
 
@@ -793,8 +862,9 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
 
 ASKED_CHECK = 10  # 只看排在前面的这么多页（读文件的只有还没提炼的会话摘录）
 UNDISTILLED = re.compile(r"还没提炼|not distilled yet")
-ASK_LINE = re.compile(r"^- \*\*(?:问|Q)\*\*[^：:]*[：:]\s?(.*)$")
+ASK_LINE = re.compile(r"^- \*\*(?:问|Q)\*\*(?:\s*[（(]([^）)\n]*)[）)])?\s*[：:]\s?(.*)$")
 ANSWER_LINE = re.compile(r"^\s+\*\*(?:答|A)\*\*[：:]\s?(.*)$")
+CAPTURE_HEAD = re.compile(r"^## (?:摘录(?:[（( ]|$)|Excerpt(?:[（( ]|$)|补录原对话\s*$)")
 QUESTION_CUE = re.compile(r"[?？]|^\s*(what|which|how|when|where|who|why|whose|is|are|do|does|did|can|could|should|"
                           r"would|will)\b|吗|什么|怎么|怎样|哪|是否|多少|有没有|几|为何|为什么|查一下|查查|look (it )?up", re.I)
 REFUSED = re.compile(r"recall:\s*none|not in (the |your |this )?(vault|memory|notes)|no record|nothing (about|on) (it|this|that)|"
@@ -814,19 +884,9 @@ def asked_only(vault: Path, rel: str, qset: set[str]) -> bool:
     head = body.split("\n---", 1)[0] if body.startswith("---") else ""
     if "type: session-excerpt" not in head or not UNDISTILLED.search(head):
         return False  # 只看还没提炼的会话摘录；提炼过的、别的页都不管（机密页的 how 被换掉了，所以读页头）
-    turns: list[list[str]] = []
-    for line in body.splitlines():
-        m = ASK_LINE.match(line)
-        if m:
-            turns.append([m.group(1), ""])
-            continue
-        a = ANSWER_LINE.match(line)
-        if a and turns:
-            turns[-1][1] = a.group(1)
-        elif turns and line.startswith("  ") and line.strip():
-            turns[-1][1 if turns[-1][1] else 0] += " " + line.strip()
     seen = False
-    for ask, answer in turns:
+    role_lines = "excerpt_format: role-lines-v2" in head
+    for ask, answer, _, _, _ in session_turns(body, role_lines, captured_only=role_lines):
         if qset & set(tokens(answer)) and not REFUSED.search(answer):
             return False  # 回答里有这件事：是知识
         if qset & set(tokens(ask)):
@@ -834,6 +894,172 @@ def asked_only(vault: Path, rel: str, qset: set[str]) -> bool:
                 return False  # 你自己说的一句话（"以后都用 SQLite"）：是知识
             seen = True
     return seen
+
+
+def session_turns(text: str, role_lines: bool = False, captured_only: bool = False, only_key: str | None = None):
+    """Yield each question, reply, and the first actual reply line in a captured page."""
+    ask, reply, first, quote, when = None, [], 0, "", ""
+    active, explicit_roles = not captured_only, role_lines
+    for number, line in enumerate(text.split("\n"), 1):
+        if captured_only and line.startswith("## "):
+            if ask is not None:
+                yield ask, " ".join(reply), first, quote, when
+            ask = None
+            active = bool(CAPTURE_HEAD.match(line))
+            explicit_roles = role_lines or line.rstrip() == "## 补录原对话"
+        if not active:
+            continue
+        m = ASK_LINE.match(line)
+        if m:
+            if ask is not None:
+                yield ask, " ".join(reply), first, quote, when
+            ask, reply, first, quote, when = m[2], [], 0, "", m[1] or ""
+            if only_key is not None and history_key(ask) != only_key:
+                ask = None
+            continue
+        if ask is None:
+            continue
+        a = ANSWER_LINE.match(line) if not explicit_roles or line.startswith("  **") else None
+        if a or line.startswith("  ") and first:
+            said = (a[1] if a else line).strip()
+            reply.append(said)
+            if not quote and said:
+                first, quote = number, said
+            elif a and not first:
+                first = number
+        elif line.startswith("  ") and line.strip():
+            ask += "\n" + line.strip()
+    if ask is not None:
+        yield ask, " ".join(reply), first, quote, when
+
+
+HISTORY_QUOTE = re.compile(r'「([^\n]{1,512})」|『([^\n]{1,512})』|“([^\n]{1,512})”|"([^"\n]{1,512})"|`([^`\n]{1,512})`')
+HISTORY_CONTEXT = re.compile(r"之前|当时|那次|历史|记录|会话|对话|上次|问的|怎么答|\b(?:asked|said|remember|record|conversation|chat|"
+                             r"decide|previously|(?:how|what) (?:did|was) \w+ answer(?:ed)?)\b", re.I)
+HISTORY_PROJECT = re.compile(r"(?:\b(?:in|for)\s+(?:the\s+)?(?:project\s+)?(?P<en>[A-Z][\w.-]*(?: [A-Z][\w.-]*)*)"
+                             r"(?![\w.-])|(?:在|关于)?项目[：:\s]+(?P<zh>[\w.-]+))")
+HISTORY_REFUSAL = re.compile(r"recall:\s*none|not in (the |your |this )?(vault|memory|notes)|"
+                              r"记忆里没有|库里没有|知识库没有", re.I)
+
+
+def history_key(text: str) -> str:
+    clean = unicodedata.normalize("NFKC", text).casefold().replace("`", "").replace("**", "")
+    clean = " ".join(clean.lstrip(" #-–>*").rstrip("。！？!?").split())
+    return re.sub(r"(?<=[\u3400-\u9fff]) (?=[\u3400-\u9fff])", "", clean)
+
+
+def is_dated_excerpt(meta: dict) -> bool:
+    return (meta.get("type") == "session-excerpt" and meta.get("source") in IMPORTED_SOURCES
+            and re.fullmatch(r"\d{4}-\d{2}-\d{2}", meta.get("date", "")) is not None)
+
+
+def answered_turns(meta: dict, text: str, only_key: str | None = None):
+    """Only a captured, dated question with a recorded answer can establish an exact history match."""
+    if not is_dated_excerpt(meta):
+        return
+    role_lines = meta.get("excerpt_format") == "role-lines-v2"
+    for ask, answer, ln, quote, when in session_turns(text, role_lines, captured_only=True, only_key=only_key):
+        if quote and len(ask) >= 6 and not HISTORY_REFUSAL.search(answer):
+            key = only_key if only_key is not None else history_key(ask.split("\n", 1)[0])
+            yield key, ln, quote, ask, answer, when
+
+
+@lru_cache(maxsize=4)
+def _proof_file(path: Path, mtime: int, size: int) -> tuple[frozenset[str], dict]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return frozenset(), {}
+    if not isinstance(data, dict):
+        return frozenset(), {}
+    hashes, projects = data.get("replies"), data.get("projects")
+    return (frozenset(s for s in hashes if isinstance(s, str)) if isinstance(hashes, list) else frozenset(),
+            {sid: p for sid, p in projects.items() if isinstance(p, str)} if isinstance(projects, dict) else {})
+
+
+def history_proofs() -> tuple[frozenset[str], dict]:
+    """Proofs are hashes of redacted question/answer pairs verified against actual host message roles."""
+    state = Path(os.environ.get("LMEMORY_STATE_DIR") or Path.home() / ".local/state/lmemory")
+    path = state / "codex-answer-proofs.json"
+    try:
+        st = path.stat()
+    except OSError:
+        return frozenset(), {}
+    return _proof_file(path, st.st_mtime_ns, st.st_size)
+
+
+def proof_key(meta: dict, when: str, ask: str, answer: str) -> str:
+    fields = [meta.get("session"), meta.get("date"), when, " ".join(ask.split()), " ".join(answer.split())]
+    return hashlib.sha256(json.dumps(fields, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+
+
+def history_request(query: str) -> tuple[str, str, str] | None:
+    m = max(HISTORY_QUOTE.finditer(query), key=lambda x: len(x[0]), default=None)
+    if not m:
+        return None
+    context = query[:m.start()] + " " + query[m.end():]
+    if not HISTORY_CONTEXT.search(context) or not (day := associate.requested_day(context)):
+        return None
+    key = history_key(next(x for x in m.groups() if x is not None))
+    return (key, day, context) if len(compact(key)) >= 6 else None
+
+
+def historical_recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit: int) -> dict | None:
+    """Resolve an explicitly quoted past question without making its words compete with unrelated notes."""
+    if not (request := history_request(query)):
+        return None
+    key, day, context = request
+    scope = scope.strip("/")
+    missing = {"hits": [], "history_matches": 0, "confidence": "none", "query_tokens": []}
+    rows = con.execute(
+        "SELECT DISTINCT d.rel, d.tier, d.status, h.day FROM history_turns h "
+        "JOIN docs d ON d.rowid=h.rid WHERE h.question=? AND substr(h.day, -length(?))=? "
+        "AND (? = '' OR d.rel = ? OR instr(d.rel, ?) = 1) ORDER BY d.rel",
+        (key, day, day, scope, scope, scope + "/"),
+    ).fetchall()
+    if not rows:
+        return missing
+    proofs, project_aliases = history_proofs()
+    known = {p for (p,) in con.execute("SELECT DISTINCT project FROM history_turns WHERE project<>''")} | set(project_aliases.values())
+    projects = {p.casefold() for p in known if re.search(r"(?<![a-z0-9])" + re.escape(p) + r"(?![a-z0-9])", context, re.I)}
+    if not projects and (explicit := HISTORY_PROJECT.search(context)):
+        named = (explicit["en"] or explicit["zh"]).casefold()
+        if named.split()[0] not in evidence.MONTH_NUM:
+            projects.add(named)
+    ref = kb.classify(con, vault, [r[0] for r in rows])
+    hits = {}
+    for rel, tier, status, source_day in rows:
+        if rel in ref or status in DEAD_STATUS:
+            continue
+        try:
+            text = (vault / rel).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        meta, _ = split_frontmatter(text)
+        aliases = {meta.get("project", "").casefold(), project_aliases.get(meta.get("session"), "").casefold()}
+        if (meta.get("date") != source_day or (projects and not projects & aliases)
+                or meta.get("status", "").lower() in DEAD_STATUS
+                or is_secret_page(zones.canon(vault, rel), meta)):
+            continue
+        certified = {}
+        for _, n, q, ask, answer, when in answered_turns(meta, text, only_key=key):
+            if meta.get("excerpt_format") == "role-lines-v2":
+                certified[n] = (n, redact(q)[:160])
+            elif (digest := proof_key(meta, when, ask, answer)) in proofs:
+                certified[digest] = None if digest in certified else (n, redact(q)[:160])
+        quotes = [quote for quote in certified.values() if quote is not None]
+        if quotes:
+            hits[rel] = {"rel": rel, "tier": tier, "status": status, "how": "",
+                         "score": 1.0, "turn_quotes": quotes}
+    if hits:
+        pages = list(hits.values())
+        n_turns = sum(len(hit["turn_quotes"]) for hit in pages)
+        result = {"hits": pages[:limit], "history_matches": n_turns, "confidence": "high" if n_turns == 1 else "medium",
+                  "query_tokens": list(dict.fromkeys(tokens(key)))}
+        if limit == PAGES and len(pages) > limit:
+            result["more"] = pages[limit:EVIDENCE_PAGES]
+        return result
+    return missing
 
 
 CLIP_PATH = kb.CLIP_PATH  # 剪藏识别挪到 kb.py：剪藏自动算知识库
@@ -1014,7 +1240,8 @@ def print_kb(vault: Path, res: dict, query: str, lines: int = 1) -> None:
 
 
 def strong_matches(con: sqlite3.Connection, rid: int, terms: list[str], df: dict[str, int],
-                   named: set[str] = frozenset(), small: bool = False, known: set[str] = frozenset()) -> int:
+                   named: AbstractSet[str] = frozenset(), small: bool = False,
+                   known: AbstractSet[str] = frozenset()) -> int:
     """首条命中页里出现了几个"像词"的查询词。只碰上一个泛词的，多半是巧合。"""
     if not terms:
         return 0
@@ -1206,7 +1433,7 @@ def coverage_signals(con: sqlite3.Connection, vault: Path, query: str, rels: lis
 
     kept = [t for t in raw if dfx(t) > 0 and (not is_cjk_bigram(t) or not set(t) & FUNCTION_CHARS)]
     absent = [t for t in raw if dfx(t) == 0]
-    out = {"nterms": len(raw), "nabsent": len(absent)}
+    out: dict[str, int | float | bool | str] = {"nterms": len(raw), "nabsent": len(absent)}
     if not kept:
         return {**out, "cov1": 0.0, "cov3": 0.0, "line_cov": 0.0, "rare_miss1": False, "rare_miss3": False,
                 "bind_fail": False}
@@ -1253,7 +1480,7 @@ def unknown_content_terms(raw: list[str], df: dict[str, int]) -> int:
     return n
 
 
-def query_content_terms(raw: list[str], df: dict[str, int], named: set[str] = frozenset()) -> int:
+def query_content_terms(raw: list[str], df: dict[str, int], named: AbstractSet[str] = frozenset()) -> int:
     """问题里有几个实词：拉丁词、像词的双字；库里没有但由少见字组成的双字也算（说明问的是库外的东西）。"""
     n = 0
     for t in raw:
@@ -1438,7 +1665,7 @@ def attach_answers(vault: Path, hits: list[dict], raw: list[str], df: dict[str, 
 
 
 def is_cjk_bigram(t: str) -> bool:
-    return len(t) == 2 and all(CJK_RE.fullmatch(c) for c in t)
+    return len(t) == 2 and CJK_RE.fullmatch(t) is not None
 
 
 def term_df(con: sqlite3.Connection, terms: list[str]) -> dict[str, int]:
@@ -1455,38 +1682,54 @@ def wordness(bigram: str, df: dict[str, int]) -> float:
     return pair / base if base else 0.0
 
 
-def best_lines(path: Path, qtok: list[str], k: int = 1, span: tuple[int, int] | None = None) -> list[tuple[int, str]]:
+def best_lines(path: Path, qtok: list[str], k: int = 1, span: tuple[int, int] | None = None,
+               preferred_line: int | None = None) -> list[tuple[int, str]]:
     """The `k` lines of a page that hold the most question words, in file order. `span` (first, last line, from 1):
     the best paragraph found by recall (`evidence.page_evidence`); lines are taken from it first."""
-    if span and span[0] > 0:
-        got = best_lines(path, qtok, k)
-        inside = [x for x in (_scored_lines(path, qtok) or []) if span[0] <= x[1] <= span[1]]
-        if inside:
-            inside.sort(key=lambda x: (-x[0], x[1]))
-            return sorted((i, text) for _n, i, text in inside[:k])
-        return got
-    scored = _scored_lines(path, qtok)
-    if scored is None:
-        return []
+    scored = _scored_lines(path, qtok, span, preferred_line if k > 0 else None)
     scored.sort(key=lambda x: (-x[0], x[1]))
-    return sorted((i, text) for _n, i, text in scored[:k])
+    return sorted((i, redact(text)[:160]) for _n, i, text in scored[:k])
 
 
-def _scored_lines(path: Path, qtok: list[str]) -> list[tuple[int, int, str]] | None:
+def hit_lines(vault: Path, hit: dict, qtok: list[str], k: int,
+              span: tuple[int, int] | None = None) -> list[tuple[int, str]]:
+    if quotes := hit.get("turn_quotes"):
+        return quotes[:max(0, k)]
+    return best_lines(vault / hit["rel"], qtok, k, span, hit.get("conflict_line"))
+
+
+def _scored_lines(path: Path, qtok: list[str], span: tuple[int, int] | None,
+                  preferred: int | None) -> list[tuple[int, int, str]]:
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return None
+        return []
     if is_secret_page(path.name, split_frontmatter(text)[0]):
-        return None  # 机密页只给路径
+        return []  # 机密页只给路径
     lines = text.splitlines()
-    scored = []
-    for i, line in enumerate(lines, 1):
-        lt = set(tokens(line))
-        n = sum(1 for t in qtok if t in lt)
-        if n:
-            scored.append((n, i, redact(line.strip())[:160]))
-    return scored
+    checked = None
+
+    def score(indices):
+        scored = []
+        for i in indices:
+            if i == checked:
+                continue
+            line = lines[i - 1]
+            lt = set(tokens(line))
+            n = sum(1 for t in qtok if t in lt)
+            if n:
+                scored.append((n, i, line.strip()))
+        return scored
+
+    if preferred is not None and 1 <= preferred <= len(lines):
+        if scored := score((preferred,)):
+            return scored
+        checked = preferred
+    if span and 0 < span[0] <= span[1]:
+        start, end = min(span[0], len(lines) + 1), min(span[1], len(lines))
+        scored = score(range(start, end + 1))
+        return scored or score(chain(range(1, start), range(end + 1, len(lines) + 1)))
+    return score(range(1, len(lines) + 1))
 
 
 def main() -> int:
@@ -1534,8 +1777,8 @@ def main() -> int:
         print_kb(vault, res, args.query, 2)
         return 0
     if not res["hits"] or res.get("confidence") == "none":
-        if res.get("asked"):
-            print(ASKED_NOTE.format(pages=", ".join(res["asked"][:2])))
+        if res.get("asked_lead"):
+            print(ASKED_NOTE.format(pages=res["asked"][0]))
         print("recall: none (no page covers enough of the question; do not guess)")
         print_kb(vault, res, args.query, 2)
         return 0
@@ -1549,7 +1792,7 @@ def main() -> int:
             print(f"  answer (generated): {redact(h['answer'])}")
         if h["how"]:
             print(f"  how: {h['how']}")
-        for ln, text in best_lines(vault / h["rel"], res["query_tokens"], args.lines):
+        for ln, text in hit_lines(vault, h, res["query_tokens"], args.lines):
             print(f"  L{ln}: {text}")
     print_extras(res, "assoc")
     print_kb(vault, res, args.query)

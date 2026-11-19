@@ -45,7 +45,7 @@ def words(text: str) -> tuple[set[str], set[str]]:
 
 
 def pending(folder: Path) -> dict[tuple[str, str], list[dict]]:
-    """{(date, id8): [{page, n, time, said, cue}]} for every candidate line still waiting."""
+    """{(date, recorded id): [{page, n, time, said, cue}]} for every candidate line still waiting."""
     out: dict[tuple[str, str], list[dict]] = {}
     if not folder.is_dir():
         return out
@@ -56,7 +56,7 @@ def pending(folder: Path) -> dict[tuple[str, str], list[dict]]:
         for n, raw in enumerate(page.read_text(encoding="utf-8").splitlines()):
             hit = LINE.match(raw) or LINE_EN.match(raw)
             if hit and hit.group(6) in PENDING:
-                out.setdefault((m.group(1), hit.group(4)[:8]), []).append(
+                out.setdefault((m.group(1), hit.group(4)), []).append(
                     {"page": page, "n": n, "time": hit.group(1), "said": hit.group(2), "cue": hit.group(5)})
     return out
 

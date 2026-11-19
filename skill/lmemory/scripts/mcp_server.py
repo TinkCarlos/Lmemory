@@ -345,8 +345,10 @@ class Worker:
         threading.Thread(target=self._read, daemon=True).start()
 
     def _read(self) -> None:
-        for line in self.proc.stdout:
-            self.replies.put(line)
+        stdout = self.proc.stdout
+        if stdout is not None:
+            for line in stdout:
+                self.replies.put(line)
         self.replies.put(None)
 
     def alive(self) -> bool:
@@ -357,8 +359,11 @@ class Worker:
         self.stale = False
         self.touched = set()
         try:
-            self.proc.stdin.write(json.dumps(req, ensure_ascii=False) + "\n")
-            self.proc.stdin.flush()
+            stdin = self.proc.stdin
+            if stdin is None:
+                raise OSError("lookup process has no input pipe")
+            stdin.write(json.dumps(req, ensure_ascii=False) + "\n")
+            stdin.flush()
             line = self.replies.get(timeout=timeout)
             if line is None:
                 raise OSError("lookup process exited")
@@ -524,7 +529,9 @@ def skill(args: dict) -> tuple[str, bool]:
         return (f"no skill {sid!r}; the skills are: {known}", True)
     if WRITE:
         try:
-            skills.record_fetch(vault, skills.find(vault, sid)["id"], f"MCP（{CLIENT or 'unknown client'}）")
+            entry = skills.find(vault, sid)
+            if entry is not None:
+                skills.record_fetch(vault, entry["id"], f"MCP（{CLIENT or 'unknown client'}）")
         except OSError:
             pass
     return (text, False)
@@ -536,7 +543,6 @@ def correct(args: dict) -> tuple[str, bool]:
 
     import capture_ledger
     import corrections
-    import zones
 
     raw = cur_vault()
     if not raw:
@@ -754,16 +760,16 @@ def handle(msg: dict) -> dict | None:
     params = msg.get("params") or {}
     if method == "initialize":
         global CLIENT
-        info = params.get("clientInfo") if isinstance(params.get("clientInfo"), dict) else {}
-        name = " ".join(str(info.get("name") or "").split())[:60]
+        info = params.get("clientInfo")
+        name = " ".join(str(info.get("name") or "").split())[:60] if isinstance(info, dict) else ""
         if HTTP:
             CLIENTS[cur_who()] = name
         else:
             CLIENT = name
-        caps = params.get("capabilities") if isinstance(params.get("capabilities"), dict) else {}
+        caps = params.get("capabilities")
         # MCP sampling（服务端请客户端的模型来答）：只记客户端声明了没有，不用它（规范已弃用，Claude Code 不支持）
         global CLIENT_SAMPLING
-        CLIENT_SAMPLING = "sampling" in caps
+        CLIENT_SAMPLING = isinstance(caps, dict) and "sampling" in caps
         asked = params.get("protocolVersion")
         result = {"protocolVersion": asked if asked in PROTOCOLS else PROTOCOLS[0],
                   "capabilities": {"tools": {"listChanged": False}},
@@ -805,8 +811,10 @@ def _rpc_summary(msg) -> dict:
     if not isinstance(msg, dict):
         return {}
     out = {"rpc": msg.get("method")}
-    params = msg.get("params") if isinstance(msg.get("params"), dict) else {}
+    params = msg.get("params")
     if msg.get("method") == "tools/call":
+        if not isinstance(params, dict):
+            params = {}
         out["tool"] = params.get("name")
         q = str((params.get("arguments") or {}).get("query") or "")
         if q:
@@ -828,7 +836,7 @@ def make_handler(token: str, allowed_origins: list[str], started: float):
         protocol_version = "HTTP/1.1"
         server_version = f"lmemory/{VERSION}"
 
-        def log_message(self, *_):  # 访问日志由 _log 写，一请求一行 JSON，不含问题原文
+        def log_message(self, format: str, *args) -> None:  # 访问日志由 _log 写，不含问题原文
             pass
 
         def _log(self, code: int, t0: float, extra: dict | None = None) -> None:
@@ -1014,6 +1022,11 @@ def make_handler(token: str, allowed_origins: list[str], started: float):
     return Handler
 
 
+class MCPHTTPServer(ThreadingHTTPServer):
+    # Keep room for a burst of team clients while the server accepts connections.
+    request_queue_size = 64
+
+
 def serve_http(addr: str, token_file: str, allowed_origins: list[str], log_queries: bool) -> int:
     host, sep, port = addr.rpartition(":")
     if not sep:
@@ -1053,7 +1066,7 @@ def serve_http(addr: str, token_file: str, allowed_origins: list[str], log_queri
             METRICS.index_s[name or LABEL or "default"] = time.perf_counter() - t0
             print(f"index ready{' for ' + name if name else ''} in {time.perf_counter() - t0:.1f} s", file=sys.stderr)
     _ctx.vault = None
-    server = ThreadingHTTPServer((host, port_n), make_handler(token, allowed_origins, started))
+    server = MCPHTTPServer((host, port_n), make_handler(token, allowed_origins, started))
     server.daemon_threads = True
     base = f"http://{host}:{server.server_address[1]}"
     print(json.dumps({"listening": f"{base}/mcp", "label": LABEL or None,

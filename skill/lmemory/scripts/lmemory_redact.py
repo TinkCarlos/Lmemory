@@ -28,8 +28,11 @@ SECRET_PAGES = ("90 系统文件/自动化/自进化钥匙.md",)
 SECRET_NAME = re.compile(r"凭据|凭证|密钥|秘钥|私钥|钥匙|口令|credential|secret|password|passwd|api[ _-]?key", re.I)
 MARK = "<redacted>"
 PLACEHOLDER = re.compile(r"^(?:YOUR_|CHANGE_?ME|REPLACE|TODO|PASTE_|sk-your|x{4,}|<|\.\.\.|…|\*{3,})", re.I)
-LABEL = (r"(?:[A-Za-z0-9_]*(?:API[_ -]?KEY|APIKEY|ACCESS[_ -]?KEY|SECRET[_ -]?KEY|PRIVATE[_ -]?KEY|SECRET|TOKEN|PASSWORD|"
-         r"PASSWD|CREDENTIALS?)[A-Za-z0-9_]*|\bkey\b|密钥|秘钥|私钥|密码|口令|令牌|凭据|凭证|访问密钥)")
+LABEL_IN_NAME = (r"(?:API[_ -]?KEY|APIKEY|ACCESS[_ -]?KEY|SECRET[_ -]?KEY|PRIVATE[_ -]?KEY|SECRET|TOKEN|PASSWORD|"
+                 r"PASSWD|CREDENTIALS?)")
+LABEL_ALONE = r"\bkey\b|密钥|秘钥|私钥|密码|口令|令牌|凭据|凭证|访问密钥"
+LABEL = r"(?:[A-Za-z0-9_]*" + LABEL_IN_NAME + r"[A-Za-z0-9_]*|" + LABEL_ALONE + ")"
+LABEL_HINT = re.compile(LABEL_IN_NAME + "|" + LABEL_ALONE, re.I)
 ASSIGN = re.compile(r"(?P<k>" + LABEL + r"[\"'`]?\s*(?:[:=：]|\s)\s*[\"'`]?)(?P<v>[^\s\"'`,;|)）]+)", re.I)
 QUERY = re.compile(r"(?P<k>[?&](?:key|api_?key|apikey|token|access_token|secret|password|sig|signature|auth)=)(?P<v>[^&#\s]+)",
                    re.I)
@@ -81,9 +84,12 @@ def _high_entropy(run: str) -> bool:
 def redact(text: str) -> str:
     if not text:
         return text
-    text = CONN.sub(lambda m: m.group("k") + (MARK if not PLACEHOLDER.match(m.group("v")) else m.group("v")), text)
-    text = QUERY.sub(lambda m: m.group("k") + (MARK if _value_is_secret(m.group("v")) else m.group("v")), text)
-    text = ASSIGN.sub(lambda m: m.group("k") + (MARK if _value_is_secret(m.group("v")) else m.group("v")), text)
+    if "://" in text:
+        text = CONN.sub(lambda m: m.group("k") + (MARK if not PLACEHOLDER.match(m.group("v")) else m.group("v")), text)
+    if "?" in text or "&" in text:
+        text = QUERY.sub(lambda m: m.group("k") + (MARK if _value_is_secret(m.group("v")) else m.group("v")), text)
+    if LABEL_HINT.search(text):
+        text = ASSIGN.sub(lambda m: m.group("k") + (MARK if _value_is_secret(m.group("v")) else m.group("v")), text)
     text = KNOWN.sub(MARK, text)
     text = BEARER.sub(r"\1" + MARK, text)
     return RUN.sub(lambda m: MARK if _high_entropy(m.group(0)) else m.group(0), text)

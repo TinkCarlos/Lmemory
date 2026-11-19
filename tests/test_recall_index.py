@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -48,6 +49,45 @@ def hits(res):
 
 def test_tokens_split_cjk_bigrams_and_latin():
     assert r.tokens("日更健康 Groq whisper") == ["日更", "更健", "健康", "groq", "whisper"]
+
+
+@pytest.mark.parametrize("source", ["krouter-import", "lmemory-import"])
+def test_dated_recall_keeps_existing_imported_sessions(vault, source):
+    rel = "05 时间日志/2026-02-15 Release drills.md"
+    write(
+        vault, rel,
+        f"---\ntype: session-excerpt\nsource: {source}\nexcerpt_format: role-lines-v2\n"
+        "date: 2026-02-15\nstatus: imported\n---\n\n## Excerpt\n\n"
+        "- **Q** (10:30): When does the rehearsal begin?\n"
+        "  **A**: The rehearsal begins at 09:20 UTC.\n",
+    )
+    res = r.recall(vault, 'In the 2026-02-15 conversation I asked "When does the rehearsal begin?"')
+    assert res["history_matches"] == 1
+    assert res["hits"][0]["rel"] == rel
+    assert res["hits"][0]["turn_quotes"][0][1] == "The rehearsal begins at 09:20 UTC."
+
+
+def test_old_dated_excerpt_requires_verified_turn(vault, tmp_path, monkeypatch):
+    state = tmp_path / "proofs"
+    state.mkdir()
+    monkeypatch.setenv("LMEMORY_STATE_DIR", str(state))
+    ask = "Which marker goes on the east door?"
+    answer = "Place the blue triangle on the east door."
+    day, when, session = "2026-02-15", "10:30", "synthetic-session"
+    rel = "05 时间日志/2026-02-15 Safety drill.md"
+    write(
+        vault, rel,
+        f"---\ntype: session-excerpt\nsource: krouter-import\nsession: {session}\n"
+        f"date: {day}\nstatus: imported\n---\n\n## Excerpt\n\n"
+        f"- **Q** ({when}): {ask}\n  **A**: {answer}\n",
+    )
+    query = f'In the {day} conversation I asked "{ask}"'
+    assert r.recall(vault, query)["history_matches"] == 0
+    proof = r.proof_key({"session": session, "date": day}, when, ask, answer)
+    (state / "codex-answer-proofs.json").write_text(json.dumps({"replies": [proof]}), encoding="utf-8")
+    result = r.recall(vault, query)
+    assert result["history_matches"] == 1
+    assert result["hits"][0]["turn_quotes"][0][1] == answer
 
 
 def test_rule_page_ranks_first(vault):

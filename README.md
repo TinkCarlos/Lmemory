@@ -4,9 +4,17 @@
 
 [简体中文](README.zh.md) · [MIT License](LICENSE)
 
-Lmemory gives AI agents a local memory they can cite. Point it at a Markdown folder, ask what was decided, and get back the matching notes and source lines.
+**Local, source-backed memory for Codex and other MCP clients.** Point Lmemory at a Markdown folder to recover previous decisions, corrections, and conversation records. Each lookup returns evidence the agent can cite.
 
-Lmemory is maintained by **Tink**. It keeps notes in plain Markdown, searches with SQLite, and uses fewer regular-expression checks when rebuilding paragraph evidence. The benchmark below measures the first lookup from an empty cache.
+![Benchmark comparison. Median cold lookup fell from 7.334 to 5.818 seconds. Both builds found 99.80% of original cross-project sources. Synthetic context payload fell from 72,864 to 14,644 tokens.](docs/img/lmemory-comparison-en.png)
+
+Use Lmemory to carry a project's decisions across chats, find the rule that replaced an older one, or locate the original answer to a question you asked on a specific date.
+
+## How it works
+
+1. **Index the notes locally.** SQLite FTS5 indexes titles, terms, and paragraph evidence from Markdown files. An alias can point directly to a known source. Other queries rank candidates by their terms, scope, date, and evidence.
+2. **Return evidence the agent can check.** A receipt contains matching source paths, short excerpts, and line numbers. It also tells the agent whether the vault provides direct support, related material, or too little evidence. The agent can open a cited note when the excerpt leaves information out.
+3. **Keep the first lookup and context smaller.** During a rebuild, Lmemory shares text normalization between tokenization and evidence tagging, reuses results for repeated paragraphs, and reduces regular-expression work. During lookup, it puts the receipt into the agent's context so the agent can consult full notes selectively.
 
 ## Quick start
 
@@ -48,9 +56,39 @@ A lookup runs locally and returns source paths, evidence lines, and one of three
 
 ## What changed from KRouter
 
-The index labels paragraphs that contain dates, durations, or frequencies. Lmemory checks whether an English pattern can start at the current character before evaluating its alternatives. Chinese patterns and Unicode number handling keep their original behavior. The ranker and the cache schema are unchanged.
+Lmemory normalizes each paragraph once for tokenization and evidence tagging. It reuses results for repeated paragraphs within the same rebuild and reduces regular-expression work for dates, durations, frequencies, and other numeric evidence. Dated recall recognizes session excerpts imported by both KRouter and Lmemory.
+
+### Local Codex vault comparison
+
+Both versions used the same frozen vault of **1,801 Markdown pages** with Python 3.12.13 on the same Mac. The baseline was the previously installed local KRouter build, which already included earlier optimizations. Each cold round started with a separate empty cache, timed the first stdio MCP lookup through the completed index rebuild, and alternated the order of the two builds between rounds.
+
+| Metric | Local KRouter | Lmemory |
+| --- | ---: | ---: |
+| Median first lookup with a rebuilt index, 6 rounds | 7.334 s | **5.818 s** |
+| Cross-project questions that found the original session and date | 1,012 / 1,014 | 1,012 / 1,014 |
+| Cross-project questions with all expected facts covered | 1,012 / 1,014 | 1,012 / 1,014 |
+| Verifiable facts in cross-project sources | 1,958 / 1,962 | 1,958 / 1,962 |
+
+Lmemory was faster in **all six cold rounds** and reduced the median by **20.7%**. In a separate three-round replay of the same **1,030 questions**, all **3,090 pairs of retrieval receipts** matched after removing observation timestamps. The comparison covers retrieval and source evidence in the local installation. This repository publishes the aggregate results and the indexed retrieval improvements. The public lookup uses saved vault notes and imported excerpts as evidence.
+
+### Warm recall and context tokens
+
+On **24 public synthetic questions** about 12 fictional runbooks, the expected source ranked first on **24/24** questions. In three warmed runs of 120 stdio MCP lookups each on the test Mac, the median ranged from **2.56 to 2.96 ms**, and the 95th percentile ranged from **3.24 to 4.06 ms**.
+
+| Payload for the same 24 questions | Total input tokens |
+| --- | ---: |
+| Full text of the same retrieved source notes, with paths | 72,864 |
+| Lmemory MCP receipts, including evidence and retrieval metadata | **14,644** |
+
+That is **79.9% fewer context tokens** in this workload. This counts the compared payloads using `o200k_base`, with temporary vault paths normalized. Model instructions, tool schemas, generated answers, and subsequent reads are outside this measurement.
+
+```sh
+uv run --no-project --with tiktoken==0.14.0 python bench/scale/context_budget.py
+```
 
 ### Cold lookup comparison
+
+This earlier comparison uses the Lmemory build pinned by `lmemory-bench-20261119`.
 
 Each checkout used the same 10,017 Markdown pages (10,000 generated pages plus the public template) on an Apple M5 with Python 3.12.13. We timed the first stdio MCP query with an empty cache, ran six rounds, and reversed checkout order every other round.
 
@@ -89,7 +127,7 @@ The benchmark generates its own notes and uses isolated caches. It reports cold 
 <a name="measured-not-claimed"></a>
 <a name="check-it-yourself"></a>
 
-- See the [comparison and reproduction steps](#cold-lookup-comparison) for this build.
+- See the [local Codex vault comparison](#local-codex-vault-comparison) and the [reproducible synthetic benchmark](#cold-lookup-comparison).
 
 ## Credits and license
 

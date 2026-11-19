@@ -32,8 +32,12 @@ PARTICLES = set("的了着过地得")
 
 
 def parse_frontmatter(path: Path) -> dict[str, str]:
+    return _frontmatter(path) or {}
+
+
+def _frontmatter(path: Path) -> dict[str, str] | None:
     if not path.is_file():
-        return {}
+        return None
     text = path.read_text(encoding="utf-8", errors="replace")
     if not text.startswith("---"):
         return {}
@@ -89,11 +93,8 @@ def live_rows(
     today = today or date.today()
     kept: list[tuple[str, list[str], str, str]] = []
     for case_id, aliases, source, anchor in rows:
-        path = vault / source
-        if not path.is_file():
-            continue
-        live, _, _ = in_force(parse_frontmatter(path), today)
-        if live:
+        meta = _frontmatter(vault / source)
+        if meta is not None and in_force(meta, today)[0]:
             kept.append((case_id, aliases, source, anchor))
     return kept
 
@@ -123,6 +124,18 @@ def load_rows(path: Path) -> list[tuple[str, list[str], str, str]]:
         case_id, aliases_raw, source, anchor = parts
         aliases = [item.strip() for item in aliases_raw.split(";") if item.strip()]
         rows.append((case_id, aliases, source, anchor))
+    return rows
+
+
+def rows_for_lock(query: str, rows: list[tuple[str, list[str], str, str]], route: str):
+    """For a dated history lookup, only a shortcut that names the whole request can lock."""
+    if route in ("search", "project", "memory"):
+        from associate import requested_day
+
+        if requested_day(query):
+            q = normalize(query)
+            return [(case, [a for a in aliases if normalize(a) == q], source, anchor)
+                    for case, aliases, source, anchor in rows if any(normalize(a) == q for a in aliases)]
     return rows
 
 
@@ -170,6 +183,13 @@ def is_cjk(char: str) -> bool:
     return "\u3400" <= char <= "\u9fff"
 
 
+@functools.lru_cache(maxsize=512)
+def hint_terms(text: str) -> tuple[frozenset[str], frozenset[str]]:
+    bigrams = frozenset(left + right for left, right in zip(text, text[1:])
+                        if is_cjk(left) and is_cjk(right) and left not in HINT_FUNCTION and right not in HINT_FUNCTION)
+    return bigrams, frozenset(c for c in text if not is_cjk(c))
+
+
 def near_score(query: str, alias: str) -> int:
     """Weaker overlap for suggestions only. Never used as a canonical hit."""
     hit = alias_score(query, alias)
@@ -188,11 +208,12 @@ def near_score(query: str, alias: str) -> int:
         return 40 + n
     # 汉字只算连着的双字，而且不算虚字双字：零散的单字（「剪辑」和「剪藏原件」共有「剪」「件」）、
     # 「什么」这种问句词，都不说明问的是这一页
-    shared = {q[i:i + 2] for i in range(len(q) - 1)} & {a[i:i + 2] for i in range(len(a) - 1)}
-    shared = {b for b in shared if is_cjk(b[0]) and is_cjk(b[1]) and not set(b) & HINT_FUNCTION}
+    q_cjk, q_other = hint_terms(q)
+    a_cjk, a_other = hint_terms(a)
+    shared = q_cjk & a_cjk
     if shared:
         return 21 + len(shared)
-    overlap = len({c for c in set(q) & set(a) if not is_cjk(c)})
+    overlap = len(q_other & a_other)
     if overlap >= 2:
         return 20 + overlap
     return 0
@@ -255,7 +276,6 @@ def suggestions(
     vault: Path | None = None,
     today: date | None = None,
 ) -> list[tuple[int, str, str, str]]:
-    rows = live_rows(rows, vault, today)
     ranked: list[tuple[int, str, str, str]] = []
     for case_id, aliases, source, _anchor in rows:
         best = 0
@@ -268,7 +288,17 @@ def suggestions(
         if best:
             ranked.append((best, case_id, best_alias, source))
     ranked.sort(key=lambda item: (-item[0], item[1]))
-    return ranked[:limit]
+    if vault is None:
+        return ranked[:limit]
+    today = today or date.today()
+    live = []
+    for item in ranked:
+        if len(live) == limit:
+            break
+        meta = _frontmatter(vault / item[3])
+        if meta is not None and in_force(meta, today)[0]:
+            live.append(item)
+    return live[:limit]
 
 
 def query_conflict(
@@ -282,7 +312,7 @@ def query_conflict(
     Hit band is alias_score >= 100. Weak overlap hints (20–40) are not a choice.
     """
     live = live_rows(rows, vault, today)
-    if lookup(query, rows, vault=vault, today=today) is not None:
+    if not live or lookup(query, live) is not None:
         return None
     source_by_id = {case_id: source for case_id, _aliases, source, _anchor in live}
     scores = scores_for(query, live)
@@ -335,6 +365,7 @@ def main() -> int:
     parser.add_argument("--map", required=True)
     parser.add_argument("--vault", required=True)
     parser.add_argument("--query", default="")
+    parser.add_argument("--route", default="")
     parser.add_argument("--suggest", action="store_true")
     parser.add_argument("--explain", action="store_true")
     parser.add_argument("--limit", type=int, default=5)
@@ -345,7 +376,7 @@ def main() -> int:
     if args.explain:
         if not args.query:
             return 2
-        conflict = query_conflict(args.query, rows, vault=vault)
+        conflict = query_conflict(args.query, rows_for_lock(args.query, rows, args.route), vault=vault)
         if not conflict:
             sys.stdout.write("conflict: no\n")
             return 0
@@ -376,7 +407,7 @@ def main() -> int:
 
     if not args.query:
         return 2
-    hit = lookup(args.query, rows, vault=vault)
+    hit = lookup(args.query, rows_for_lock(args.query, rows, args.route), vault=vault)
     if hit is None:
         return 1
     case_id, relative_source, anchor = hit

@@ -94,16 +94,17 @@ _NUM_WORDS = ("one two three four five six seven eight nine ten eleven twelve th
               "seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand "
               "dozen couple single double pair half first second third")
 NUM_EN = r"(?:\d+(?:[.,]\d+)?|(?:" + "|".join(_NUM_WORDS.split()) + r")s?|an?|several|few)"
-CN_NUM = r"[0-9零〇一二两三四五六七八九十百千万半几]+"
+CN_NUM = r"[0-9零〇一二两三四五六七八九十百千万半几]"
 UNIT_EN = r"(?:second|sec|minute|min|hour|hr|day|night|week|weekend|fortnight|month|year|yr|decade|semester|season)s?"
 UNIT_CN = r"(?:秒钟?|分钟|个?小时|个?钟头|天|晚|日|个?星期|周|个?月|年|季度|学期)"
 MONTHS = ("january february march april may june july august september october november december "
           "jan feb mar apr jun jul aug sep sept oct nov dec").split()
 DAYS = "monday tuesday wednesday thursday friday saturday sunday mondays tuesdays wednesdays thursdays fridays saturdays sundays weekend weekends".split()
 
+# These patterns test presence, so Chinese units only need the last digit of a number.
 TYPE_TEXT = {
     # 数量：数字、数词、中文数字
-    "count": re.compile(r"\d|\b(?:" + "|".join(_NUM_WORDS.split()[:30]) + r"|dozens?|couple|several|both|single|"
+    "count": re.compile(r"\d|(?=[a-z])\b(?:" + "|".join(_NUM_WORDS.split()[:30]) + r"|dozens?|couple|several|both|single|"
                         r"twice|once|thrice|pair)\b|[零〇一二两三四五六七八九十百千万几]", re.I),
     # Guard the English branches before checking word boundaries at each character.
     "duration": re.compile(r"(?=[a-z\d])\b(?:" + NUM_EN + r"[\s-]+(?:and a half\s+)?" + UNIT_EN + r"\b|since\s+(?:\d{4}|last|"
@@ -115,18 +116,18 @@ TYPE_TEXT = {
                        r"last (?:week|month|year|night|weekend|time|summer|winter|spring|fall|autumn)|"
                        r"next (?:week|month|year|weekend)|this (?:morning|afternoon|evening|week|month|year|weekend)|"
                        r"earlier|morning|afternoon|evening|o'clock|am|pm|\d{1,2}:\d\d)\b)|"
-                       r"\d+\s*[年月日号点]|[一二三四五六七八九十]+[月日号点]|周[一二三四五六日天末]|星期[一二三四五六日天]|"
+                       r"\d\s*[年月日号点]|[一二三四五六七八九十][月日号点]|周[一二三四五六日天末]|星期[一二三四五六日天]|"
                        r"昨天|今天|明天|前天|后天|上周|上个月|去年|今年|明年|下周|下个月|早上|上午|下午|晚上|刚才|前几天|最近", re.I),
     "money": re.compile(r"[$€£¥￥]\s?\d|\d\s?(?:k|K)?\s?(?:dollars?|bucks|usd|eur|euros?|pounds?|gbp|yuan|rmb|cents?|yen)\b|"
-                        r"\b(?:dollars?|bucks|euros?|cents?)\b|\d+(?:\.\d+)?\s*(?:元|块|万|美元|美金|欧元|英镑|日元|人民币|刀)|"
-                        r"[一二两三四五六七八九十百千万]+\s*(?:块|元|万)", re.I),
+                        r"(?=[a-z])\b(?:dollars?|bucks|euros?|cents?)\b|\d\s*(?:元|块|万|美元|美金|欧元|英镑|日元|人民币|刀)|"
+                        r"[一二两三四五六七八九十百千万]\s*(?:块|元|万)", re.I),
     "freq": re.compile(r"(?=[a-z])\b(?:(?:every|each|daily|weekly|monthly|yearly|annually|nightly|once|twice|thrice|regularly|"
                        r"usually|always|often|biweekly|fortnightly)\b|times? (?:a|an|per|each)\b|per (?:day|week|month|year)\b|"
                        r"(?:on|most) (?:" + "|".join(DAYS) + r")\b|x (?:a|per) (?:day|week)\b)|"
-                       r"每(?:天|日|周|个?星期|个?月|年|晚|次|隔)|[一二两三四五六七八九十几\d]+\s*次|隔天|经常|常常|定期", re.I),
+                       r"每(?:天|日|周|个?星期|个?月|年|晚|次|隔)|[一二两三四五六七八九十几\d]\s*次|隔天|经常|常常|定期", re.I),
 }
 # 年龄：一个数，或「… years old」「… 岁」
-TYPE_TEXT["age"] = re.compile(r"\d|\b(?:" + "|".join(_NUM_WORDS.split()[:28]) + r")\b|岁|years? old|\bteens?\b|"
+TYPE_TEXT["age"] = re.compile(r"\d|(?=[a-z])\b(?:" + "|".join(_NUM_WORDS.split()[:28]) + r")\b|岁|years? old|\bteens?\b|"
                               r"\b(?:twenties|thirties|forties|fifties)\b", re.I)
 # 「多少」可能是数量、金额或时长：三类里有一类就算
 TYPE_TEXT["quantity"] = re.compile("|".join(TYPE_TEXT[k].pattern for k in ("count", "money", "duration")), re.I)
@@ -169,13 +170,20 @@ def has_type(text: str, typ: str) -> bool:
 
 
 TAG = {"count": "c", "duration": "d", "date": "t", "money": "$", "freq": "f", "age": "a"}
+TAG_DIGIT = re.compile(r"\d")
 
 
 def type_tags(text: str) -> str:
     """一段文字里出现了哪几类具体内容（存进索引，查询时不用再跑正则）：`c` 数量、`d` 时长、`t` 日期时间、
     `$` 金额、`f` 频率、`a` 年龄。"""
-    t = unicodedata.normalize("NFKC", text or "")
-    return "".join(tag for k, tag in TAG.items() if TYPE_TEXT[k].search(t))
+    return normalized_type_tags(unicodedata.normalize("NFKC", text or ""))
+
+
+def normalized_type_tags(t: str) -> str:
+    # Both count and age accept any digit. Test that common case once.
+    digit = bool(TAG_DIGIT.search(t))
+    return "".join(tag for k, tag in TAG.items()
+                   if (digit and k in ("count", "age")) or TYPE_TEXT[k].search(t))
 
 
 def tags_have(tags: str, typ: str) -> bool:
@@ -217,18 +225,18 @@ def page_day(rel: str, meta: dict) -> str:
     return "-".join(m.groups()) if m else ""
 
 
-def index_page(con, tokens, rid: int, rel: str, text: str, meta: dict, body: str, head: str = "") -> None:
+def index_page(con, tokens, paragraph, rid: int, rel: str, text: str, meta: dict, body: str, head: str = "") -> None:
     """一页的段落、日期和说话人。`text` 是整页（已脱敏、LF 换行），`body` 是 frontmatter 之后的正文，`head` 是
     标题、文件名和触发词。"""
     offset = text[: max(0, len(text) - len(body))].count("\n") if text.endswith(body) else 0
     rows, who = [], set()
     for k, (l0, l1, chunk, spk) in enumerate(blocks(body)):
-        toks = " ".join(dict.fromkeys(tokens(chunk)))
+        toks, tags = paragraph(chunk)
         if not toks:
             continue
         if spk:
             who.add(spk)
-        rows.append((rid, k, l0 + offset + 1, l1 + offset + 1, spk, type_tags(chunk), toks))
+        rows.append((rid, k, l0 + offset + 1, l1 + offset + 1, spk, tags, toks))
     con.executemany("INSERT INTO psg VALUES(?,?,?,?,?,?,?)", rows)
     con.execute("INSERT OR REPLACE INTO pinfo VALUES(?,?,?,?)", (rid, page_day(rel, meta), " ".join(sorted(who)),
                                                                    " ".join(dict.fromkeys(tokens(head)))))
@@ -297,20 +305,28 @@ def page_evidence(con, plan: dict, rids: list[int]) -> dict[int, dict]:
     if not rids:
         return {}
     weight, forms = plan["weight"], plan["forms"]
+    terms = tuple(forms)
+    form_terms: dict[str, list[int]] = {}
+    for i, term in enumerate(terms):
+        for form in forms[term]:
+            form_terms.setdefault(form, []).append(i)
+    searchable = set(form_terms)
     total = sum(weight.values()) or 1.0
     names = set(plan["names"])
     typ = plan["type"]
     rare = max(weight, key=lambda t: (weight[t], t))
     nums = plan.get("nums") or []
+    targets = searchable.union(nums)
     marks = ",".join("?" * len(rids))
     info = {rid: (day, set(spk.split()), set(head.split())) for rid, day, spk, head in
             con.execute(f"SELECT rid, day, spk, head FROM pinfo WHERE rid IN ({marks})", rids)}
     rows: dict[int, list] = {}
     for rid, k, l0, l1, spk, tags, toks in con.execute(
             f"SELECT rid, k, l0, l1, spk, tags, toks FROM psg WHERE rid IN ({marks}) ORDER BY rid, k", rids):
-        ts = set(toks.split())
-        hit = frozenset(t for t, fs in forms.items() if not fs.isdisjoint(ts))
-        nhit = frozenset(n for n in nums if n in ts)
+        present = targets.intersection(toks.split())
+        matched = {i for form in searchable & present for i in form_terms[form]}
+        hit = frozenset(terms[i] for i in sorted(matched))
+        nhit = frozenset(n for n in nums if n in present)
         rows.setdefault(rid, []).append((l0, l1, spk, tags, hit, nhit))
     out = {}
     for rid in rids:

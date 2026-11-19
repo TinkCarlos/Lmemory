@@ -21,6 +21,7 @@ from canonical_lookup import (
     lookup,
     parse_frontmatter,
     query_conflict,
+    rows_for_lock,
     suggestions,
 )
 
@@ -182,11 +183,11 @@ def emit_host_action(health: Path, vault: Path | None = None) -> None:
                   "Model steps need the writer's lane (a *_API_KEY, or a logged-in grok / Codex / claude / …).")
 
 
-def emit_suggestions(query: str, vault: Path, map_path: Path) -> None:
+def emit_suggestions(query: str, vault: Path, map_path: Path, route: str = "") -> None:
     if not query or not map_path.is_file():
         return
     rows = load_rows(map_path)
-    conflict = query_conflict(query, rows, vault=vault)
+    conflict = query_conflict(query, rows_for_lock(query, rows, route), vault=vault)
     if conflict:
         left_id, left_alias, left_source, left_score = conflict["left"]
         right_id, right_alias, right_source, right_score = conflict["right"]
@@ -243,7 +244,7 @@ def log_query(route: str, query: str, status: str, top: str = "", confidence: st
 def canonical_lookup(query: str, vault: Path, map_path: Path, route: str) -> bool:
     if not query or not map_path.is_file():
         return False
-    rows = load_rows(map_path)
+    rows = rows_for_lock(query, load_rows(map_path), route)
     hit = lookup(query, rows, vault=vault)
     if hit is None:
         return False
@@ -409,28 +410,39 @@ def md_search(needle: str, scope: Path, max_per_file: int = 4, max_lines: int = 
         print(redact(line))  # 字面搜索打出来的原文行也不能带出密钥；机密页的行整行不出
 
 
+def print_history_ambiguity(matches: int | None) -> None:
+    if matches and matches > 1:
+        print(f"recall_note: {matches} recorded turns match the same dated quotation. "
+              "Keep their answers separate and ask which source was intended if necessary.")
+
+
 def print_recall(res: dict, vault: Path, lines: int, query: str = "") -> None:
-    from recall_index import PARTIAL_NOTE, best_lines, print_extras, print_kb, unseen_note
+    from recall_index import PARTIAL_NOTE, print_extras, print_kb, unseen_note
 
     print(f"recall_confidence: {res.get('confidence', 'none')}")
     print(f"recall_margin: {res.get('margin', 0)}")
     print(f"recall_strong_terms: {res.get('strong', 0)}")
     if res.get("partial"):
         print(PARTIAL_NOTE)
-    if query and (note := unseen_note(vault, res, query)):
+    history = res.get("history_matches")
+    print_history_ambiguity(history)
+    if query and not history and (note := unseen_note(vault, res, query)):
         print(note)
     print_extras(res, "conflict")
     print("recall:")
     _print_hits(res["hits"], res, vault, lines)
     print_extras(res, "assoc")
     if res.get("more"):
-        print("more: further direct hits for a question that adds up or lists (after the pages above)")
+        if history:
+            print("more: additional recorded excerpts with the same dated quotation")
+        else:
+            print("more: further direct hits for a question that adds up or lists (after the pages above)")
         _print_hits(res["more"], res, vault, lines)
     print_kb(vault, res, query)
 
 
 def _print_hits(hits: list[dict], res: dict, vault: Path, lines: int) -> None:
-    from recall_index import best_lines
+    from recall_index import hit_lines
 
     for h in hits:
         flag = f" status={h['status']}" if h["status"] else ""
@@ -442,10 +454,13 @@ def _print_hits(hits: list[dict], res: dict, vault: Path, lines: int) -> None:
             print(f"  how: {h['how']}")
         ev = h.get("ev") or {}
         span = (ev["l0"], ev["l1"]) if ev.get("l0") and ev.get("pc", 0) > 0 else None
-        for i, (ln, text) in enumerate(best_lines(vault / h["rel"], res["query_tokens"], lines, span)):
+        budget = max(2, lines) if h.get("turn_quotes") else lines
+        for i, (ln, text) in enumerate(hit_lines(vault, h, res["query_tokens"], budget, span)):
             # 段落证据：最好的那一段是哪几行（只标在第一行上，回执不加行）
-            where = f" (passage L{span[0]}-L{span[1]})" if i == 0 and span and span[1] > span[0] else ""
+            where = f" (passage L{span[0]}-L{span[1]})" if i == 0 and span and span[0] <= ln <= span[1] and span[1] > span[0] else ""
             print(f"  L{ln}{where}: {text}")
+        if len(h.get("turn_quotes", ())) > budget:
+            print("  more_answer_lines: " + ", ".join(f"L{ln}" for ln, _ in h["turn_quotes"][budget:]))
 
 
 def bounded_search(scope: Path, vault: Path, map_path: Path, route: str, query: str) -> None:
@@ -481,29 +496,39 @@ def bounded_search(scope: Path, vault: Path, map_path: Path, route: str, query: 
         emit_receipt(scope, "ranked-recall-complete", route, query, vault, map_path)
         log_query(route, query, "ranked-recall-complete" + ("+widened" if widened else ""), res["hits"][0]["rel"],
                   res.get("confidence", ""), [h["rel"] for h in res["hits"][:3]])
-        emit_suggestions(query, vault, map_path)
+        emit_suggestions(query, vault, map_path, route)
         print(f"route: {route}")
         print(f"scope: {scope}")
         if widened:
             print("scope_widened: vault (the route scope had no page covering this question)")
         print_recall(res, vault, 4 if (scope.is_file() and not widened) else 1, query)
-        print("open_page: only the top recall hit, and only if its how does not close the question")
+        if res.get("history_matches"):
+            print("open_page: read the matching answer at the cited line for the complete historical reply")
+        else:
+            print("open_page: only the top recall hit, and only if its how does not close the question")
         return
     if _ri is not None:
         # 记忆里没有（只有知识库对得上时这一行这样说）；严格模式下「只有相关的页」也走这里
         print(_ri.state_line(vault, res, query, strict=strict))
-    emit_receipt(scope, "bounded-literal-search-complete", route, query, vault, map_path)
-    log_query(route, query, "bounded-literal-search-complete")
-    emit_suggestions(query, vault, map_path)
+    exact_history = ((res is not None and "history_matches" in res)
+                     or (res is None and _ri is not None and _ri.history_request(query) is not None))
+    status = "dated-history-not-found" if exact_history and not folded else "bounded-literal-search-complete"
+    emit_receipt(scope, status, route, query, vault, map_path)
+    log_query(route, query, status)
+    if exact_history and not folded:
+        print("recall: none (no verified answer to the quoted question on that date in this scope)")
+        return
+    emit_suggestions(query, vault, map_path, route)
     print(f"route: {route}")
     print(f"scope: {scope}")
     if res is not None:
-        if res.get("asked"):
-            print(_ri.ASKED_NOTE.format(pages=", ".join(res["asked"][:2])))
+        if res.get("asked_lead"):
+            print(_ri.ASKED_NOTE.format(pages=res["asked"][0]))
         print("recall: none (no page covers enough of the question; do not guess)")
         if os.environ.get("LMEMORY_NEAREST") == "1" and not folded:
             print_nearest(vault, query)
         if folded:
+            print_history_ambiguity(res.get("history_matches"))
             print(_ri.RELATED_PAGES[_ri._note_lang(vault, query)].format(pages="; ".join(_ri.page_list(res))))
         _ri.print_kb(vault, res, query, 2)
     if folded:

@@ -29,6 +29,7 @@ The conflict tie-break (`conflicts`) is on by default (`LMEMORY_CONFLICT=0` turn
 
 from __future__ import annotations
 
+import heapq
 import json
 import math
 import os
@@ -36,6 +37,7 @@ import re
 import sqlite3
 import unicodedata
 from collections import Counter, defaultdict
+from datetime import date
 from pathlib import Path
 
 KEY_TERMS = 64        # 每页存词频最高的这么多个实词，"共同的词"边从这里算
@@ -121,12 +123,13 @@ def page_edges(rel: str, head: str, meta: dict, body: str) -> list[tuple[str, st
 
 
 _LETTER = re.compile(r"[a-z]")
+_BIT_COUNT = getattr(int, "bit_count", lambda value: bin(value).count("1"))
 
 
-def key_terms(ri, body: str) -> list[str]:
+def key_terms(ri, body: str, body_tokens: list[str] | None = None) -> list[str]:
     """The page's most frequent content words: Latin words of 3+ letters (no function words, no numbers) and Chinese
     pairs without a function character."""
-    tf = Counter(ri.tokens(body))
+    tf = Counter(ri.tokens(body) if body_tokens is None else body_tokens)
     skip = ri.EN_FUNCTION | ri.QUERY_STOP
     fn = ri.FUNCTION_CHARS
     keep = {}
@@ -139,7 +142,7 @@ def key_terms(ri, body: str) -> list[str]:
         elif len(t) < 3 or not _LETTER.search(t):
             continue
         keep[t] = n
-    return [t for t, _ in sorted(keep.items(), key=lambda kv: (-kv[1], kv[0]))[:KEY_TERMS]]
+    return [t for t, _ in heapq.nsmallest(KEY_TERMS, keep.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
 SCHEMA = """
@@ -166,10 +169,11 @@ def forget(con: sqlite3.Connection, rel: str, rid: int | None) -> None:
     con.execute("DELETE FROM names WHERE rel=?", (rel,))
 
 
-def index_page(con: sqlite3.Connection, ri, rel: str, rid: int, text: str, meta: dict, body: str) -> None:
+def index_page(con: sqlite3.Connection, ri, rel: str, rid: int, text: str, meta: dict, body: str,
+               body_tokens: list[str] | None = None) -> None:
     """A new or changed page's edges (the caller has `forget`-ten the old ones)."""
     head = text.split("\n---", 1)[0] if text.startswith("---\n") else ""
-    con.execute("INSERT INTO keyterms(rowid, terms) VALUES(?, ?)", (rid, " ".join(key_terms(ri, body))))
+    con.execute("INSERT INTO keyterms(rowid, terms) VALUES(?, ?)", (rid, " ".join(key_terms(ri, body, body_tokens))))
     con.executemany("INSERT INTO edges VALUES(?,?,?)", [(rel, k, v) for k, v in page_edges(rel, head, meta, body)])
     con.executemany("INSERT INTO names VALUES(?,?)", [(rel, k) for k in name_keys(rel)])
 
@@ -271,19 +275,16 @@ def spread(con: sqlite3.Connection, direct: list[dict], shown: set[str], scope: 
     direct_norm = {h["rel"]: max(0.0, h["score"]) / top for h in direct}
     act: Counter = Counter()
     via: dict[str, Counter] = defaultdict(Counter)
-    shared: dict[str, Counter] = defaultdict(Counter)
     n_docs = con.execute("SELECT count(*) FROM files").fetchone()[0] or 1
     seed_rels = [h["rel"] for h in seeds]
     seed_deg = degrees(con, seed_rels)
 
-    def add(dst: str, kind: str, src: str, amount: float, word: str = "") -> None:
+    def add(dst: str, kind: str, src: str, amount: float) -> None:
         # 种子页本身也可以被别的种子带出来：k=3 时第 3 条直接命中让位给联想，它若和前两条连得紧，照样回得来
         if amount <= 0 or dst == src or dst in shown:
             return
         act[dst] += amount
         via[dst][(kind, src)] += amount
-        if word:
-            shared[dst][word] += amount
 
     # 共同的词：种子页的实词 → 也把它列为实词的别的页；词越少见权重越大，连的页越多每页分得越少
     marks = ",".join("?" * len(seed_rels))
@@ -294,7 +295,7 @@ def spread(con: sqlite3.Connection, direct: list[dict], shown: set[str], scope: 
         seed_terms[rel] = row[0].split() if row and row[0] else []
     terms = sorted({t for ts in seed_terms.values() for t in ts})
     df: dict[str, int] = {}
-    holders: dict[str, list[int]] = defaultdict(list)
+    holders: dict[str, list[int]] = {}
     cap = max(2, min(DF_ABS_MAX, int(DF_SHARE_MAX * n_docs)))
     for i in range(0, len(terms), 500):
         chunk = terms[i:i + 500]
@@ -303,26 +304,42 @@ def spread(con: sqlite3.Connection, direct: list[dict], shown: set[str], scope: 
         live = [t for t in chunk if 2 <= df.get(t, 0) <= cap]
         if live:
             q = ",".join("?" * len(live))
-            for term, doc in con.execute(f"SELECT term, doc FROM kvinst WHERE term IN ({q})", live):
-                holders[term].append(doc)
+            for term, docs in con.execute(
+                f"SELECT term, group_concat(doc) FROM kvinst WHERE term IN ({q}) GROUP BY term", live
+            ):
+                holders[term] = list(map(int, docs.split(",")))
     docs = sorted({d for ds in holders.values() for d in ds})
     rel_of: dict[int, str] = {}
     for i in range(0, len(docs), 500):
         chunk = docs[i:i + 500]
         rel_of.update(con.execute(f"SELECT rid, rel FROM files WHERE rid IN ({','.join('?' * len(chunk))})",
                                   chunk).fetchall())
+    rel_of = {doc: rel for doc, rel in rel_of.items()
+              if rel not in shown and (not scope or rel == scope or rel.startswith(scope + "/"))}
+    # Share one score and term mask per path, preserving the order of the additions below.
+    word_totals = {rel: [0.0, 0] for rel in rel_of.values()}
+    destinations = {doc: (rel, word_totals[rel]) for doc, rel in rel_of.items()}
+    eligible = {term: [destinations[doc] for doc in posting if doc in destinations] for term, posting in holders.items()}
+    word_bits = {t: 1 << i for i, t in enumerate(terms)}
+    word_steps = []
     for h in seeds:
         a = h["score"] / top
-        mine = seed_terms.get(h["rel"], [])
+        src = h["rel"]
+        mine = seed_terms.get(src, [])
         for t in mine:
             n = df.get(t, 0)
             if not 2 <= n <= cap:
                 continue
             share = a * WEIGHTS["words"] * math.log(n_docs / n) / len(mine) / (n - 1)
-            for doc in holders[t]:
-                rel = rel_of.get(doc)
-                if rel and rel != h["rel"]:
-                    add(rel, "words", h["rel"], share, t)
+            if share <= 0:
+                continue
+            bit = word_bits[t]
+            word_steps.append((t, src, share))
+            for rel, total in eligible.get(t, ()):
+                if rel != src:
+                    total[0] += share
+                    total[1] |= bit
+    act.update({rel: score for rel, (score, mask) in word_totals.items() if mask})
     # 链接、取代：沿边两头都算；枢纽页（索引、总览）发出去的分摊到它所有的链接上
     for a_rel, b_rel, kind in _resolved_links(con, seed_rels):
         for src, dst in ((a_rel, b_rel), (b_rel, a_rel)):
@@ -354,10 +371,9 @@ def spread(con: sqlite3.Connection, direct: list[dict], shown: set[str], scope: 
         if rel in shown or scope and not (rel == scope or rel.startswith(scope + "/")):
             continue
         score = amount * (1 + QUERY_BOOST * direct_norm.get(rel, 0.0))
-        explicit = any(k != "words" for k, _s in via[rel])
         # 安静门槛：只靠"共同的词"连上的，要共有足够多的少见词、分数也够，否则不出声（小库里只共有 `tests`、
         # `changed` 这类词的页，十有八九是巧合）
-        if not explicit and (len(shared[rel]) < MIN_WORDS or score < MIN_SCORE):
+        if rel not in via and (_BIT_COUNT(word_totals[rel][1]) < MIN_WORDS or score < MIN_SCORE):
             continue
         scored.append((score, rel))
     # 只给前几名查层级和链接数：大库里共同的词能连到上千页，逐个查 docs（rel 列不建索引）太慢
@@ -372,6 +388,15 @@ def spread(con: sqlite3.Connection, direct: list[dict], shown: set[str], scope: 
         if row:
             info[rel] = row
     deg = degrees(con, cands)
+    # Explanation weights only matter for the pages that survive scoring.
+    doc_choices = {doc for doc, rel in rel_of.items() if rel in rids}
+    shared: dict[str, Counter] = defaultdict(Counter)
+    for term, src, amount in word_steps:
+        for doc in doc_choices.intersection(holders.get(term, ())):
+            dst = rel_of[doc]
+            if dst != src:
+                via[dst][("words", src)] += amount
+                shared[dst][term] += amount
     out = []
     for score, rel in scored:
         if rel not in info:
@@ -407,11 +432,66 @@ CHANGE_RE = re.compile(
     re.I)
 CONFLICT_RATIO = 0.5   # 较新那页的直接得分至少是首条的一半，才算"也在说这件事"
 CONFLICT_SHARE = 0.6   # 首条对上的问题实词，较新那页至少也有这么多
+CHANGE_SHARE = 0.75    # 改口的同一句话须覆盖两页共有的大部分实词
 CONFLICT_DEPTH = 3     # 只看前三条
+CHANGE_SENTENCE = re.compile(r"(?<=[。！？；!?;])\s*|(?<=\.)\s+")
+NUMBERED_SUBJECT = re.compile(r"([a-z][a-z_-]*|[㐀-鿿]{2})\s*#?\s*(\d{2,})(?!\d)", re.I)
+QUOTED_WORDING = r'["“「『]([^"”」』\n]{2,80})["”」』]'
+WORDING_LITERAL = re.compile(QUOTED_WORDING)
+WORDING_CHANGE = re.compile(rf"{QUOTED_WORDING}\s*(?:统一)?\s*(?:改成|改为|改回|换成|换为|替换为)\s*{QUOTED_WORDING}")
+REJECT_WORDING = re.compile(r"不要(?:再)?用|不能(?:再)?用|不(?:得|宜|应|该|建议|采用|支持|使用|显示)|弃用|禁止|禁用|"
+                            r"\b(?:not|never|obsolete|invalid|deprecated)\b", re.I)
+PAST_WORDING = re.compile(r"旧(?:称|文案|用语|说法)|原(?:称|文案|用语|说法)|曾(?:用|称)|此前|之前|历史"
+                          r"|\b(?:previously|formerly|old wording|old label)\b", re.I)
+PENDING_WORDING = re.compile(r"待(?:核对|确认|检查)|是否|有没有|\b(?:verify whether|check whether)\b", re.I)
 CONFLICT_NOTE = ("recall_conflict: an earlier page says otherwise. {new} ({new_day}) changes what {old} ({old_day}) "
                  "says; the newer page is listed first. Answer from the newer page and say it was changed.")
 CONFLICT_FLAG = ("recall_conflict: possible. {a} ({a_day}) and {b} ({b_day}) are both about this and may disagree; "
                  "the order was not changed. Read both before answering.")
+CN_DATE_PART = r"(\d{1,2}|[一二三四五六七八九十]{1,3})"
+QUERY_DATE = re.compile(rf"(?<!\d)(?:(\d{{4}})\s*年\s*)?{CN_DATE_PART}\s*月\s*{CN_DATE_PART}\s*[日号]"
+                        r"|(?<!\d)(\d{4})-(\d{2})-(\d{2})(?!\d)")
+EN_MONTH = r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+ENG_QUERY_DATE = re.compile(
+    rf"\b(?:({EN_MONTH})\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b|(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?({EN_MONTH})\b)"
+    r"(?:,?\s+(\d{4})\b)?", re.I | re.ASCII)
+RANGE_BEFORE_DATE = re.compile(r"(?:自从|截至|截止(?:到)?|\b(?:from|since|until|through|before|after|as of))\s*$", re.I)
+RANGE_AFTER_DATE = re.compile(r"\s*\)?\s*(?:以来|之后|以后|之前|以前|起|开始|至|(?:[-–—]|to\s+)\s*\d|(?:or later|and later|onwards?)\b)", re.I)
+
+
+def normalize_query_dates(query: str) -> str:
+    from evidence import MONTH_NUM
+
+    def convert(match: re.Match) -> str:
+        month, day, day_first, month_last, year = match.groups()
+        m = MONTH_NUM[(month or month_last).lower()]
+        d = int(day or day_first)
+        return f"{year}-{m:02}-{d:02}" if year else f"{m}月{d}日"
+
+    return ENG_QUERY_DATE.sub(convert, unicodedata.normalize("NFKC", query))
+
+
+def requested_day(query: str) -> str:
+    """A single explicit calendar day, or its month-day suffix if the year is omitted."""
+    from evidence import _cn_int
+
+    query = normalize_query_dates(query)
+    days = set()
+    for match in QUERY_DATE.finditer(query):
+        year, month, day, iso_year, iso_month, iso_day = match.groups()
+        year = year or iso_year
+        try:
+            key = date(int(year or 2000), _cn_int(month or iso_month) or 0, _cn_int(day or iso_day) or 0).isoformat()
+        except ValueError:
+            continue
+        if RANGE_BEFORE_DATE.search(query[:match.start()]) or RANGE_AFTER_DATE.match(query[match.end():]):
+            return ""
+        days.add(key if year else key[4:])
+    if len(days) == 2:
+        full = max(days, key=len)
+        if len(full) == 10 and full[4:] in days:
+            return full
+    return next(iter(days)) if len(days) == 1 else ""
 
 
 def _page_text(vault: Path, rel: str) -> str:
@@ -421,30 +501,105 @@ def _page_text(vault: Path, rel: str) -> str:
         return ""
 
 
-def change_lines(ri, text: str, subject: set[str]) -> tuple[bool, bool]:
-    """(a line says something was changed, such a line also names the subject)."""
-    any_change = named = False
-    for line in text.splitlines():
+def settled_clauses(body: str) -> list[str]:
+    """Current text only, leaving explicitly pending sections out of wording comparisons."""
+    clauses = []
+    pending_level = 0
+    for line in unicodedata.normalize("NFKC", body).casefold().splitlines():
+        heading = re.match(r"^(#{1,6})\s+(.*)", line)
+        if heading:
+            level = len(heading[1])
+            if pending_level and level <= pending_level:
+                pending_level = 0
+            if not pending_level and PENDING_WORDING.search(heading[2]):
+                pending_level = level
+        if not pending_level:
+            clauses.extend(CHANGE_SENTENCE.split(line))
+    return clauses
+
+
+def agrees_with_wording_change(labels: tuple[str, str], peer_clauses: list[str]) -> bool:
+    """A quoted rename yields no disagreement if the peer already uses the new wording."""
+    old, new = (unicodedata.normalize("NFKC", label).casefold() for label in labels)
+    if old in new or new in old:
+        return False
+    agrees = False
+    for clause in peer_clauses:
+        if old not in clause and new not in clause:
+            continue
+        context = WORDING_LITERAL.sub("", clause)
+        if PENDING_WORDING.search(context) or context.rstrip().endswith("?"):
+            continue
+        rejects = REJECT_WORDING.search(context)
+        if new in clause and rejects:
+            return False
+        changed = WORDING_CHANGE.search(clause)
+        if changed and changed.groups() == (old, new):
+            agrees = True
+            continue
+        if old in clause and not (PAST_WORDING.search(context) or rejects):
+            return False
+        if new in clause:
+            agrees = True
+    return agrees
+
+
+def change_line(ri, text: str, meta: dict, body: str, peer_body: str, subject: set[str], ids: set[str],
+                numbered: set[tuple[str, str]]) -> int:
+    """Find a change statement about the shared subject, using a named heading for context."""
+    heading_line = re.search(r"^#\s+(.+)$", body, re.M)
+    title = meta.get("title") or (heading_line[1] if heading_line else "")
+    heading = subject.intersection(ri.tokens(title))
+    missing = subject - heading
+    lines = body.splitlines()
+    first = len(text.splitlines()) - len(lines) + 1
+    names = {name for name, _num in numbered}
+    peer_clauses = None
+    for number, line in enumerate(lines, first):
         if not CHANGE_RE.search(line):
             continue
-        any_change = True
-        if subject & set(ri.tokens(line)):
-            named = True
-            break
-    return any_change, named
+        for sentence in CHANGE_SENTENCE.split(line):
+            if not CHANGE_RE.search(sentence):
+                continue
+            terms = set(ri.tokens(sentence))
+            if not ids <= terms:
+                continue
+            if any(name in names and (name, value) not in numbered
+                   for name, value in NUMBERED_SUBJECT.findall(sentence.lower())):
+                continue
+            match = subject & terms
+            if len(match) >= CHANGE_SHARE * len(subject) or (len(heading) >= 2 and missing and missing <= match):
+                wording = WORDING_CHANGE.search(sentence)
+                if not wording:
+                    return number
+                if peer_clauses is None:
+                    peer_clauses = settled_clauses(peer_body)
+                if not agrees_with_wording_change(wording.groups(), peer_clauses):
+                    return number
+    return 0
 
 
-def conflicts(ri, con: sqlite3.Connection, vault: Path, hits: list[dict], qtok: list[str]) -> dict | None:
+def conflicts(ri, con: sqlite3.Connection, vault: Path, hits: list[dict], qtok: list[str], query: str) -> dict | None:
     """The first pair among the top hits that look like the same thing said twice, at different dates.
 
-    Both pages match the question about as well and share most of its words, both are dated, and the newer one has a
-    line that says something was changed and names the subject. Sure, at different dates: the newer page goes first
+    Both pages match the question about as well and share most of its content words, both are dated, and the newer
+    one says in a statement matching those words that the subject changed. Known different project roots rule out
+    a pair. Unconfirmed correction candidates cannot establish conflicts.
+    A query about a specific day only considers conflicts between records from that day.
+    Sure, at different dates: the newer page goes first
     (if it is not already) and both are marked. Unsure, the same date (which is newer cannot be told): marked, order
     kept. Anything less (no change line naming the subject, a page without a date): nothing. Replaced pages are left
     to their own marking."""
     live = [h for h in hits[:CONFLICT_DEPTH] if h.get("tier") != "dead" and h.get("status") not in ri.DEAD_STATUS]
-    if len(live) < 2 or not qtok:
+    if len(live) < 2 or (len(live) == 2 and live[1]["score"] < CONFLICT_RATIO * live[0]["score"]):
         return None
+    query_subject = QUERY_DATE.sub("", normalize_query_dates(query)).lower()
+    query_terms = set(ri.tokens(query_subject))
+    qtok = [t for t in qtok if t in query_terms]
+    if not qtok:
+        return None
+    ids = {t for t in query_terms if t.isdigit()}
+    numbered = set(NUMBERED_SUBJECT.findall(query_subject)) if ids else set()
     marks = ",".join("?" * len(qtok))
 
     def have(rel: str) -> set[str]:
@@ -455,36 +610,53 @@ def conflicts(ri, con: sqlite3.Connection, vault: Path, hits: list[dict], qtok: 
             f"SELECT DISTINCT term FROM vinst WHERE term IN ({marks}) AND doc=? AND col IN ('title','triggers','body')",
             qtok + [rid[0]])}
 
-    first = live[0]
-    words0 = have(first["rel"])
-    if not words0:
+    for i, first in enumerate(live[:-1]):
+        text0 = _page_text(vault, first["rel"])
+        meta0, body0 = ri.split_frontmatter(text0)
+        if meta0.get("type") != "correction-candidates":
+            break
+    else:
         return None
-    meta0 = ri.split_frontmatter(_page_text(vault, first["rel"]))[0]
+    target = requested_day(query)
     day0 = page_day(first["rel"], meta0)
-    for other in live[1:]:
+    if not day0 or (target and not day0.endswith(target)):
+        return None
+    words0 = None
+    for other in live[i + 1:]:
         if other["score"] < CONFLICT_RATIO * first["score"]:
             continue
-        words1 = have(other["rel"])
-        common = words0 & words1
-        if len(common) < min(2, len(words0)) or len(common) < CONFLICT_SHARE * len(words0):
-            continue
         text1 = _page_text(vault, other["rel"])
-        day1 = page_day(other["rel"], ri.split_frontmatter(text1)[0])
-        if not day0 or not day1:
+        meta1, body1 = ri.split_frontmatter(text1)
+        if meta1.get("type") == "correction-candidates":
             continue
-        text0 = _page_text(vault, first["rel"])
-        if day1 < day0 or day1 == day0 and change_lines(ri, ri.split_frontmatter(text0)[1], common)[1]:
+        root0, root1 = meta0.get("project_root"), meta1.get("project_root")
+        if root0 and root1 and root0 != root1:
+            continue
+        day1 = page_day(other["rel"], meta1)
+        if not day1 or (target and day1 != day0):
+            continue
+        if words0 is None:
+            words0 = have(first["rel"])
+            if not words0:
+                return None
+        common = words0 & have(other["rel"])
+        if not ids.issubset(common) or len(common) < min(2, len(words0)) or len(common) < CONFLICT_SHARE * len(words0):
+            continue
+        subject = {t for t in common if not t.isdigit()
+                   and (not ri.is_cjk_bigram(t) or not ri.FUNCTION_CHARS.intersection(t))}
+        if not subject:
+            continue
+        if day1 <= day0 and (line := change_line(ri, text0, meta0, body0, body1, subject, ids, numbered)):
             # 首条才是较新的（或同一天、改动的话在首条）：顺序已经对了，只说明较早的一页说法不同
-            older, newer, new_text = other, first, text0
+            older, newer = other, first
+        elif day0 <= day1 and (line := change_line(ri, text1, meta1, body1, body0, subject, ids, numbered)):
+            older, newer = first, other
         else:
-            older, newer, new_text = first, other, text1
-        _changed, named = change_lines(ri, ri.split_frontmatter(new_text)[1], common)
-        if not named:  # 改动的话没点到这件事（长会话里随处都有 instead of、replace）：不算
             continue
         sure = day1 != day0
-        reorder = sure and newer is other
+        reorder = sure and newer is not hits[0]
         return {"older": older["rel"], "newer": newer["rel"], "older_day": min(day0, day1),
-                "newer_day": max(day0, day1), "sure": sure, "reorder": reorder}
+                "newer_day": max(day0, day1), "sure": sure, "reorder": reorder, "change_line": line}
     return None
 
 
@@ -496,6 +668,8 @@ def apply_conflict(hits: list[dict], c: dict) -> None:
     for h in hits:
         if h["rel"] == c["newer"]:
             h["conflict"] = "newer" if c["sure"] else "possible"
+            if c["sure"]:
+                h["conflict_line"] = c["change_line"]
         elif h["rel"] == c["older"]:
             h["conflict"] = "older" if c["sure"] else "possible"
 

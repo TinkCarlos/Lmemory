@@ -182,6 +182,22 @@ def test_renamed_session_replaces_its_page(env):
     assert len(names) == 1 and "新标题" in names[0]
 
 
+def test_reimport_preserves_secret_marker_without_supplement(env, tmp_path):
+    _claude_session(env["claude"], "fixture-protected", 1, title="发版流程")
+    _run(env)
+    rel, text = next(iter(_pages(env).items()))
+    page = env["vault"] / FOLDER / rel
+    page.write_text(text.replace("---\n", "---\nsecret: true\n", 1), encoding="utf-8")
+    _run(env)
+    assert "\nsecret: true\n" in page.read_text(encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "route_knowledge.py"), "search", "发版只从 main 打 tag 吗"],
+        env={**env["env"], "LMEMORY_CACHE_DIR": str(tmp_path / "cache")},
+        check=True, capture_output=True, text=True, timeout=120,
+    )
+    assert "定了：发版只从 main 打 tag。" not in result.stdout
+
+
 def test_nightly_imports_only_after_consent(env):
     _claude_session(env["claude"], "aaaa1111-s", 1, title="昨天")
     off = _run(env, "--nightly")
