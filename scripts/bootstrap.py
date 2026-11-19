@@ -319,15 +319,17 @@ def lay_down(template: Path, vault: Path, dry: bool, lang: str = "zh") -> list[s
     if table is not None:
         sample = ROOT / "skill/lmemory/scripts/canonical_sources.psv"
         return zones.lay_out(template, vault, dry, table, sample if template == ROOT / "template" else None)
-    added = []
+    files = []
     for src in sorted(template.rglob("*")):
         if not src.is_file() or src.name == ".DS_Store":
             continue
-        rel = src.relative_to(template)
-        dst = vault / rel
+        rel = src.relative_to(template).as_posix()
+        files.append((src, rel, zones.install_path(vault, rel)))
+    added = []
+    for src, rel, dst in files:
         if dst.exists():
             continue
-        added.append(rel.as_posix())
+        added.append(rel)
         if not dry:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
@@ -786,6 +788,8 @@ def register_app(app: dict, server: list[str], dry: bool, t: dict | None = None,
         DESKTOP_DEFERRED["mcpb"] = str(mcpb) if mcpb else ""
         if t:
             cmd = f'{"python" if WINDOWS else "python3"} "{ROOT / "scripts" / "bootstrap.py"}" --connect claude-desktop'
+            if vault is not None:
+                cmd += " --vault " + (f'"{vault}"' if WINDOWS else _arg(str(vault)))
             print(t["desktop_running"].format(cmd=cmd, mcpb=mcpb or "-"))
         return False
     try:
@@ -1264,7 +1268,11 @@ def main() -> int:
             print(f"unknown app {args.connect!r}: " + ", ".join(a["id"] for a in MCP_APPS))
             return 2
         py = sys.executable if WINDOWS else (shutil.which("python3") or sys.executable)
-        ok = register_app(app, [py, str(skill_home() / "scripts" / "mcp_server.py")], args.dry_run, t)
+        vault = Path(args.vault).expanduser().resolve() if args.vault else None
+        server = [py, str(skill_home() / "scripts" / "mcp_server.py")]
+        if vault is not None:
+            server.extend(["--vault", str(vault)])
+        ok = register_app(app, server, args.dry_run, t, vault)
         if ok:
             print((t["mcp_desktop"] if app["id"] == "claude-desktop" else t["mcp_app"].format(app=app["name"], file=app_config(app)))
                   + "".join(f"\n  {p}" for p in CHANGED))

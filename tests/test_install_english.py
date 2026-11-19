@@ -235,6 +235,38 @@ def test_install_rejects_an_upstream_layout_that_escapes_the_vault(tmp_path):
 
 
 @POSIX
+def test_install_uses_the_resolved_layout_target(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    outside = tmp_path / "outside"
+    (outside / "child").mkdir(parents=True)
+    (outside / "back").symlink_to(vault, target_is_directory=True)
+    (vault / "bridge").symlink_to(outside / "child", target_is_directory=True)
+    (vault / zones.LEGACY_ZONES_FILE).write_text(
+        "90 系统文件|bridge/../unused/../back/System\n", encoding="utf-8"
+    )
+    res, _ = _boot(_env(tmp_path), "--lang", "zh", "--minimal", "--vault", str(vault))
+    assert res.returncode == 0, res.stderr
+    assert (vault / "System/自动化/日更健康.md").is_file()
+    assert not (outside / "unused").exists()
+
+
+@POSIX
+def test_install_rejects_a_default_layout_symlink_outside_the_vault(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = vault / "90 系统文件"
+    link.symlink_to(outside, target_is_directory=True)
+    res, _ = _boot(_env(tmp_path), "--lang", "zh", "--minimal", "--vault", str(vault))
+    assert res.returncode == 1
+    assert "outside the memory folder" in res.stderr
+    assert list(vault.iterdir()) == [link]
+    assert not list(outside.iterdir())
+
+
+@POSIX
 def test_dry_run_lists_every_file_and_setting_and_changes_nothing(tmp_path):
     env = _env(tmp_path)
     vault = tmp_path / "v"
@@ -417,15 +449,23 @@ def _desktop_env(tmp: Path, running: str) -> dict:
 
 
 @POSIX
-def test_claude_desktop_running_is_left_alone_and_gets_an_extension_instead(tmp_path):
+@pytest.mark.parametrize("minimal", [False, True])
+def test_claude_desktop_running_is_left_alone_and_gets_an_extension_instead(tmp_path, minimal):
     env = _desktop_env(tmp_path, "1")
     cfg = Path(env["LMEMORY_CLAUDE_DESKTOP_CONFIG"])
     before = cfg.read_text(encoding="utf-8")
-    res, out = _boot(env, "--lang", "en", "--no-import")
+    args = ["--lang", "en", "--no-import"]
+    vault_file = Path(env["LMEMORY_VAULT_FILE"])
+    if minimal:
+        old_default = _english_vault(tmp_path)
+        vault_file.parent.mkdir(parents=True)
+        vault_file.write_text(str(old_default) + "\n", encoding="utf-8")
+        args.extend(["--minimal", "--apps", "claude-desktop", "--vault", str(tmp_path / "lookup's $vault")])
+    res, out = _boot(env, *args)
     assert res.returncode == 0, res.stdout[-1500:] + res.stderr[-1500:]
     assert cfg.read_text(encoding="utf-8") == before  # written while running, it would be lost on quit
     assert "claude-desktop" not in out["mcp"] and "Claude Desktop is running" in res.stdout
-    assert "--connect claude-desktop" in res.stdout
+    retry = re.search(r"then run (.* --connect claude-desktop[^\n]*?); or \(2\)", res.stdout).group(1)
     mcpb = Path(out["claude_desktop_extension"])
     import build_mcpb
 
@@ -433,12 +473,15 @@ def test_claude_desktop_running_is_left_alone_and_gets_an_extension_instead(tmp_
     import zipfile
 
     m = json.loads(zipfile.ZipFile(mcpb).read("manifest.json"))
-    assert m["user_config"]["memory_folder"]["default"] == out["vault"]  # the folder the install recorded
+    assert m["user_config"]["memory_folder"]["default"] == out["vault"]
     env["LMEMORY_CLAUDE_DESKTOP_RUNNING"] = "0"  # quit the app, then the one command the install printed
-    res = subprocess.run([sys.executable, str(BOOT), "--connect", "claude-desktop"], env=env, capture_output=True,
+    res = subprocess.run(["/bin/sh", "-c", retry], env=env, capture_output=True,
                          text=True, timeout=120)
     data = json.loads(cfg.read_text(encoding="utf-8"))
     assert res.returncode == 0 and "mcp_server.py" in json.dumps(data["mcpServers"]["lmemory"]), res.stdout
+    if minimal:
+        assert data["mcpServers"]["lmemory"]["args"][-2:] == ["--vault", out["vault"]]
+        assert vault_file.read_text(encoding="utf-8") == str(old_default) + "\n"
     assert data["mcpServers"]["other"] == {"command": "x"} and (cfg.parent / (cfg.name + ".lmemory-bak")).is_file()
     env["LMEMORY_CLAUDE_DESKTOP_RUNNING"] = "1"  # uninstall while it runs: left alone, and told why
     res = subprocess.run([sys.executable, str(BOOT), "--unregister-mcp"], env=env, capture_output=True, text=True,

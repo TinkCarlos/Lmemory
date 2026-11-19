@@ -95,8 +95,8 @@ def path(vault: Path, rel: str) -> Path:
 
 
 def install_path(vault: Path, rel: str) -> Path:
-    dst = vault / rel
-    if not dst.resolve().is_relative_to(vault.resolve()):
+    dst = (vault / rel).resolve()
+    if not dst.is_relative_to(vault.resolve()):
         raise ValueError(f"Installation path is outside the memory folder: {rel}")
     return dst
 
