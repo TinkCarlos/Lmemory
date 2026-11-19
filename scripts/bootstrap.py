@@ -296,7 +296,7 @@ import zones  # noqa: E402
 def layout_for(vault: Path, lang: str) -> Path | None:
     """The names a vault is laid down with: its own `lmemory-zones.psv`; else, for an English vault that does not
     already use the default (Chinese) names, `zones_en.psv`; else None (the default names)."""
-    own = zones._file(vault)
+    own = zones.vault_table(vault)
     if own.is_file():
         return own
     if lang == "en" and not any((vault / m).exists() for m in DEFAULT_MARKS):
@@ -307,7 +307,7 @@ def layout_for(vault: Path, lang: str) -> Path | None:
 def vault_state(vault: Path) -> str:
     if not vault.exists() or (vault.is_dir() and not any(p for p in vault.iterdir() if p.name != ".DS_Store")):
         return "new"
-    if (vault / "Agent第二大脑.md").is_file() or zones._file(vault).is_file() \
+    if (vault / "Agent第二大脑.md").is_file() or zones.vault_table(vault).is_file() \
             or (vault / "90 系统文件" / "自动化" / "日更健康.md").is_file():
         return "ours"
     return "merge"
@@ -389,7 +389,7 @@ def install_posix(vault: Path, dry: bool, lookup_only: bool = False) -> int:
     return subprocess.run(argv, env=env).returncode
 
 
-def install_windows(vault: Path, dry: bool, timer: bool) -> int:
+def install_windows(vault: Path, dry: bool, timer: bool, lookup_only: bool = False) -> int:
     """install.sh, for Windows: skill (keeping the alias table), agent rules, alias table into the vault, timer."""
     home = Path.home()
     skill = Path(os.environ.get("LMEMORY_SKILL_HOME") or home / ".agents/skills/lmemory")
@@ -425,14 +425,15 @@ def install_windows(vault: Path, dry: bool, timer: bool) -> int:
         shutil.copy2(ROOT / "extras/cursor/lmemory-ask-product.mdc", ask)
         if old_rule is not None and old_rule.is_file() and "route_knowledge" in old_rule.read_text(encoding="utf-8", errors="replace"):
             old_rule.unlink()
-    table = zones.path(vault, "90 系统文件/canonical_sources.psv")
+    table = zones.install_path(vault, zones.real(vault, "90 系统文件/canonical_sources.psv"))
     if not table.exists() and table.parent.is_dir():
         old = kept.get("canonical_sources.psv")
         sample = (ROOT / "skill/lmemory/scripts/canonical_sources.psv").read_bytes()
         table.write_bytes(old if old and old != sample else sample)
     env = {**os.environ, "OBSIDIAN_VAULT": str(vault)}
-    subprocess.run([sys.executable, str(ROOT / "extras/host-daily-evolution/resolve.py"), "--sync-health", "--offline"],
-                   env=env, capture_output=True)
+    if not lookup_only:
+        subprocess.run([sys.executable, str(ROOT / "extras/host-daily-evolution/resolve.py"), "--sync-health", "--offline"],
+                       env=env, capture_output=True)
     if timer:
         ps = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ROOT / "scripts/install_windows_task.ps1"),
               "-Vault", str(vault), "-Python", sys.executable]
@@ -745,7 +746,7 @@ def claude_desktop_running() -> bool:
     return False
 
 
-def desktop_extension(py: str) -> Path | None:
+def desktop_extension(py: str, vault: Path | None = None) -> Path | None:
     """A Claude Desktop extension for this machine: the memory folder the install recorded as its default, the
     interpreter found here. Built next to the recorded-folder file; None when it cannot be built."""
     builder = ROOT / "scripts" / "build_mcpb.py"
@@ -756,7 +757,7 @@ def desktop_extension(py: str) -> Path | None:
         import build_mcpb
         from lmemory_home import vault_file, vault_path
 
-        return build_mcpb.build(vault_file().parent / "Lmemory.mcpb", vault_path(), py)
+        return build_mcpb.build(vault_file().parent / "Lmemory.mcpb", str(vault) if vault is not None else vault_path(), py)
     except Exception:  # noqa: BLE001 - 做不出扩展包就只给"退出后重跑"那条路
         return None
 
@@ -769,7 +770,7 @@ def claude_desktop_config() -> Path | None:
     return app_config(MCP_APPS[0])
 
 
-def register_app(app: dict, server: list[str], dry: bool, t: dict | None = None) -> bool:
+def register_app(app: dict, server: list[str], dry: bool, t: dict | None = None, vault: Path | None = None) -> bool:
     """Add Lmemory to one app's MCP settings, keeping everything else in the file. Never touches a file it cannot
     parse, or a `lmemory` entry that is not Lmemory's mcp_server.py; keeps a copy of the file it changes."""
     cfg = app_config(app)
@@ -781,7 +782,7 @@ def register_app(app: dict, server: list[str], dry: bool, t: dict | None = None)
                                      "(Lmemory.mcpb) built instead" if running else f"add {app['key']}.lmemory to {cfg}"))
         return False
     if running:
-        mcpb = desktop_extension(server[0])
+        mcpb = desktop_extension(server[0], vault)
         DESKTOP_DEFERRED["mcpb"] = str(mcpb) if mcpb else ""
         if t:
             cmd = f'{"python" if WINDOWS else "python3"} "{ROOT / "scripts" / "bootstrap.py"}" --connect claude-desktop'
@@ -1077,7 +1078,8 @@ def uninstall_plugin(dry: bool) -> list[str]:
     return gone
 
 
-def register_mcp(t: dict, dry: bool, apps: set[str] | None = None, plugin: bool = True) -> list[str]:
+def register_mcp(t: dict, dry: bool, apps: set[str] | None = None, plugin: bool = True,
+                 vault: Path | None = None) -> list[str]:
     """Register the MCP server with the agent CLIs that are installed (user scope). Re-running is harmless."""
     if os.environ.get("LMEMORY_NO_MCP") == "1":
         return []
@@ -1085,6 +1087,8 @@ def register_mcp(t: dict, dry: bool, apps: set[str] | None = None, plugin: bool 
     # python3 on PATH outlives a versioned interpreter path (a Homebrew upgrade moves python@3.x)
     py = sys.executable if WINDOWS else (shutil.which("python3") or sys.executable)
     server = [py, str(skill / "scripts" / "mcp_server.py")]
+    if vault is not None:
+        server.extend(["--vault", str(vault)])
     done = []
     for cli, argv in (("claude", ["mcp", "add", "--scope", "user", "lmemory", "--"]),
                       ("codex", ["mcp", "add", "lmemory", "--"])):
@@ -1116,7 +1120,7 @@ def register_mcp(t: dict, dry: bool, apps: set[str] | None = None, plugin: bool 
                 done.append("claude-plugin")
                 print(t["plugin_done"])
     for app in MCP_APPS:  # 本机装了哪个就接哪个，和 claude / codex 一样不问
-        if wanted(app["id"], apps) and register_app(app, server, dry, t):
+        if wanted(app["id"], apps) and register_app(app, server, dry, t, vault):
             done.append(app["id"])
             print(t["mcp_desktop"] if app["id"] == "claude-desktop" else t["mcp_app"].format(app=app["name"], file=app_config(app)))
     return done
@@ -1280,10 +1284,15 @@ def main() -> int:
         print(t["py_old"].format(v=platform.python_version()))
         return 1
     vault = Path(args.vault or os.environ.get("LMEMORY_VAULT") or os.environ.get("OBSIDIAN_VAULT") or recorded_vault() or default_vault(lang)).expanduser().resolve()
+    os.environ.pop("LMEMORY_ZONES", None)  # 安装使用目标库自己的映射，查询才允许显式覆盖
     state = vault_state(vault)
     template = template_for(lang)
     print(f"{t['plan']}: {t['vault_' + state]} → {vault}")
-    added = lay_down(template, vault, args.dry_run, lang)
+    try:
+        added = lay_down(template, vault, args.dry_run, lang)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 1
     planned = layout_for(vault, lang)
     if args.dry_run and planned is not None and not (vault / zones.ZONES_FILE).is_file():
         # 预演时库还没建：打出来的路径按它将要用的名字（英文库是 90 System/…），不按默认的中文名
@@ -1296,11 +1305,12 @@ def main() -> int:
                   Path(os.environ.get("LMEMORY_ASK_RULE") or Path.home() / ".cursor/rules/lmemory-ask-product.mdc")]
     had_rules = [f.exists() for f in rule_files]
     os.environ["LMEMORY_NO_TIMER"] = "1"  # 先只装只读部分：库、路由、规则；夜间任务等宿主点头再装
-    rc = install_windows(vault, args.dry_run, False) if WINDOWS else install_posix(vault, args.dry_run, args.minimal)
+    rc = (install_windows(vault, args.dry_run, False, args.minimal) if WINDOWS
+          else install_posix(vault, args.dry_run, args.minimal))
     if rc != 0:
         return rc
     if args.dry_run:
-        register_mcp(t, True, apps, not args.minimal)
+        register_mcp(t, True, apps, not args.minimal, vault if args.minimal else None)
         if not args.no_import:
             register_hooks(t, True, apps)
         print("  nightly job: " + ("yes (--timer)" if args.timer else "no (--no-timer)" if args.no_timer
@@ -1313,16 +1323,16 @@ def main() -> int:
                                         else "no (existing vault)"))
         return 0
     sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
-    from lmemory_home import remember
+    from lmemory_home import remember, vault_file
 
-    vf = remember(vault)  # agent、MCP、插件不用先 export 变量也找得到这个记忆文件夹
     if state == "new":
         CREATED.append(f"{vault}{os.sep} ({len(added)} files)")
     CREATED.append(f"{skill_home()}{os.sep}" + (" (replaced: upgrade)" if had_skill else ""))
     if os.environ.get("LMEMORY_NO_CURSOR_RULES") != "1":
         CREATED.extend(f"{f}" + (" (replaced)" if had else "") for f, had in zip(rule_files, had_rules))
-    CREATED.append(str(vf))
-    mcp = register_mcp(t, False, apps, not args.minimal)
+    if not args.minimal or not vault_file().is_file():
+        CREATED.append(str(remember(vault)))
+    mcp = register_mcp(t, False, apps, not args.minimal, vault if args.minimal else None)
     os.environ.pop("LMEMORY_NO_TIMER", None)
     timer, asked = decide_timer(args, vault, t)
     if not timer and not args.no_timer and legacy_timer():

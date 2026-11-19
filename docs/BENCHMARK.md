@@ -32,7 +32,7 @@ questions, a runner, and a scorer that grades any system's output.
 ## Results
 
 Four systems, both question sets, run on 2026-10-12. Held-out means the 25 questions in `heldout.jsonl` that KRouter was
-never tuned on ([`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md)); dev means the 30 bench questions, on which Lmemory
+never tuned on ([`HELDOUT.md`](../bench/memory_honesty/HELDOUT.md)); dev means the 30 bench questions, on which KRouter
 was fixed once (see below). Each cell gives the wrong-citation rate, refusals out of 10 neighbour questions, and right
 answers on correction and current questions.
 
@@ -46,7 +46,7 @@ answers on correction and current questions.
 That table compares systems at their defaults, and at their defaults the other three have no way to refuse and no
 notion of a replaced page, so "neighbours refused 0 / 10" is settled before the first question. An outside review
 (2026-10-12) pointed this out. The fair question is what an ordinary search does once it gets the same two things
-Lmemory has: replaced pages left out (`status: superseded`), and a score floor below which it refuses.
+KRouter has: replaced pages left out (`status: superseded`), and a score floor below which it refuses.
 
 ### Matched baselines: the same two things, for everyone
 
@@ -140,7 +140,7 @@ sessions that change Lmemory, but the same model family. "Outside" means a separ
 code it reviews; it does not mean independent of Anthropic's models, so question wording may share that family's
 habits. A set written by a person is planned and will be logged here before it is run.
 
-**Held-out, on questions KRouter was never tuned on.** An outside reviewer wrote 25 new questions for the same 30-page vault: 15 answerable ones phrased differently, and 10 neighbour questions. They were written independently of any tuning. Lmemory 1.0: 25% wrong citations (3 / 12), 8 / 10 neighbours refused, 9 / 15 answerable right. Plain BM25 that always answers: 61%, 1 / 10. The questions are in [`bench/memory_honesty/heldout.jsonl`](../bench/memory_honesty/heldout.jsonl), frozen at 1.0.1; the rules for using them (aggregates only, no tuning toward them, what burns the set) and a log of who has seen what are in [`bench/memory_honesty/HELDOUT.md`](../bench/memory_honesty/HELDOUT.md). CI pins the questions and the vault and checks only a sanity guard against plain full-text search, never a floor. Quote this figure, or the 0.12.1 row (22%), as Lmemory's wrong-citation rate, not the 0% above. The three wrong citations: a git branch-name format question cited the date-format page (both say "format"); a release-tag naming question and a checkout-page load-budget question each cited a neighbouring page.
+**Held-out, on questions KRouter was never tuned on.** An outside reviewer wrote 25 new questions for the same 30-page vault: 15 answerable ones phrased differently, and 10 neighbour questions. They were written independently of any tuning. KRouter 1.0: 25% wrong citations (3 / 12), 8 / 10 neighbours refused, 9 / 15 answerable right. Plain BM25 that always answers: 61%, 1 / 10. The questions are in [`bench/memory_honesty/heldout.jsonl`](../bench/memory_honesty/heldout.jsonl), frozen at 1.0.1; the rules for using them (aggregates only, no tuning toward them, what burns the set) and a log of who has seen what are in [`bench/memory_honesty/HELDOUT.md`](../bench/memory_honesty/HELDOUT.md). CI pins the questions and the vault and checks only a sanity guard against plain full-text search, never a floor. Quote this figure, or the 0.12.1 row (22%), as the upstream run's wrong-citation rate, not the 0% above. The three wrong citations: a git branch-name format question cited the date-format page (both say "format"); a release-tag naming question and a checkout-page load-budget question each cited a neighbouring page.
 
 **Read the 0.13.0 row as a development-set number.** The bench was written for 0.13.0, and its first run found a bug:
 English function words (`what`, `which`, `does`, `should`) were counted as words "the vault has never seen", so a

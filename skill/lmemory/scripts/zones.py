@@ -35,13 +35,15 @@ LEGACY_ZONES_FILE = "krouter-zones.psv"
 _CACHE: dict[str, tuple[float, list[tuple[str, str]]]] = {}
 
 
-def _file(vault: Path) -> Path:
-    raw = os.environ.get("LMEMORY_ZONES", "").strip()
-    if raw:
-        return Path(raw)
+def vault_table(vault: Path) -> Path:
     current = vault / ZONES_FILE
     legacy = vault / LEGACY_ZONES_FILE
     return legacy if not current.exists() and legacy.is_file() else current
+
+
+def _file(vault: Path) -> Path:
+    raw = os.environ.get("LMEMORY_ZONES", "").strip()
+    return Path(raw) if raw else vault_table(vault)
 
 
 def pairs(vault: Path | None) -> list[tuple[str, str]]:
@@ -92,6 +94,13 @@ def path(vault: Path, rel: str) -> Path:
     return Path(vault) / real(vault, rel)
 
 
+def install_path(vault: Path, rel: str) -> Path:
+    dst = vault / rel
+    if not dst.resolve().is_relative_to(vault.resolve()):
+        raise ValueError(f"Installation path is outside the memory folder: {rel}")
+    return dst
+
+
 EN_TABLE = Path(__file__).with_name("zones_en.psv")
 
 
@@ -139,12 +148,16 @@ def lay_out(template: Path, vault: Path, dry: bool = False, table: Path = EN_TAB
     the copied pages; write `lmemory-zones.psv` and the alias table (`alias_sample`, paths mapped, aliases in other
     scripts dropped) when they are missing. Returns the vault-relative paths added."""
     rows = _rows(table)
+    files = [
+        (src, _swap(src.relative_to(template).as_posix(), rows))
+        for src in sorted(Path(template).rglob("*")) if src.is_file() and src.name != ".DS_Store"
+    ]
+    zf = install_path(vault, ZONES_FILE)
+    alias_rel = _swap("90 系统文件/canonical_sources.psv", rows)
+    alias_dst = install_path(vault, alias_rel)
+    destinations = [(src, rel, install_path(vault, rel)) for src, rel in files]
     added = []
-    for src in sorted(Path(template).rglob("*")):
-        if not src.is_file() or src.name == ".DS_Store":
-            continue
-        rel = _swap(src.relative_to(template).as_posix(), rows)
-        dst = Path(vault) / rel
+    for src, rel, dst in destinations:
         if dst.exists():
             continue
         added.append(rel)
@@ -155,20 +168,17 @@ def lay_out(template: Path, vault: Path, dry: bool = False, table: Path = EN_TAB
             dst.write_text(_rewrite(src.read_text(encoding="utf-8"), rows), encoding="utf-8")
         else:
             shutil.copy2(src, dst)
-    zf = Path(vault) / ZONES_FILE
     if not zf.exists():
         added.append(ZONES_FILE)
         if not dry:
             zf.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(table, zf)
     if alias_sample is not None and Path(alias_sample).is_file():
-        rel = _swap("90 系统文件/canonical_sources.psv", rows)
-        dst = Path(vault) / rel
-        if not dst.exists():
-            added.append(rel)
+        if not alias_dst.exists():
+            added.append(alias_rel)
             if not dry:
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                dst.write_text(map_aliases(Path(alias_sample).read_text(encoding="utf-8"), rows), encoding="utf-8")
+                alias_dst.parent.mkdir(parents=True, exist_ok=True)
+                alias_dst.write_text(map_aliases(Path(alias_sample).read_text(encoding="utf-8"), rows), encoding="utf-8")
     return added
 
 
@@ -192,6 +202,10 @@ def main(argv: list[str]) -> int:
     `zones.py lang VAULT` prints en or zh."""
     if len(argv) == 3 and argv[0] == "real":
         print(path(Path(argv[1]), argv[2]))
+        return 0
+    if len(argv) == 3 and argv[0] == "install-path":
+        vault = Path(argv[1])
+        print(install_path(vault, real(vault, argv[2])))
         return 0
     if len(argv) == 2 and argv[0] == "lang":
         print(lang(Path(argv[1])))

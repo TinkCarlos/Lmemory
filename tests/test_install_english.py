@@ -160,6 +160,8 @@ def test_minimal_install_only_looks_up(tmp_path):
 @POSIX
 def test_minimal_upgrade_keeps_prior_capture_and_writer_configuration(tmp_path):
     env = _env(tmp_path)
+    env.pop("LMEMORY_NO_MCP", None)
+    env.pop("LMEMORY_NO_HOOKS", None)
     home = tmp_path / "home"
     codex = home / ".codex"
     codex.mkdir()
@@ -170,15 +172,31 @@ def test_minimal_upgrade_keeps_prior_capture_and_writer_configuration(tmp_path):
     state.mkdir()
     consent = state / "import.json"
     consent.write_text('{"consent": true}\n', encoding="utf-8")
+    original_vault = _english_vault(tmp_path)
+    config_vault = home / ".config/lmemory/vault"
+    config_vault.parent.mkdir(parents=True)
+    config_vault.write_text(str(original_vault) + "\n", encoding="utf-8")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    command = fake_bin / "codex"
+    log = tmp_path / "codex-args"
+    command.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{log}'\n", encoding="utf-8")
+    command.chmod(0o755)
+    env["PATH"] = f"{fake_bin}:{env['PATH']}"
     keys = Path(env["LMEMORY_KEYS_ENV"])
     keys.write_text("# existing writer values\n", encoding="utf-8")
-    res, out = _boot(env, "--lang", "en", "--minimal", "--apps", "codex", "--timer")
+    selected_vault = tmp_path / "lookup only"
+    res, out = _boot(env, "--lang", "en", "--minimal", "--apps", "codex", "--timer",
+                     "--vault", str(selected_vault))
     assert res.returncode == 0, res.stderr
+    assert out["mcp"] == ["codex"]
     assert out["hooks"] == [] and out["model"] is None and out["timer"] is False
     assert "key wire:" not in res.stdout
     assert not (codex / "hooks.json").exists()
     assert consent.read_text(encoding="utf-8") == '{"consent": true}\n'
     assert keys.read_text(encoding="utf-8") == "# existing writer values\n"
+    assert config_vault.read_text(encoding="utf-8") == str(original_vault) + "\n"
+    assert log.read_text(encoding="utf-8").splitlines()[-2:] == ["--vault", str(selected_vault)]
 
 
 @POSIX
@@ -191,12 +209,29 @@ def test_explicit_upstream_vault_uses_its_custom_layout(tmp_path):
     mapped = zones.path(vault, "90 系统文件/canonical_sources.psv")
     aliases = mapped.read_bytes()
     assert zones.lang(vault) == "en" and not current.exists()
-    res, out = _boot(_env(tmp_path), "--lang", "en", "--minimal", "--vault", str(vault))
+    elsewhere = tmp_path / "other-zones.psv"
+    elsewhere.write_text("90 系统文件|Unrelated\n", encoding="utf-8")
+    env = {**_env(tmp_path), "LMEMORY_ZONES": str(elsewhere)}
+    res, out = _boot(env, "--lang", "en", "--minimal", "--vault", str(vault))
     assert res.returncode == 0, res.stderr
     assert out["state"] == "ours"
     assert legacy.read_bytes() == current.read_bytes() == layout
     assert mapped.read_bytes() == aliases
     assert not (vault / "90 系统文件").exists()
+    assert not (vault / "Unrelated").exists()
+
+
+@POSIX
+def test_install_rejects_an_upstream_layout_that_escapes_the_vault(tmp_path):
+    vault = tmp_path / "test vault"
+    vault.mkdir()
+    layout = vault / zones.LEGACY_ZONES_FILE
+    layout.write_text("90 系统文件|../outside\n", encoding="utf-8")
+    res, _ = _boot(_env(tmp_path), "--minimal", "--vault", str(vault))
+    assert res.returncode == 1
+    assert "outside the memory folder" in res.stderr
+    assert list(vault.iterdir()) == [layout]
+    assert not (tmp_path / "outside").exists()
 
 
 @POSIX

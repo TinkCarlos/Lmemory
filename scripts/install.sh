@@ -2,6 +2,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+unset LMEMORY_ZONES
 # 记忆文件夹：LMEMORY_VAULT（正式名字）优先，OBSIDIAN_VAULT（旧名字）照样认
 if [ -n "${LMEMORY_VAULT:-}" ]; then OBSIDIAN_VAULT=$LMEMORY_VAULT; export OBSIDIAN_VAULT; unset LMEMORY_VAULT; fi
 FORCE=0
@@ -141,7 +142,7 @@ else
   # 别名表放进库：库里已有就不动；没有就把旧表（不是样例时）搬进去、原位置留软链；全新安装放一份样例
   # 路径按库自己的区名（lmemory-zones.psv，英文库是 90 System/…）
   ZONES="$ROOT/skill/lmemory/scripts/zones.py"
-  VAULT_MAP=$(python3 "$ZONES" real "$VAULT" "90 系统文件/canonical_sources.psv")
+  VAULT_MAP=$(python3 "$ZONES" install-path "$VAULT" "90 系统文件/canonical_sources.psv")
   OLD_MAP="$SKILL_DST/scripts/canonical_sources.psv"
   if [ -d "$(dirname "$VAULT_MAP")" ] && [ ! -e "$VAULT_MAP" ]; then
     if [ -e "$OLD_MAP" ] && ! cmp -s "$OLD_MAP" "$SAMPLE_MAP"; then
@@ -161,7 +162,7 @@ else
   elif [ -e "$VAULT_MAP" ]; then
     printf '%s\n' "alias table: $VAULT_MAP (kept)"
   fi
-  HEALTH=$(python3 "$ZONES" real "$VAULT" "90 系统文件/自动化/日更健康.md")
+  HEALTH=$(python3 "$ZONES" install-path "$VAULT" "90 系统文件/自动化/日更健康.md")
   if [ "${LMEMORY_LOOKUP_ONLY:-}" != "1" ] && [ -f "$HEALTH" ]; then
     python3 "$ROOT/extras/host-daily-evolution/patch_health.py" "$HEALTH" self_evolution_key "$key_field" || true
     if [ -n "$WRITER" ]; then
@@ -229,7 +230,9 @@ else
       ;;
   esac
   fi
-  python3 "$ROOT/extras/host-daily-evolution/resolve.py" --sync-health --offline >/dev/null || true
+  if [ "${LMEMORY_LOOKUP_ONLY:-}" != "1" ]; then
+    python3 "$ROOT/extras/host-daily-evolution/resolve.py" --sync-health --offline >/dev/null || true
+  fi
 fi
 [ "${LMEMORY_BOOTSTRAP:-}" = "1" ] || printf '%s\n' "next: run ./scripts/first_run.sh against the template, then point LMEMORY_VAULT at your memory folder."
 
