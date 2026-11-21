@@ -124,7 +124,7 @@ jobs:
         run: npm install --no-audit --no-fund && npm test
 
   docker:
-    # 团队服务器镜像：每个 PR 都构建一次并跑冒烟测试（不推送；推送只在发版时）
+    # CI builds the team-server image and smoke-tests it locally.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

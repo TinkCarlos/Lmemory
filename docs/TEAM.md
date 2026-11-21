@@ -20,7 +20,8 @@ service; you run the server.
 Every answer from the team server starts with `vault_label: team`, and the personal server can say
 `vault_label: personal` (`--label personal`), so an answer always says which memory it came from.
 
-Build the example image from this checkout with `docker build -t lmemory:local .`. Kubernetes nodes need access to the image you build.
+Build the example image from this checkout with `docker build -t lmemory:local .`. GitHub Releases publish installable
+attachments. Kubernetes nodes need access to the container image you build.
 
 ## 1. The team vault
 
@@ -43,8 +44,8 @@ python3 skill/lmemory/scripts/mcp_server.py --http 0.0.0.0:8787 \
   --vault /srv/team-vault --label team --token-file /etc/lmemory/token
 ```
 
-or with Docker (the image is built and smoke-tested on every release, with a build-provenance attestation). The
-container runs as user 10001, so give it the token file (`chown 10001 /etc/lmemory/token`):
+With Docker, use the image built from this checkout. The container runs as user 10001, so give it the token file
+with `chown 10001 /etc/lmemory/token`.
 
 ```bash
 docker run -d --name lmemory-team --restart unless-stopped -p 8787:8787 \
@@ -121,7 +122,7 @@ cluster or a systemd host by us. The multi-bank server itself is tested in `test
 | Access | a token per person or agent (`--users`: only hashes kept, `read` or `write`, which banks), or one shared token per bank or server; constant-time compare; loopback only without one; origin check |
 | Attribution | every write names its person on the page, in the change ledger, in a journal (`lmemory_changes`) and as the git author; two corrections of one thing: the later holds, the earlier is kept and named ([§2c](#2c-one-token-per-person-who-changed-what-and-conflicting-corrections)) |
 | Monitoring | `/metrics` (Prometheus), `/healthz`, one JSON access-log line per request with a hash of the question |
-| Deployment | `python3 mcp_server.py --http`, the Docker image (non-root, read-only vault, provenance attestation), Compose, Kubernetes, systemd |
+| Deployment | `python3 mcp_server.py --http`, a locally built Docker image (non-root, read-only vault), Compose, Kubernetes, systemd |
 | Scale | over HTTP, 10,000 pages: 13 ms per lookup (median), 301 answers/s with 32 callers; 50,000: 54 ms, 75/s ([§4](#4-how-big-it-can-get)); ten people reading and writing at once: [§5](#5-ten-people-at-once) |
 | Backups | the git remote, and `backup.py` for an encrypted nightly copy of a personal vault |
 | Not offered | a hosted service, SSO, per-page permissions inside one bank (a token is read or write for the whole bank: give each group its own bank), more than one server writing one vault |
