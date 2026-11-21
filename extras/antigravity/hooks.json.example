@@ -1,0 +1,25 @@
+{
+  "lmemory": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "/path/to/lmemory/bin/python ~/.gemini/config/hooks/lmemory-agy.py start",
+        "timeout": 10
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "/path/to/lmemory/bin/python ~/.gemini/config/hooks/lmemory-agy.py prompt",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "/path/to/lmemory/bin/python ~/.gemini/config/hooks/lmemory-agy.py stop",
+        "timeout": 5
+      }
+    ]
+  }
+}
