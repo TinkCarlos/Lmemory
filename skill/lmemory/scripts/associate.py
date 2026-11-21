@@ -595,7 +595,8 @@ def conflicts(ri, con: sqlite3.Connection, vault: Path, hits: list[dict], qtok: 
         return None
     query_subject = QUERY_DATE.sub("", normalize_query_dates(query)).lower()
     query_terms = set(ri.tokens(query_subject))
-    qtok = [t for t in qtok if t in query_terms]
+    singulars = {term[:-1] for term in query_terms if term.isascii() and term.endswith("s")}
+    qtok = [t for t in qtok if t in query_terms or t in singulars]
     if not qtok:
         return None
     ids = {t for t in query_terms if t.isdigit()}

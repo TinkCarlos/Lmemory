@@ -1,7 +1,7 @@
 # Lmemory Obsidian architecture
 
 <!-- lmemory-status:start (source: docs/STATUS.md; run scripts/sync_status.py) -->
-> **Lmemory source checkout.** Maintained by [Tink](https://github.com/TinkCarlos). Install from source using the [README](../README.md). The public cold lookup comparison and its exact reproduction steps are linked there. Historical upstream measurements are labeled in [NUMBERS.md](NUMBERS.md).
+> **Lmemory v2.1.3 (2026-11-21).** Maintained by [Tink](https://github.com/TinkCarlos). See the [release notes](https://github.com/TinkCarlos/Lmemory/releases/tag/v2.1.3) and the [bilingual ranking comparison](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/BENCHMARK.md#bilingual-ranking-2026-11-21). Historical upstream measurements are labeled in [NUMBERS.md](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/NUMBERS.md). [Installation](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/README.md).
 <!-- lmemory-status:end -->
 
 This is the protocol detail. README is the entry; [`PROTOCOL.md`](../PROTOCOL.md) is the invariant list. The author’s private notes are not in this repository.
@@ -147,17 +147,28 @@ The agent does not dump the vault into context. It sends a short question (or a 
 
 `canonical_lookup.py` against the alias table in force — `LMEMORY_MAP`, else the vault's own `90 系统文件/canonical_sources.psv`, else the sample shipped with the skill (receipts print which, as `canonical_map:`). The table lives in the vault so it syncs and survives upgrades; `propose_aliases.py` drafts rows for the host to tick, and only ticked, re-checked rows are appended:
 
-1. Normalized alias equals query: highest.
-2. Alias is a substring of the query and carries it (alias ≥ 4 characters, or at least half the query): next. A shorter alias inside a longer question only ranks suggestions.
-3. Query is a substring of the alias and length ≥ 2: next.
-4. Strip particles `的了着过地得` and punctuation before compare.
-5. Tied scores resolve to the lowest id only when they point at the same file; otherwise no hit.
-6. If the whole string misses, sum scores over whitespace tokens — whole-alias hits only; a token that is just a fragment of an alias does not count — and use the same tie-break.
-7. A source whose `status` is superseded / retired / rejected / deprecated / archived, or that is outside `valid_from` / `invalid_at`, is out of force: no hit, no L0 row.
+A shortcut can answer only when the full normalized input equals a registered alias and the answer anchor can be
+found in the mapped source. The source must be in force and in the vault. Reference material, secret pages and replaced lines cannot lock. Normalization
+removes spacing, punctuation and common Chinese particles. A tie across files is ambiguous. A tie on the same file
+uses the lowest ID. Substrings and token overlaps are available as suggestions.
 
-Hit: receipt `canonical_match: true`. The agent **must** open and cite `canonical_source`. Do not substitute the preferences note or another nearby page. If the mapped page is `candidate`, still read it. A rejected or superseded page never locks (rule 7).
+A lock emits `canonical_match: true` with the source and its verified anchor. An ordinary lexical match, including a
+high-scoring one, is `memory: related`. A verified answer to a uniquely matched dated quotation can also be
+`memory: direct`. A query that explicitly names a complete uppercase identifier such as `LMEMORY_STATE_DIR` requires
+that name in a source. Tokens from different places or partial names do not qualify.
 
-Miss: **L1 recall** (`recall_index.py`). Ranked over the route’s scope; rule pages first, a topic dossier only when the question names its topic, superseded pages sunk; each hit prints its `how`, the best matching line, and an `answer (generated):` card when one fits the question. Weak overlap prints `recall: none` — then, and only then, literal `rg` in that scope. Skip `Clippings/`, backups, and cold mirrors. Recall never claims a page; only the lock does.
+Miss: **L1 recall** (`recall_index.py`). Ranked over the route’s scope, with rule pages first and a topic dossier
+boosted when the question names its topic. For current queries, expired and generated pages cannot establish a match.
+They can fill spare context slots after live matches. Queries for a specific day or a supported time range also consider
+historical pages. Each result prints its `how`, the best matching line and a supported `answer (generated):` card when
+available. Weak overlap prints `recall: none` and then tries literal `rg` in that scope. Skip `Clippings/`, backups and
+cold mirrors. Recall never claims a page. Only the lock does.
+
+For Chinese current queries, an otherwise accepted related result may reorder its first three direct matches by
+indexed paragraph coverage. That step follows the normal refusal and conflict checks. For English queries, an absent
+plural may match an indexed singular. The original refusal rules still apply. `LMEMORY_EVIDENCE=0` or `evidence|off`
+turns off paragraph reordering. `LMEMORY_EVIDENCE=1` or `evidence|on` enables the full evidence option, including temporal
+weighting and evidence-based refusal. See the [November ranking comparison](BENCHMARK.md#bilingual-ranking-2026-11-21).
 
 When building paragraph evidence, the English duration, date and frequency patterns check for a possible starting character before evaluating word boundaries and alternatives. Chinese patterns and Unicode digits keep the original matching behavior. Paragraph tags and existing caches remain compatible.
 

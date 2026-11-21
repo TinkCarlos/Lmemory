@@ -94,6 +94,7 @@ def lookup(ri, vault: Path, q: str) -> dict:
     res = ri.recall(vault, q)
     refused = res["confidence"] == "none" or not res["hits"]
     rec = {"conf": res["confidence"], "refused": refused, "cited": [] if refused else [h["rel"] for h in res["hits"][:3]],
+           "history_matches": res.get("history_matches"),
            "kb": [h["rel"] for h in res.get("kb") or []]}
     if not refused and hasattr(ri, "coverage_signals"):
         con = ri.connect(ri.cache_path(vault))
@@ -358,7 +359,8 @@ def _locked(vault: str, q: str) -> bool:
     if not mp.is_file():
         return False
     try:
-        return cl.lookup(q, cl.load_rows(mp), vault=Path(vault)) is not None
+        rows = cl.rows_for_lock(q, cl.load_rows(mp), Path(vault))
+        return cl.lookup(q, rows, vault=Path(vault)) is not None
     except Exception:  # noqa: BLE001
         return False
 
@@ -377,7 +379,8 @@ def states() -> dict:
         row = {"unanswerable": {"n": 0, "direct": 0, "related": 0, "none": 0},
                "answerable": {"n": 0, "direct": 0, "related": 0, "none": 0, "page_default": 0, "page_strict": 0}}
         for it, r in zip(items, recs):
-            res = {"hits": [{"rel": c} for c in r["cited"]], "confidence": r["conf"]}
+            res = {"hits": [{"rel": c} for c in r["cited"]], "confidence": r["conf"],
+                   "history_matches": r.get("history_matches")}
             st = ri.answer_state(res, locked=_locked(it["vault"], it["q"]))
             side = row["answerable" if r["answerable"] else "unanswerable"]
             side["n"] += 1

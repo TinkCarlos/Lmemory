@@ -1,7 +1,7 @@
 {
   "name": "lmemory",
   "displayName": "Lmemory",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Your agents remember what you decided and what you changed — from a folder of Markdown you own (open it in Obsidian if you like), with the source of every answer, and \"not in the vault\" instead of a guess.",
   "author": { "name": "Tink", "url": "https://github.com/TinkCarlos" },
   "homepage": "https://github.com/TinkCarlos/Lmemory",

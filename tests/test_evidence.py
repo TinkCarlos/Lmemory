@@ -60,6 +60,8 @@ def test_time_window():
     assert ev.time_window("上周六去哪了", now) == (dt.date(2023, 5, 26), dt.date(2023, 5, 28))
     assert ev.time_window("What may happen next?", now) is None
     assert ev.time_window("How do I deploy?", now) is None
+    assert ev.time_window("What was the deployment policy in 2022?", now) == (dt.date(2022, 1, 1), dt.date(2022, 12, 31))
+    assert ev.time_window("2022年发版政策是什么？", now) == (dt.date(2022, 1, 1), dt.date(2022, 12, 31))
 
 
 def test_aggregate_questions():

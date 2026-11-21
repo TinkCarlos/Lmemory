@@ -19,7 +19,6 @@ asked otherwise.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from .viewdata import Store, head_of, mods
@@ -49,7 +48,7 @@ TEXT = {
         "m_history": "The hook brought it before: {ts}, {agent}, {route} “{word}”.",
         "route_alias": "a name in the alias table", "route_trigger": "a trigger word", "route_recall": "recall with a wide lead",
         "v_locked": "Answered by an alias lock: the question names a page the alias table points at.",
-        "v_answer": "Answered by the ranked search. Confidence: {conf}.",
+        "v_answer": "The ranked search found pages. Match confidence: {conf}.",
         "v_partial": "Found pages, but only one word of the question matched them. Confidence: low; they may be about something else.",
         "v_none": "The memory does not know this: no page covers enough of the question, so nothing is offered.",
         "lock_hit": "The question {how} the alias “{alias}”, which the alias table lists for {page}. A lock answers at once, so the ranked search did not decide this.",
@@ -61,7 +60,7 @@ TEXT = {
         "lock_tie": "No lock: the question matches two different pages equally well ({left} → {lp}; {right} → {rp}). A lock does not guess between them.",
         "lock_dead": "No lock: the alias “{alias}” matches, but its page {page} is no longer in force (replaced, retired or expired), so the lock does not claim it.",
         "lock_gone": "No lock: the alias “{alias}” matches, but its page {page} is not in the memory any more.",
-        "lock_none": "No lock: no alias in the alias table matches the question closely enough.",
+        "lock_none": "No lock: no exact alias with a supported answer matched.",
         "lock_near": "Closest aliases (hints only, never an answer): {list}.",
         "words_used": "Words used to rank: {words}.",
         "words_absent": "Words of the question that no page contains: {words}.",
@@ -111,6 +110,7 @@ TEXT = {
         "kb_only": "Only your knowledge base matched: your memory has nothing on this, and the receipt's first line says so.",
         "r_nothing": "no page contains the question's words ({words})",
         "r_no_words": "the question has only function words, nothing to match",
+        "r_identifier": "no matching memory page contains the complete identifiers ({names})",
         "r_unnamed": "the question names {names}, which no page in the memory mentions at all",
         "r_unknown": "the question's central word never appears in the memory ({words}); the pages found only share side words",
         "r_off_vault": "most of the question's real words ({n}) appear nowhere in the memory, more than the best page matched ({m}): it asks about something else",
@@ -165,7 +165,7 @@ TEXT = {
         "m_history": "钩子以前递过它：{ts}，{agent}，{route}「{word}」。",
         "route_alias": "别名表里的名字", "route_trigger": "触发词", "route_recall": "领先很多的召回",
         "v_locked": "别名锁直接答了：问题点到了别名表里指向的那一页。",
-        "v_answer": "排序搜索答了，置信度：{conf}。",
+        "v_answer": "排序搜索找到了页面，匹配置信度：{conf}。",
         "v_partial": "找到了页面，但问题里只有一个词对上，置信度 low：它们可能说的是别的事。",
         "v_none": "库里没有：没有哪一页覆盖了足够多的问题，所以什么也不给。",
         "lock_hit": "问题{how}别名「{alias}」，别名表把它列在 {page} 名下。锁是直接答，这一题没走排序。",
@@ -227,6 +227,7 @@ TEXT = {
         "kb_only": "只有知识库对得上：你的记忆里没有这件事，回执第一行就这么说。",
         "r_nothing": "没有哪一页含有问题里的词（{words}）",
         "r_no_words": "问题里只有虚词，没有可匹配的内容",
+        "r_identifier": "匹配的记忆页没有完整标识符（{names}）",
         "r_unnamed": "问题点了 {names}，整个库里没有哪一页提过",
         "r_unknown": "问题的核心词在库里一次都没出现（{words}），找到的页只是沾了边角词",
         "r_off_vault": "问题里的真词有 {n} 个整库都没有，比最好的一页对上的（{m} 个）还多：问的是库外的事",
@@ -283,25 +284,19 @@ def _lock(m, vault: Path, q: str) -> dict:
     if not q or not map_path.is_file():
         return out
     rows = cl.load_rows(map_path)
-    hit = cl.lookup(q, rows, vault=vault)
+    eligible = cl.rows_for_lock(q, rows, vault)
+    hit = cl.lookup(q, eligible, vault=vault)
     if hit is not None:
         case_id, relative, anchor = hit
         if not (vault / relative).is_file():
             return {**out, "state": "gone", "alias": "", "page": relative}
         alias, kind = _winning_alias(cl, q, next(r for r in rows if r[0] == case_id))
-        how = anchor
-        try:
-            import route_knowledge
-
-            how = route_knowledge.how_for(vault, case_id, anchor)[0]
-        except Exception:  # noqa: BLE001
-            pass
         return {**out, "state": "locked", "id": case_id, "alias": alias, "kind": kind, "page": relative,
-                "how": m.redact.redact(how)}
-    tie = cl.query_conflict(q, rows, vault=vault)
+                "how": m.redact.redact(anchor)}
+    tie = cl.query_conflict(q, eligible, vault=vault)
     if tie:
-        l, r = tie["left"], tie["right"]
-        return {**out, "state": "tie", "left": f"{l[1]}", "lp": l[2], "right": f"{r[1]}", "rp": r[2]}
+        left, right = tie["left"], tie["right"]
+        return {**out, "state": "tie", "left": left[1], "lp": left[2], "right": right[1], "rp": right[2]}
     live = {r[0] for r in cl.live_rows(rows, vault)}
     blocked = cl.scores_for(q, [r for r in rows if r[0] not in live])
     if blocked:
@@ -462,7 +457,7 @@ def explain(vault, question: str, lang: str | None = None, refresh: bool = True,
     q = " ".join((question or "").split())
     vlang = m.zones.lang(vault)
     lang = lang if lang in ("en", "zh") else vlang
-    ri, assoc = m.ri, m.associate
+    ri = m.ri
     out: dict = {"question": q, "lang": lang, "vault_lang": vlang, "vault": str(vault)}
     out["lock"] = _lock(m, vault, q)
     res = ri.recall(vault, q, refresh_first=refresh) if q else {"hits": [], "confidence": "none", "margin": 0.0,
@@ -501,7 +496,9 @@ def explain(vault, question: str, lang: str | None = None, refresh: bool = True,
         out["kb"] = [dict(k) for k in res.get("kb") or []]  # 知识库那一块（kb.py）：参考资料，单列
         out["kb_only"] = ri.kb_only(res)
         out["slots"] = {"n": ri.PAGES, "k": ri.DIRECT_FIRST}
-        if conf == "none":
+        if conf == "none" and res.get("missing_identifiers"):
+            out["refusal"] = [{"code": "r_identifier", "names": ", ".join(res["missing_identifiers"])}]
+        elif conf == "none":
             opened = ri.recall(vault, q, refresh_first=False, gate=False, conflict=False, assoc=False) if q else {}
             out["refusal"] = [{"code": c, **p} for c, p in _refusal(m, con, vault, q, raw, df, opened)] if q else \
                 [{"code": "r_no_words"}]

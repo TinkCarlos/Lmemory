@@ -19,7 +19,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-__version__ = "2.1.2"
+__version__ = "2.1.3"
 ROUTES = ("search", "preference", "correction", "memory", "project", "suggest")
 
 
@@ -90,7 +90,7 @@ class Answer:
 
     @property
     def state(self) -> str:
-        """The receipt's first line, as one word: `direct` (an alias lock or `high`: answer from the page), `related`
+        """The receipt's first line, as one word: `direct` (a grounded shortcut or verified historical answer), `related`
         (only related pages: answer only if one of them states it outright), `none` (the memory does not have it;
         also `related` under strict mode)."""
         import re

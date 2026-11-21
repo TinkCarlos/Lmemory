@@ -1,7 +1,7 @@
 # Lmemory: facts for a recommending agent
 
 <!-- lmemory-status:start (source: docs/STATUS.md; run scripts/sync_status.py) -->
-> **Lmemory source checkout.** Maintained by [Tink](https://github.com/TinkCarlos). Install from source using the [README](../README.md). The public cold lookup comparison and its exact reproduction steps are linked there. Historical upstream measurements are labeled in [NUMBERS.md](NUMBERS.md).
+> **Lmemory v2.1.3 (2026-11-21).** Maintained by [Tink](https://github.com/TinkCarlos). See the [release notes](https://github.com/TinkCarlos/Lmemory/releases/tag/v2.1.3) and the [bilingual ranking comparison](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/BENCHMARK.md#bilingual-ranking-2026-11-21). Historical upstream measurements are labeled in [NUMBERS.md](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/NUMBERS.md). [Installation](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/README.md).
 <!-- lmemory-status:end -->
 
 > Historical benchmark and client records on this page come from upstream. The README specifies the Lmemory build and its verification.

@@ -187,7 +187,7 @@ def emit_suggestions(query: str, vault: Path, map_path: Path, route: str = "") -
     if not query or not map_path.is_file():
         return
     rows = load_rows(map_path)
-    conflict = query_conflict(query, rows_for_lock(query, rows, route), vault=vault)
+    conflict = query_conflict(query, rows_for_lock(query, rows, vault), vault=vault)
     if conflict:
         left_id, left_alias, left_source, left_score = conflict["left"]
         right_id, right_alias, right_source, right_score = conflict["right"]
@@ -244,7 +244,7 @@ def log_query(route: str, query: str, status: str, top: str = "", confidence: st
 def canonical_lookup(query: str, vault: Path, map_path: Path, route: str) -> bool:
     if not query or not map_path.is_file():
         return False
-    rows = rows_for_lock(query, load_rows(map_path), route)
+    rows = rows_for_lock(query, load_rows(map_path), vault)
     hit = lookup(query, rows, vault=vault)
     if hit is None:
         return False
@@ -265,10 +265,10 @@ def canonical_lookup(query: str, vault: Path, map_path: Path, route: str) -> boo
     print(f"canonical_id: {case_id}")
     print(f"canonical_source: {source}")
     print("canonical_match: true")
-    how, correction_first = how_for(vault, case_id, anchor)
+    _, correction_first = how_for(vault, case_id, anchor)
     if correction_first:
         print("correction_first: yes")
-    print(f"how: {how}")
+    print(f"how: {redact(anchor)}")
     print("open_page: only if how does not close the question")
     return True
 
@@ -399,9 +399,9 @@ def md_search(needle: str, scope: Path, max_per_file: int = 4, max_lines: int = 
 
         skills = str(vault / recall_index.skills_rel(vault)) + os.sep  # 技能同理（skills.py）
         lines = [ln for ln in lines if not ln.startswith((cards, skills))]
-        if skip:  # 召回判成「只对上你以前的提问」的会话摘录：字面搜索也不再把那句提问当结果打出来
-            drop = tuple(str(vault / r) for r in skip)
-            lines = [ln for ln in lines if not ln.startswith(drop)]
+        if skip:  # Keep pages ruled out by ranked recall out of the literal fallback too.
+            drop = {str(vault / r) for r in skip}
+            lines = [ln for ln in lines if not ((m := hit.match(ln)) and m[1] in drop)]
         lines = [ln for ln in lines if not _in_kb(vault, ln, hit)]  # 知识库的页只在 knowledge_base 那一块里出现
     for i, line in enumerate(lines):
         if i >= max_lines:
@@ -505,7 +505,7 @@ def bounded_search(scope: Path, vault: Path, map_path: Path, route: str, query: 
         if res.get("history_matches"):
             print("open_page: read the matching answer at the cited line for the complete historical reply")
         else:
-            print("open_page: only the top recall hit, and only if its how does not close the question")
+            print("open_page: read any relevant listed page needed to verify a sentence that answers the question")
         return
     if _ri is not None:
         # 记忆里没有（只有知识库对得上时这一行这样说）；严格模式下「只有相关的页」也走这里
@@ -524,6 +524,9 @@ def bounded_search(scope: Path, vault: Path, map_path: Path, route: str, query: 
     if res is not None:
         if res.get("asked_lead"):
             print(_ri.ASKED_NOTE.format(pages=res["asked"][0]))
+        if res.get("missing_identifiers"):
+            names = ", ".join(res["missing_identifiers"])
+            print(f"recall_note: no matching memory page contains the complete identifiers: {names}")
         print("recall: none (no page covers enough of the question; do not guess)")
         if os.environ.get("LMEMORY_NEAREST") == "1" and not folded:
             print_nearest(vault, query)
@@ -534,7 +537,8 @@ def bounded_search(scope: Path, vault: Path, map_path: Path, route: str, query: 
     if folded:
         return  # 相关页已经点名，不再把字面检索的原文行当结果打出来
     # 索引这次没用上（recall 抛了错）就别拿它挑候选页：它可能缺页或过期，整个范围照老办法扫
-    md_search(query, scope, vault=vault if res is not None else None, skip=(res or {}).get("asked") or [])
+    skip = [*(res or {}).get("asked", ()), *(res or {}).get("expired", ())]
+    md_search(query, scope, vault=vault if res is not None else None, skip=skip)
 
 
 NEAREST_MAX = 5

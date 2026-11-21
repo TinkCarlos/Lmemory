@@ -73,11 +73,18 @@ def test_correct_in_session_puts_the_new_answer_before_the_old(tmp_path):
 
 
 def test_a_page_with_other_facts_is_annotated_not_superseded(tmp_path):
+    from canonical_lookup import rows_for_lock
+
     vault = _vault(tmp_path)
     page = vault / OLD_PAGE
     page.write_text(page.read_text(encoding="utf-8") + "".join(f"- 其他约定 {i}：保持不变。\n" for i in range(14)),
                     encoding="utf-8")
+    alias = "本地开发数据库"
+    anchor = next(line for line in page.read_text(encoding="utf-8").splitlines() if "Postgres 16" in line)
+    rows = [("DB", [alias], OLD_PAGE, anchor)]
+    assert rows_for_lock(alias, rows, vault)
     res = corrections.apply_now(vault, "本地开发数据库以后改用 SQLite", "本地开发数据库用 Postgres 16", OLD_PAGE, "test")
+    assert not rows_for_lock(alias, rows, vault)
     assert res["mode"] == "line"
     text = page.read_text(encoding="utf-8")
     assert "status: active" in text and "⚠ 已改" in text and text.index("⚠ 已改") > text.index("Postgres 16")

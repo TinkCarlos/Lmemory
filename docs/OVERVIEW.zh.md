@@ -22,7 +22,7 @@ recall:
 - 周报/排版.md tier=other status=active score=0.0
   how: 标题用平实的句子，不加感叹号。每段最多放一个链接，赞助商那一行放最后。
   L6: # 周报排版
-open_page: only the top recall hit, and only if its how does not close the question
+open_page: read any relevant listed page needed to verify a sentence that answers the question
 ```
 
 Lmemory 做的就是这些：把规则、它在哪一页、有多大把握递出去。你的 agent 接下来怎么说，由它自己决定。想用你自己的库：安装时加 `--vault ~/我的库`（Claude Desktop：安装脚本只在应用关着时写它的设置文件，否则按你的文件夹做一个双击安装的扩展包）。文件夹里已有的文件一个不改，只补缺的；它会写每个找到的 AI 应用的 MCP 设置（改动的文件都留一份 `*.lmemory-bak`），另外在你的用户目录下放它自己的文件夹：[逐个文件列出](INSTALL.zh.md)。

@@ -1,7 +1,7 @@
 # Lmemory 详细说明
 
 <!-- lmemory-status:start (source: docs/STATUS.zh.md; run scripts/sync_status.py) -->
-> **Lmemory 源码版本。** 由 [Tink](https://github.com/TinkCarlos) 维护。安装与公开对照复现步骤见[中文 README](../README.zh.md)。上游历史测量见 [NUMBERS.zh.md](NUMBERS.zh.md)。
+> **Lmemory v2.1.3（2026-11-21）。** 由 [Tink](https://github.com/TinkCarlos) 维护。[发布说明](https://github.com/TinkCarlos/Lmemory/releases/tag/v2.1.3) · [中英文排序对照](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/BENCHMARK.md#bilingual-ranking-2026-11-21)。上游历史测量见 [NUMBERS.zh.md](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/NUMBERS.zh.md)。 [安装指南](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/README.zh.md).
 <!-- lmemory-status:end -->
 
 > 历史评测与客户端记录来自上游。Lmemory 的本次复测以 README 中标明的构建和基准为准。
@@ -76,7 +76,7 @@ python3 ~/.agents/skills/lmemory/scripts/backup.py saved
 
 用七小节讲一次查询是怎么得出结果的。它问的是 `lmemory ask` 问的同一段代码，然后说：
 
-1. **别名锁。** 哪个别名对上了、怎么对上的（问题就是别名、包含别名、或占了别名的大半），别名表给的页和那一句答案；没有锁就说为什么：没有接近的、两个不同的页打平（锁不猜）、别名对上了但那一页已被取代或不在了。锁是直接答的，所以锁答了的时候，排序搜索只作「参考」展示，没有决定任何事。
+1. **别名锁。** 显示精确匹配的别名、来源和核验过的原句。没有可用的锁时，展示相关提示，或说明碰到冲突、来源已被取代或文件缺失。锁先给出答案时，排序搜索只作参考。
 2. **词。** 召回拿来排序的词，以及其中整个库都没有页面含有的。
 3. **页面和顺序。** 每一页：问题里的哪些词在它里面、在哪里（标题、别名或触发词、正文），得分是「正文相关度 × 层级权重」（点名的主题档案、或问题就是这一页的名字时再乘一个系数）；只有这个乘积能复现召回给的数时才会写出来。被取代的页会写明谁取代了它，永远不当答案；取代了别的页的也会写明。
 4. **为什么是这个置信度。** `high` 要第一名至少是第二名的 1.5 倍并且是规则页或主题档案；`medium` 是明显领先但不满足前者；`low` 是前两名很接近、只对上一个词、或全是网页剪藏。`none` 会列出拦下的检查：问题点了库里没人提过的名字、核心词从未出现、真词大多在库外、最好的一页没对上任何真词、得分低于门槛。这些是用召回自己的函数重算的，有测试保证和 `recall` 一致。
@@ -88,9 +88,9 @@ python3 ~/.agents/skills/lmemory/scripts/backup.py saved
 
 ### 三态，和严格模式
 
-回执第一行写明记忆里有什么：`memory: direct`（别名锁命中，或置信度 `high`：按这一页回答并注明出处）、`memory: related`（`medium` 或 `low`：没有直接的答案，只有相关的页；只有当某一页里有一句话直接回答了问题时才作答，并引出那一句和出处，否则告诉用户记忆里没有；`recall_note:` 点出排第一的页缺哪些词，告诉你先看哪里），或 `memory: none`。别的都不变：交的页一样，置信度一样。Python 的 `Answer` 里是 `.state`。
+`memory: direct` 表示已命中一条完整登记的别名并在来源里核到答案原文，或确认了一条唯一的带日期原始答复。`memory: related` 会给出可查的相关页。只有其中有原文直接回答问题，才引用原话和出处。查不到能回答的原文，就告诉用户记忆里没有。`memory: none` 表示检索未找到足够依据。词面置信度高只代表匹配得好。Python 的 `Answer` 通过 `.state` 读取该状态。
 
-**严格模式**把 `related` 当成 `memory: none` 交给宿主，相关的页只在一行 `related_pages:` 里点名，不作为依据列出；提问钩子也只递 `high` 的页。打开：`LMEMORY_STRICT=1`（`0` 关掉，优先于配置文件），或者在记忆文件夹根目录的 `lmemory-settings.psv` 里写一行 `strict|on`。**默认关**。它适合你自己整理过、有规则页和别名的记忆：`high` 要规则页或主题页领先第二名 1.5 倍，所以在只有会话记录的文件夹上几乎没有 `direct`，严格模式几乎什么都不答（第 38 套：LongMemEval 235 道、LoCoMo 768 道可答题，一道答案页都没交到；在有规则页的合成记忆上是 51 道里 39 道）。
+**严格模式**把 `related` 交给宿主时改为 `memory: none`，相关页只作为 `related_pages:` 提示，也不通过提问钩子递出未经核验的排序结果。用 `LMEMORY_STRICT=1` 或在库根目录的 `lmemory-settings.psv` 写 `strict|on` 开启。环境变量 `0` 可以覆盖文件里的开关。默认关闭。
 
 ### 剪藏和别人写的材料
 

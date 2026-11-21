@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import functools
 import os
+import re
 import sys
 import unicodedata
 from datetime import date
@@ -29,6 +30,7 @@ def map_for(vault: Path | None) -> Path:
 
 
 PARTICLES = set("的了着过地得")
+LITERAL_IDENTIFIER = re.compile(r"(?<![A-Za-z0-9_])_*[A-Z][A-Z0-9]*(?:_+[A-Z0-9]+)+_*(?![A-Za-z0-9_])")
 
 
 def parse_frontmatter(path: Path) -> dict[str, str]:
@@ -127,16 +129,57 @@ def load_rows(path: Path) -> list[tuple[str, list[str], str, str]]:
     return rows
 
 
-def rows_for_lock(query: str, rows: list[tuple[str, list[str], str, str]], route: str):
-    """For a dated history lookup, only a shortcut that names the whole request can lock."""
-    if route in ("search", "project", "memory"):
-        from associate import requested_day
+def rows_for_lock(query: str, rows: list[tuple[str, list[str], str, str]], vault: Path):
+    """Only an exact shortcut with an answer supported by its source can skip recall."""
+    import kb
+    import zones
+    from corrections import LINE_CORRECTION_PREFIXES
+    from lmemory_redact import is_secret_page
 
-        if requested_day(query):
-            q = normalize(query)
-            return [(case, [a for a in aliases if normalize(a) == q], source, anchor)
-                    for case, aliases, source, anchor in rows if any(normalize(a) == q for a in aliases)]
-    return rows
+    q = normalize(query)
+    identifiers = set(LITERAL_IDENTIFIER.findall(query))
+    matched = []
+    for case, aliases, relative, anchor in rows:
+        exact = [alias for alias in aliases if q and normalize(alias) == q]
+        evidence = normalize(anchor)
+        if not exact or not evidence:
+            continue
+        source = vault / relative
+        try:
+            resolved = source.resolve()
+            root = vault.resolve()
+            if not resolved.is_relative_to(root):
+                continue
+            paths = {relative, resolved.relative_to(root).as_posix()}
+            meta = _frontmatter(resolved)
+            if meta is None or any(is_secret_page(zones.canon(vault, path), meta) for path in paths):
+                continue
+            text = resolved.read_text(encoding="utf-8", errors="replace")
+            if any(kb.reason(vault, path, text) for path in paths):
+                continue
+            if kb.fm_reason(kb.head_of(text)) and not any(kb._under(path, kb.mine_marked(vault)) for path in paths):
+                continue
+            if identifiers and not identifiers.issubset(LITERAL_IDENTIFIER.findall(text)):
+                continue
+            body = text.partition("\n---")[2] if text.startswith("---\n") else text
+            if meta.get("type") == "session-excerpt":
+                continue
+            lines = body.splitlines()
+            for index, line in enumerate(lines):
+                if index + 1 < len(lines) and lines[index + 1].lstrip().startswith(LINE_CORRECTION_PREFIXES):
+                    continue
+                line = re.sub(r"^\s*(?:>\s*)+(?:\[!\w+\]\s*)?", "", line).strip()
+                if not line or re.search(r"[?？]", line):
+                    continue
+                sentences = re.split(r"(?<=[.!])\s+|(?<=[。！])", line)
+                # Match the whole statement so a shorter anchor cannot lose a negation in the source.
+                quote = next((part.strip() for part in [line, *sentences] if normalize(part) == evidence), None)
+                if quote:
+                    matched.append((case, exact, relative, quote))
+                    break
+        except (OSError, RuntimeError):
+            continue
+    return matched
 
 
 def stands_in_for(q: str, a: str) -> bool:
@@ -376,7 +419,7 @@ def main() -> int:
     if args.explain:
         if not args.query:
             return 2
-        conflict = query_conflict(args.query, rows_for_lock(args.query, rows, args.route), vault=vault)
+        conflict = query_conflict(args.query, rows_for_lock(args.query, rows, vault), vault=vault)
         if not conflict:
             sys.stdout.write("conflict: no\n")
             return 0
@@ -407,7 +450,7 @@ def main() -> int:
 
     if not args.query:
         return 2
-    hit = lookup(args.query, rows_for_lock(args.query, rows, args.route), vault=vault)
+    hit = lookup(args.query, rows_for_lock(args.query, rows, vault), vault=vault)
     if hit is None:
         return 1
     case_id, relative_source, anchor = hit
@@ -415,7 +458,9 @@ def main() -> int:
     if not source.is_file():
         print(f"Canonical source missing: {source}", file=sys.stderr)
         return 1
-    sys.stdout.write(f"{case_id}|{relative_source}|{anchor}\n")
+    from lmemory_redact import redact
+
+    sys.stdout.write(f"{case_id}|{relative_source}|{redact(anchor)}\n")
     return 0
 
 

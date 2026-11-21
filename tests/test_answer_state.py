@@ -1,4 +1,4 @@
-"""The receipt's first line says one of three things (set 38): `memory: direct` (an alias lock or `high`), `memory:
+"""The receipt's first line says one of three things (set 38): `memory: direct` (a grounded alias or verified historical answer), `memory:
 related` (only related pages, with how to use them), `memory: none`. Strict mode hands `related` over as `none`, the
 pages named on one line. Ranking, pages and confidence are untouched; strict mode is off unless switched on."""
 
@@ -34,7 +34,7 @@ def vault(tmp_path, monkeypatch):
     synthetic.lay_out(v)
     table = v / "90 系统文件/canonical_sources.psv"
     table.parent.mkdir(parents=True)
-    table.write_text(f"# id|aliases|source|anchor\nRELEASE|{LOCK_ALIAS}|02 经验与方法/发版流程.md|先跑全量测试\n", encoding="utf-8")
+    table.write_text(f"# id|aliases|source|anchor\nRELEASE|{LOCK_ALIAS}|02 经验与方法/发版流程.md|发版前先跑全量测试，测试全绿后打 tag，由 CI 发布；不直接推 main。\n", encoding="utf-8")
     return v
 
 
@@ -58,8 +58,29 @@ def test_three_states(vault):
     assert none.startswith("memory: none") and "严格模式" not in none
 
 
-def test_state_is_a_fixed_function_of_confidence():
-    assert ri.answer_state({"hits": [{}], "confidence": "high"}) == "direct"
+def test_full_setting_name_cannot_be_answered_by_the_generic_memory_alias(tmp_path, monkeypatch):
+    import shutil
+
+    v = shutil.copytree(REPO / "template", tmp_path / "vault")
+    monkeypatch.setenv("LMEMORY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("LMEMORY_NO_QUERY_LOG", "1")
+    monkeypatch.delenv("LMEMORY_MAP", raising=False)
+    text = _receipt(v, "Which state directory does Codex MCP keep for LMEMORY_STATE_DIR?")
+    assert text.startswith("memory: none")
+    assert "canonical_match: true" not in text and "\nrecall:\n" not in text
+    assert _receipt(v, "memory").startswith("memory: direct")
+    assert "canonical_match: true" not in _receipt(v, "seal the day")  # its table anchor is not quoted on the page
+
+    from canonical_lookup import rows_for_lock
+
+    source = "02 经验与方法/Agent/用户偏好与工作约束.md"
+    # The source says “Do not move Clippings originals.” A substring is not a supporting sentence.
+    assert not rows_for_lock("clippings", [("Q02", ["clippings"], source, "Move Clippings originals")], v)
+
+
+def test_high_relevance_is_not_direct_evidence():
+    assert ri.answer_state({"hits": [{}], "confidence": "high"}) == "related"
+    assert ri.answer_state({"hits": [{}], "confidence": "high", "history_matches": 1}) == "direct"
     assert ri.answer_state({"hits": [{}], "confidence": "medium"}) == "related"
     assert ri.answer_state({"hits": [{}], "confidence": "low"}) == "related"
     assert ri.answer_state({"hits": [], "confidence": "none"}) == "none"

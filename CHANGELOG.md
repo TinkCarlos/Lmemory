@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## 2.1.3 — 2026-11-21
+
+Lmemory ranks evidence more accurately in Chinese and English. A partly matching alias or a high lexical score can no longer claim a direct answer.
+
+- Chinese queries with related evidence can re-rank their first three candidates by paragraph coverage after existing refusal and correction checks. English queries can match a missing regular plural to an indexed singular. Expired records can fill spare context slots, and dated history keeps its original evidence path.
+- An exact shortcut must have a complete supporting statement in its live source. Replaced lines, secret pages and pages classified as reference material cannot establish a direct memory answer. Lookups require complete named identifiers such as `LMEMORY_STATE_DIR`. Ranked pages remain related until their evidence is read. A uniquely verified dated answer can still be direct.
+- The same 483 Chinese history questions improved from 446 to 465 first-source matches over both changes. The English public holdout improved from 57 to 58 of 75. Public Chinese and English correction and refusal totals held. See the [ranking comparison](docs/BENCHMARK.md#bilingual-ranking-2026-11-21). Only aggregate figures are published for the private replay.
+
+## Lmemory source baseline — 2026-11-19
+
 - Rebranded the CLI, Python and JavaScript packages, MCP names, installers and documentation to Lmemory. Tink maintains this fork.
 - Reduced regular-expression work when indexing paragraph evidence. The [public benchmark](README.md#cold-lookup-comparison) measures first-query wait on the same synthetic vault.
 

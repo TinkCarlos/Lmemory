@@ -2,7 +2,8 @@
 """Mechanical check of a canonical map against a vault.
 
 Every alias must unique-hit its row. Every source file must exist and be in
-force. Exhaustive on that map — not a sample, not a claim the ranker is smart.
+force. This checks the routing table, including historical fixtures. The live
+router separately requires an exact alias and a complete source statement. Exhaustive on that map — not a sample, not a claim the ranker is smart.
 
 Any host can run this on their own files. It does not verify the historical
 claim that the author’s live map was 26/26 · 156/156.
@@ -18,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skill/lmemory/scripts"))
 
-from canonical_lookup import in_force, live_rows, load_rows, lookup, parse_frontmatter  # noqa: E402
+from canonical_lookup import in_force, live_rows, load_rows, lookup, parse_frontmatter, rows_for_lock  # noqa: E402
 
 
 def verify(
@@ -31,6 +32,7 @@ def verify(
     live = live_rows(rows, vault, today)
     failures: list[str] = []
     alias_count = 0
+    grounded_count = 0
     seen_id: dict[str, int] = {}
 
     for case_id, aliases, source, _anchor in rows:
@@ -46,6 +48,8 @@ def verify(
             continue
         for alias in aliases:
             hit = lookup(alias, rows, vault=vault, today=today)
+            grounded = lookup(alias, rows_for_lock(alias, rows, vault), vault=vault, today=today)
+            grounded_count += grounded is not None and grounded[0] == case_id and grounded[1] == source
             if hit is None:
                 failures.append(f"{case_id}: alias {alias!r} missed")
                 continue
@@ -64,6 +68,7 @@ def verify(
         "ok": not failures,
         "topics": len(rows),
         "aliases": alias_count,
+        "grounded_aliases": grounded_count,
         "live": len(live),
         "failures": failures,
         "map": str(map_path),
@@ -94,7 +99,7 @@ def main() -> int:
         print(
             f"{status} topics={result['topics']}/{result['topics']} "
             f"aliases={result['aliases']}/{result['aliases']} "
-            f"live={result['live']} failures={len(result['failures'])}"
+            f"live={result['live']} grounded={result['grounded_aliases']}/{result['aliases']} failures={len(result['failures'])}"
         )
         for line in result["failures"]:
             print(f"  {line}")

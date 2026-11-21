@@ -1,6 +1,6 @@
 # id|别名（; 分隔）|库内相对路径|证据锚句
 Q01|总入口;唯一总入口;第二大脑入口;首页;入口;home;homepage|Agent第二大脑.md|唯一总入口
-Q02|剪藏;剪藏原件;Clippings原件;用户偏好;偏好;clippings;preferences|02 经验与方法/Agent/用户偏好与工作约束.md|不要移动剪藏原件
+Q02|剪藏;剪藏原件;Clippings原件;用户偏好;偏好;clippings;preferences|02 经验与方法/Agent/用户偏好与工作约束.md|不要移动剪藏（Clippings）原件
 Q03|名称直接看懂用途;文件命名;folder names|02 经验与方法/Agent/用户偏好与工作约束.md|名称要一眼看出用途
 Q04|时间日志命名;日志文件名;daily log filename|02 经验与方法/Agent/用户偏好与工作约束.md|时间日志文件名用 DD｜一句话概要
 Q05|纠错;最新纠正;冲突;取代;correction;supersedes|90 系统文件/Agent记忆/纠错与取代记录.md|以最新的纠正为准

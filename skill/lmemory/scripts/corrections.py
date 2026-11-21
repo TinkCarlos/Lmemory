@@ -15,6 +15,8 @@ import re
 import sys
 from pathlib import Path
 
+LINE_CORRECTION_PREFIXES = ("- ⚠ 已改", "- ⚠ changed")
+
 PENDING_EN = "pending the next distill"
 PENDING = ("待下次蒸馏判定", "待蒸馏确认", PENDING_EN)
 LINE = re.compile(r"^- （(\d{2}:\d{2})）(.*) — 项目 (.*?)，会话 `(?:claude|codex|cursor):([0-9A-Za-z?-]+)`，命中「(.*?)」，(.+)$")
@@ -359,7 +361,7 @@ def apply_now(vault: Path, new: str, old: str = "", page: str = "", source: str 
                              "why": "overrides: the page named is another person's correction"}
             lines_old = target.read_text(encoding="utf-8").splitlines()
             j = line_no + 1
-            while j < len(lines_old) and lines_old[j].lstrip().startswith(("- ⚠ 已改", "- ⚠ changed")):
+            while j < len(lines_old) and lines_old[j].lstrip().startswith(LINE_CORRECTION_PREFIXES):
                 for link in WIKI.findall(lines_old[j]):
                     head = _head(vault, _link_path(vault, link), memo)
                     if head is not None and all(head != p for p, _ in prior):
@@ -400,7 +402,7 @@ def apply_now(vault: Path, new: str, old: str = "", page: str = "", source: str 
             lines = text.splitlines()
             note = (f"  - ⚠ 已改（{day}）：{new} → {link_new}" if zh else f"  - ⚠ changed ({day}): {new} → {link_new}")
             at = line_no + 1
-            while at < len(lines) and lines[at].lstrip().startswith(("- ⚠ 已改", "- ⚠ changed")):
+            while at < len(lines) and lines[at].lstrip().startswith(LINE_CORRECTION_PREFIXES):
                 at += 1  # 接在这一行已有的「已改」后面：从上往下按时间
             lines.insert(at, note)
             text = "\n".join(lines) + "\n"

@@ -147,7 +147,7 @@ export class Lmemory {
   #init() {
     this.ready ??= (async () => {
       const r = await this.#call("initialize", { protocolVersion: PROTOCOL, capabilities: {},
-        clientInfo: { name: "lmemory-js", version: "2.1.2" } });
+        clientInfo: { name: "lmemory-js", version: "2.1.3" } });
       await this.t.send({ jsonrpc: "2.0", method: "notifications/initialized" });
       return r;
     })();

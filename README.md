@@ -31,7 +31,13 @@ lmemory demo --lang en
 
 The demo builds a temporary sample vault. It exercises a lookup, a changed decision, and a question the vault cannot answer.
 
-For Windows and client-specific setup, see the [installation guide](docs/INSTALL.md).
+Run the pinned release demo from a shell.
+
+```sh
+uvx --from git+https://github.com/TinkCarlos/Lmemory@v2.1.3 lmemory demo --lang en
+```
+
+For app setup, download the [macOS and Linux installer](https://github.com/TinkCarlos/Lmemory/releases/latest/download/bootstrap.sh), the [Windows installer](https://github.com/TinkCarlos/Lmemory/releases/latest/download/bootstrap.ps1) or the [Claude Desktop extension](https://github.com/TinkCarlos/Lmemory/releases/latest/download/Lmemory.mcpb). See the [installation guide](docs/INSTALL.md) for client-specific options.
 
 ### Ask about your own notes
 

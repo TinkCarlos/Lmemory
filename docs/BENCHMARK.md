@@ -1,7 +1,7 @@
 # Memory honesty bench
 
 <!-- lmemory-status:start (source: docs/STATUS.md; run scripts/sync_status.py) -->
-> **Lmemory source checkout.** Maintained by [Tink](https://github.com/TinkCarlos). Install from source using the [README](../README.md). The public cold lookup comparison and its exact reproduction steps are linked there. Historical upstream measurements are labeled in [NUMBERS.md](NUMBERS.md).
+> **Lmemory v2.1.3 (2026-11-21).** Maintained by [Tink](https://github.com/TinkCarlos). See the [release notes](https://github.com/TinkCarlos/Lmemory/releases/tag/v2.1.3) and the [bilingual ranking comparison](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/BENCHMARK.md#bilingual-ranking-2026-11-21). Historical upstream measurements are labeled in [NUMBERS.md](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/NUMBERS.md). [Installation](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/README.md).
 <!-- lmemory-status:end -->
 
 > Historical benchmark and client records on this page come from upstream. The README specifies the Lmemory build and its verification.
@@ -296,6 +296,45 @@ python3 bench/scale/gen.py 10000 /tmp/v10000
 python3 bench/scale/run.py /tmp/v10000 --queries 30
 python3 bench/scale/serve_load.py /tmp/v10000 --concurrency 1,8,32 --calls 300
 ```
+
+## Bilingual ranking (2026-11-21)
+
+Compared the installed Lmemory 2.1.2 (`bcb47dc` source baseline), the local ranking change and the existing BM25
+adapter with superseded pages excluded and its score floor selected on development data. No model was called.
+
+- **Real Chinese questions.** A fixed copy of the local vault contained 1,913 Markdown pages after ignoring secret
+  pages and paths outside the vault. Original one-line user questions came from role-marked archive excerpts or from
+  turns whose question and answer match existing host proofs. Multiple sources for the exact same wording were
+  excluded. The source with the recorded answer is the gold. A fixed session-hash split put 463 questions in
+  development and 483 in validation, with no session shared. The task is to recover an archived answer from today's
+  vault. It does not test whether a page already existed when the user originally asked, whether an answer was true,
+  or whether the system retrieves the same answer from a paraphrase. The procedure produced no qualifying English
+  questions, so the English results below use the public benchmark.
+- **Real Chinese validation via stdio MCP.** The installed tool places the recorded source first for **446/483**,
+  the candidate wheel for **463/483**, and the keyword-only BM25 baseline for **476/483**. All 17 MCP changes recover
+  a correct first source. Each query's `direct`, `related` or `none` state is identical. Both give 5 refusals and one
+  conflict alert. Reopening the MCP process retained the same sources and states on 12 replayed cases. In the second
+  candidate before review hardening, running the same 483 questions with the alias routing bypassed gave ranker-only
+  totals of **448/483 → 465/483**.
+- **Public English validation.** Combined English splits of `heldout2` and `heldout3` produce **57/75 → 58/75**
+  answerable first-source hits, with **27/37** correction hits and **40/50** refusals unchanged. BM25 with the two
+  rules has **34/75**, **16/37** and **45/50**, respectively. One ordinary question is newly correct and no scored
+  outcome is lost. On the public Chinese splits, the candidate and baseline each produce **69/75** first-source
+  hits, **35/38** correction hits and **16/50** refusals. BM25 has **50/75**, **25/38** and **35/50**, respectively.
+  After review hardening, 80 cases that could exercise the changed plural or historical paths were replayed and all
+  retained their scored outcomes.
+
+The earlier candidate re-ranked paragraphs in both languages. Its Chinese first-source hits improved, but it lost
+one English validation hit. The narrower candidate preserves conflict decisions, restricts the default paragraph
+rerank to Chinese related results and makes absent English plurals eligible to match a singular. A two-way expansion
+was rejected on development data after a refusal became a wrong citation. The benchmark outputs only aggregates
+outside the evaluation directory. This is retrieval evidence. Fresh-traffic blind judging is still pending.
+
+The direct-evidence fix recovered two more first-source matches on the same 483-question stdio MCP replay. The final
+ranking and grounding change places **465/483** sources first, compared with **446/483** on the original tool and
+**463/483** after the ranking change alone. Every previously correct first source remained correct. Refusal and
+conflict indicators on that replay and the public bilingual ranking, correction and refusal totals stayed the same.
+Only aggregate figures from the private replay are included here.
 
 ## Run it
 

@@ -226,7 +226,7 @@ bounded_search() {
     printf 'route: %s\n' "$ROUTE"
     printf 'scope: %s\n' "$scope"
     printf '%s\n' "$recalled"
-    printf 'open_page: only the top recall hit, and only if its how does not close the question\n'
+    printf 'open_page: read any relevant listed page needed to verify a sentence that answers the question\n'
     return 0
   fi
   emit_receipt "$scope" bounded-literal-search-complete
@@ -281,7 +281,6 @@ canonical_lookup() {
   if [ -f "$l0" ]; then
     row=$(awk -F'|' -v id="$canonical_id" '$1==id { print; exit }' "$l0")
     if [ -n "$row" ]; then
-      how=$(printf '%s\n' "$row" | awk -F'|' '{ print $4 }')
       flag=$(printf '%s\n' "$row" | awk -F'|' '{ print $5 }')
       [ "$flag" = "yes" ] && printf 'correction_first: yes\n'
     fi

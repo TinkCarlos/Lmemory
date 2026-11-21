@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -54,7 +53,7 @@ def test_an_answer_says_which_words_matched_and_how_the_score_came_about(vaults)
     # the explanation reproduces the number recall gave: relevance × the tier weight
     assert top["explained"] and abs(top["base"] * 1.6 - top["score"]) < 0.002
     text = text_of(e)
-    assert "Answered by the ranked search. Confidence: high." in text
+    assert "The ranked search found pages. Match confidence: high." in text
     assert "deploy in the title" in text and "×1.6" in text
     assert "4.0" in text.split("Why this confidence", 1)[1] or "×" in text  # the margin is said
     # every shown page has its words, its weight and its one-line answer
@@ -84,13 +83,14 @@ def test_an_old_page_and_the_new_one_that_changed_it(vaults):
     text = text_of(e)
     assert "changes what 02 Methods/Database choice.md (2026-03-01) says" in text
     assert "moved to first place because it is the newer one" in text
-    # and a page the vault replaced is shown as replaced, with who replaced it
     e2 = why.explain(vaults["en"], "when do we ship releases")
-    dead = next(p for p in e2["pages"] if p["rel"].endswith("Release day.md"))
-    assert dead["tier"] == "dead" and dead["replaced_by"][0].endswith("Release day, changed.md")
     top = e2["pages"][0]
     assert top["rel"].endswith("Release day, changed.md") and top["replaces"][0].endswith("Release day.md")
-    assert "was replaced by 02 Methods/Release day, changed.md" in text_of(e2)
+    # A historical lookup can still show the superseded page, with its status and replacement.
+    past = why.explain(vaults["en"], "what was the old policy for releasing every Friday afternoon")
+    dead = next(p for p in past["pages"] if p["rel"].endswith("Release day.md"))
+    assert dead["tier"] == "dead" and dead["replaced_by"][0].endswith("Release day, changed.md")
+    assert "was replaced by 02 Methods/Release day, changed.md" in text_of(past)
 
 
 def test_the_memory_does_not_know_and_says_which_word_it_could_not_find(vaults):

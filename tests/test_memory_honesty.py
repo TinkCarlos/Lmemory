@@ -24,6 +24,14 @@ def test_lmemory_on_memory_honesty_bench():
     assert int(res["current_hit"].split("/")[0]) >= 9, res["misses"]
 
 
+def test_english_plural_and_current_correction_rank_first():
+    # Existing development examples: an absent plural and a high-scoring superseded page.
+    for qset, case in (("dev2", "D2-A07"), ("dev3", "D3-05")):
+        row = next(row for row in bench.questions(qset) if row["id"] == case)
+        answer, = bench.lmemory_answers([row], bench.vault_of(qset))
+        assert answer["cited"] and answer["cited"][0] == row["gold"]
+
+
 def test_plain_full_text_baseline_is_what_the_bench_is_for():
     """Sanity check of the bench itself: a search that always answers cites wrong pages and old decisions."""
     rows = bench.questions()

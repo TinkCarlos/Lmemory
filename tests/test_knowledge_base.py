@@ -303,13 +303,16 @@ def test_standing_index_lists_memory_topics_only(vault):
     material is left out once its folder is declared."""
     import compile_subconscious as cs
 
+    bucket_anchor = ARTICLE2.split("\n\n")[-1].strip()
     _write(vault, "90 系统文件/canonical_sources.psv",
            "# id|aliases|source|anchor\nREVIEW|code review;PR approvals|Rules/Code review.md|one approval\n"
-           f"BUCKET|token bucket|{RESEARCH}/Token bucket rate limiting.md|refill rate\n")
+           f"BUCKET|token bucket|{RESEARCH}/Token bucket rate limiting.md|{bucket_anchor}\n")
     rels = lambda: {t["rel"] for t in cs.index_topics(vault)}  # noqa: E731
     assert rels() == {"Rules/Code review.md", f"{RESEARCH}/Token bucket rate limiting.md"}
+    assert _receipt(vault, "token bucket").startswith("memory: direct")
     kb.add(vault, [RESEARCH])
     assert rels() == {"Rules/Code review.md"}
+    assert _receipt(vault, "token bucket").startswith("memory: none")
 
 
 def test_nightly_counts_recognised_reference_pages(vault, tmp_path, monkeypatch):

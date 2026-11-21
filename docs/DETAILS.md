@@ -1,7 +1,7 @@
 # Lmemory in detail
 
 <!-- lmemory-status:start (source: docs/STATUS.md; run scripts/sync_status.py) -->
-> **Lmemory source checkout.** Maintained by [Tink](https://github.com/TinkCarlos). Install from source using the [README](../README.md). The public cold lookup comparison and its exact reproduction steps are linked there. Historical upstream measurements are labeled in [NUMBERS.md](NUMBERS.md).
+> **Lmemory v2.1.3 (2026-11-21).** Maintained by [Tink](https://github.com/TinkCarlos). See the [release notes](https://github.com/TinkCarlos/Lmemory/releases/tag/v2.1.3) and the [bilingual ranking comparison](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/BENCHMARK.md#bilingual-ranking-2026-11-21). Historical upstream measurements are labeled in [NUMBERS.md](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/NUMBERS.md). [Installation](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/README.md).
 <!-- lmemory-status:end -->
 
 > Historical benchmark and client records on this page come from upstream. The README specifies the Lmemory build and its verification.
@@ -121,10 +121,9 @@ folder like every other command: `--vault`, `LMEMORY_VAULT`, or the folder the i
 
 Explains how a lookup came out, in seven short sections. It asks the same code `lmemory ask` asks, then says:
 
-1. **The alias lock.** The alias that matched and how (the question is the alias, contains it, or is most of it), the
-   page the alias table gives and its one-line answer; or why there was no lock: nothing close, a tie between two pages
-   (a lock never guesses), or an alias that matches whose page is replaced or gone. A lock answers at once, so when it
-   did, the ranked search is shown "for reference" and did not decide anything.
+1. **The alias lock.** Which exact alias matched, the source and the statement found there. Without a supported match,
+   it shows relevant hints or explains a tie, a replaced source or a missing page. When a lock answers, the ranked
+   search is displayed for reference.
 2. **The words.** The words recall ranks with, and which of them no page contains.
 3. **The pages, in order.** For each: the question's words it holds and where (title, aliases or triggers, text), and
    the score as *text relevance × tier weight* (× the boost for a topic page the question names, or for a question that
@@ -156,19 +155,15 @@ days old; the cards of sets 15 and 16 are all equally cold, so their digest is i
 
 ### Three states, and strict mode
 
-The receipt's first line says what the memory has on the question: `memory: direct` (an alias lock, or confidence
-`high`: answer from the page and cite it), `memory: related` (`medium` or `low`: no direct answer, only related pages;
-answer only if one of them has a sentence that answers the question outright, quoting it and its page, else tell the
-user the memory does not have it; the `recall_note:` naming words the top page does not mention says where to look),
-or `memory: none`. Nothing else changes: the same pages, the same confidence. The Python `Answer` has it as `.state`.
+`memory: direct` means an exact registered shortcut has an anchor verified in its source, or a unique dated answer was
+verified in the original record. `memory: related` offers pages for inspection. Answer only from a sentence that
+states the answer, and cite that sentence and its page. If no page qualifies, say the memory does not have the answer.
+`memory: none` means the search did not find sufficient evidence. High lexical confidence does not mark a result as
+direct. The Python `Answer` exposes `.state`.
 
-**Strict mode** hands `related` to the host as `memory: none`, the pages named on one `related_pages:` line instead of
-listed as evidence, and keeps the prompt hook to `high` pages. Switch it on with `LMEMORY_STRICT=1` (`0` turns it off
-and wins over the file), or with a line `strict|on` in `lmemory-settings.psv` at the memory folder's root. It is **off
-by default**, and it suits a memory you have organised, with rule pages and aliases: `high` needs a rule or topic page
-leading the next by 1.5×, so on a folder of session records almost nothing is `direct` and strict mode answers almost
-nothing (set 38: 0 of 235 LongMemEval and 0 of 768 LoCoMo answers handed over; on a synthetic memory with rule pages
-39 of 51).
+**Strict mode** returns `related` as `memory: none` and lists those pages as hints on `related_pages:`. It also keeps
+unverified ranked results out of the prompt hook. Enable it with `LMEMORY_STRICT=1` or `strict|on` in
+`lmemory-settings.psv` at the vault root. `LMEMORY_STRICT=0` overrides the file. The default is off.
 
 ### Clipped pages and other people's writing
 

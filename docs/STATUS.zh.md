@@ -1,1 +1,1 @@
-> **Lmemory 源码版本。** 由 [Tink](https://github.com/TinkCarlos) 维护。安装与公开对照复现步骤见[中文 README](../README.zh.md)。上游历史测量见 [NUMBERS.zh.md](NUMBERS.zh.md)。
+> **Lmemory v2.1.3（2026-11-21）。** 由 [Tink](https://github.com/TinkCarlos) 维护。[发布说明](https://github.com/TinkCarlos/Lmemory/releases/tag/v2.1.3) · [中英文排序对照](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/BENCHMARK.md#bilingual-ranking-2026-11-21)。上游历史测量见 [NUMBERS.zh.md](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/docs/NUMBERS.zh.md)。 [安装指南](https://github.com/TinkCarlos/Lmemory/blob/v2.1.3/README.zh.md).

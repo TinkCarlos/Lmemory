@@ -5,7 +5,7 @@
 # Options pass through to bootstrap.py, e.g. `sh /tmp/lmemory-install.sh --minimal --apps claude --lang en`.
 # Fetches the latest release (a tag, never main) into ~/.dsh-lmemory/<tag>, checks its SHA-256 against the release's
 # SHA256SUMS, points ~/.dsh-lmemory/current at it, and runs scripts/bootstrap.py from there. Run again to upgrade;
-# `| LMEMORY_TAG=v2.1.2 sh` stays on one release. From a clone, it uses the clone.
+# `| LMEMORY_TAG=v2.1.3 sh` stays on one release. From a clone, it uses the clone.
 set -eu
 
 REPO="TinkCarlos/Lmemory"

@@ -148,7 +148,9 @@ def build(root: Path, lang: str = "en", git: bool = True) -> Path:
     table = zones.path(vault, "90 系统文件/canonical_sources.psv")
     alias = "deploy checklist;pre-deploy steps" if en else "部署清单;发布前检查"
     rel = zones.real(vault, M + names["deploy"] + ".md")
-    row = f"Q90|{alias}|{rel}|{'Before a deploy: tests, migration plan, tell the channel' if en else '发布前：测试、迁移方案、通知'}\n"
+    anchor = ("Before a deploy to production: run the test suite, check the migration plan, tell the channel."
+              if en else "发布到生产之前：先跑测试，核对迁移方案，再在群里说一声。")
+    row = f"Q90|{alias}|{rel}|{anchor}\n"
     with table.open("a", encoding="utf-8") as fh:
         fh.write(row)
     # experience cards and their use records

@@ -1,6 +1,6 @@
 {
   "name": "dsh-lmemory",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Lmemory DSH socket (same product as the repo root: router + writer). Not a second project.",
   "type": "module",
   "main": "lib/index.js",

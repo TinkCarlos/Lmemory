@@ -2,7 +2,7 @@
 #
 #   docker run -d --name lmemory-team -p 8787:8787 \
 #     -v /srv/team-vault:/vault:ro -v /etc/lmemory/token:/run/secrets/lmemory_token:ro \
-#     ghcr.io/tinkcarlos/lmemory:v2.1.2
+#     ghcr.io/tinkcarlos/lmemory:v2.1.3
 #
 # The vault is never written; the full-text index lives in the container's own cache. See docs/TEAM.md.
 FROM python:3.12-slim

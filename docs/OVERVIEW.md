@@ -25,7 +25,7 @@ recall:
 - Newsletter/Publishing schedule.md tier=other status=active score=0.0
   how: The newsletter goes out on Friday at 08:00. The draft is frozen on Thursday eve…
   L8 (passage L6-L8): The newsletter goes out on Friday at 08:00. The draft is frozen on Thursday evening; only typo fixes after that.
-open_page: only the top recall hit, and only if its how does not close the question
+open_page: read any relevant listed page needed to verify a sentence that answers the question
 ```
 
 Lmemory hands over the rule, its page and how sure it is; what your agent says next is its own call. For your own

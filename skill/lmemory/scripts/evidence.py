@@ -516,6 +516,10 @@ def time_window(question: str, now: _dt.date) -> tuple[_dt.date, _dt.date] | Non
         return _month_range(y, mon)
     if re.search(r"\bthis month\b|这个月|本月", q):
         return _dt.date(now.year, now.month, 1), now
+    m = re.search(r"\b(?:in|during)\s+((?:19|20)\d{2})\b|(?<!\d)((?:19|20)\d{2})\s*年", q)
+    if m:
+        year = int(m.group(1) or m.group(2))
+        return _dt.date(year, 1, 1), _dt.date(year, 12, 31)
     if re.search(r"\blast year\b|去年", q):
         return _dt.date(now.year - 1, 1, 1), _dt.date(now.year - 1, 12, 31)
     if re.search(r"\bthis year\b|今年", q):
@@ -547,11 +551,12 @@ RESCUE_PC = None    # 门槛拒了、但首条有一段完整覆盖、而且是�
 RESCUE_BIND = 0.9
 
 
-def enabled(vault=None) -> bool:
-    """Re-ranking by paragraph, the time-cue weight and the two paragraph refusals: off by default (set 39: two-sided on
-    LoCoMo, but LongMemEval's held-out half lost one hand-over and `heldout3` gained one wrong citation, so the bar was
-    not met). `LMEMORY_EVIDENCE=1`, or `evidence|on` in the memory folder's `lmemory-settings.psv`, turns them on; the
-    variable wins. Aggregation questions get more pages either way."""
+def enabled(vault=None, *, default: bool | None = False) -> bool | None:
+    """Read the paragraph-evidence setting, with the environment taking precedence over the vault file.
+
+    The full re-ranker and evidence refusals are opt-in. Passing default=None distinguishes missing settings from an
+    explicit opt-out of the default Chinese paragraph ranking.
+    """
     import os
 
     raw = os.environ.get("LMEMORY_EVIDENCE", "").strip().lower()
@@ -560,18 +565,22 @@ def enabled(vault=None) -> bool:
     if raw in ("0", "off", "false", "no"):
         return False
     if vault is None:
-        return False
+        return default
     try:
         from pathlib import Path
 
         text = (Path(vault) / "lmemory-settings.psv").read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return False
+        return default
     for line in text.splitlines():
         key, _, val = line.partition("|")
-        if key.strip().lower() == "evidence" and val.strip().lower() in ("on", "1", "true", "yes"):
+        if key.strip().lower() != "evidence":
+            continue
+        if val.strip().lower() in ("on", "1", "true", "yes"):
             return True
-    return False
+        if val.strip().lower() in ("off", "0", "false", "no"):
+            return False
+    return default
 
 
 def rank_key(h: dict, window=None) -> float:

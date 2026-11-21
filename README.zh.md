@@ -29,7 +29,13 @@ lmemory demo --lang zh
 
 演示会在临时目录建立样例库，展示查找原决定、查到更新后的决定，以及库里缺少答案时的回执。
 
-Windows 和其他客户端的接入方式见[安装指南](docs/INSTALL.zh.md)。
+也可以直接运行固定发布版的演示。
+
+```sh
+uvx --from git+https://github.com/TinkCarlos/Lmemory@v2.1.3 lmemory demo --lang zh
+```
+
+接入客户端可下载 [macOS 与 Linux 安装脚本](https://github.com/TinkCarlos/Lmemory/releases/latest/download/bootstrap.sh)、[Windows 安装脚本](https://github.com/TinkCarlos/Lmemory/releases/latest/download/bootstrap.ps1)或 [Claude Desktop 扩展](https://github.com/TinkCarlos/Lmemory/releases/latest/download/Lmemory.mcpb)。客户端选项见[安装指南](docs/INSTALL.zh.md)。
 
 ### 查询自己的笔记
 

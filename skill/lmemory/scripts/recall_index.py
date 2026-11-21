@@ -30,6 +30,7 @@ import lmemory_redact  # noqa: E402
 import associate  # noqa: E402
 import kb  # noqa: E402
 import evidence  # noqa: E402
+from canonical_lookup import LITERAL_IDENTIFIER  # noqa: E402
 
 redact = lmemory_redact.redact
 is_secret_page = lmemory_redact.is_secret_page  # 其他夜间脚本经 ri.is_secret_page 用它
@@ -51,6 +52,9 @@ RULE_PREFIXES = (
 )
 RULE_FILES = {"AGENTS.md", "Agent第二大脑.md", "01 项目/项目.md"}
 DEAD_STATUS = {"superseded", "retired", "rejected", "deprecated", "archived"}
+PAST_LOOKUP = re.compile(
+    r"\b(?:formerly|previously|used to|(?:old|prior) (?:rule|policy|version|setting))\b|当初|以前|原先|旧版", re.I
+)
 HOW_MAX = 80
 # 经验卡（experience.py）：别的任务里的经验，只作为「建议」另行输出，不进事实召回
 EXPERIENCE_DIR = "02 经验与方法/经验卡"
@@ -627,6 +631,16 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
     df = term_df(con, raw + [c for t in raw if is_cjk_bigram(t) for c in t]
                  + [f for t in raw if not is_cjk_bigram(t) for f in latin_forms(t)])
     present = [t for t in raw if df.get(t, 0) > 0]
+    has_cjk = any(is_cjk_bigram(t) for t in raw)
+    single = is_single_concept(query)
+    if gate and not has_cjk and not single:
+        # Recover only an absent plural's indexed singular, without adding near-miss terms.
+        for term in raw:
+            if df.get(term) or len(term) < 5 or not term.isalpha() or not term.endswith("s") or term.endswith(("ss", "us", "is")):
+                continue
+            singular = term[:-1]
+            if df.get(singular) and singular not in present:
+                present.append(singular)
     bigrams = [t for t in present if is_cjk_bigram(t)]
     named = phrase_terms(con, bigrams)
     titled = phrase_terms(con, bigrams, ("title",))
@@ -635,22 +649,30 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
         return {"hits": [], "stats": stats, "query_tokens": [], "confidence": "none", "margin": 0.0}
     match = "{title triggers body} : (" + " OR ".join('"' + t.replace('"', "") + '"' for t in qtok) + ")"
     scope = scope.strip("/")
-    # Filter before LIMIT so matches outside the requested page or folder cannot take its candidate slots.
+    identifiers = set(LITERAL_IDENTIFIER.findall(query)) if gate else set()
+    # A scope or an explicit identifier must match before a row can take a candidate slot.
     rows = con.execute(
         "SELECT rowid, rel, tier, status, how, title, name, bm25(docs, 0, 4.0, 4.0, 1.0, 0, 0, 0, 0, 0) AS s "
-        "FROM docs WHERE docs MATCH ? AND (? = '' OR rel = ? OR instr(rel, ?) = 1) ORDER BY s LIMIT 80",
-        (match, scope, scope, scope + "/"),
-    ).fetchall()
+        "FROM docs WHERE docs MATCH ? AND (? = '' OR rel = ? OR instr(rel, ?) = 1) ORDER BY s LIMIT ?",
+        (match, scope, scope, scope + "/", -1 if identifiers else 80),
+    )
     hits = []
     qset = set(raw)
     qname = compact(query)
-    single = is_single_concept(query)
     cards_dir = zones.real(vault, EXPERIENCE_DIR) + "/"
     skills_dir = skills_rel(vault) + "/"
     own_cards = bool(scope) and (scope + "/").startswith((cards_dir, skills_dir))
     for rid, rel, tier, status, how, title, name, s in rows:
         if not own_cards and rel.startswith((cards_dir, skills_dir)):
             continue  # 经验卡只走建议通路（experience.py），不当事实出现在召回里
+        if identifiers:
+            # A setting such as LMEMORY_STATE_DIR is a name, even though FTS indexes its pieces.
+            try:
+                text = (vault / rel).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if not identifiers.issubset(LITERAL_IDENTIFIER.findall(text)):
+                continue
         boost = TIER_BOOST.get(tier, 1.0)
         if tier == "topic":
             # 点名的主题档案是这个主题的总入口，排在同名的零散规则页前面；没点名就大幅降权
@@ -659,6 +681,8 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
             boost *= TITLE_HIT  # 问的就是这页的名字（`DSH`、`SyGJ`、`封账`）
         hits.append({"rid": rid, "rel": rel, "tier": tier, "status": status, "how": how,
                      "score": round(-s * boost, 3)})
+        if len(hits) == 80:
+            break
     hits.sort(key=lambda h: -h["score"])
     # 知识库（kb.py）：参考资料单独排、单独过门槛，不算「你定过什么」的证据，也不影响记忆这一块的置信度。
     # 没有知识库的页时，下面和以前一模一样
@@ -666,8 +690,17 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
     lib = [h for h in hits if h["rel"] in lib_map]
     if lib:
         hits = [h for h in hits if h["rel"] not in lib_map]
+    ev_setting = evidence.enabled(vault, default=None)
+    ev_on = ev_setting is True
+    try:
+        window = evidence.time_window(query, evidence.today()) if gate or ev_on else None
+    except (ValueError, OverflowError):
+        window = None
+    current_lookup = gate and not (window or PAST_LOOKUP.search(query) or associate.requested_day(query))
+    expired = [h for h in hits if h["tier"] == "dead"] if current_lookup else []
+    if expired:
+        hits = [h for h in hits if h["tier"] != "dead"]
     study = None
-    ev_on = evidence.enabled(vault)
     if hits:
         n_all = con.execute("SELECT count(*) FROM files").fetchone()[0] or 1
         plan = evidence.question_plan(con, sys.modules[__name__], query, n_all, qtok)
@@ -688,19 +721,34 @@ def _recall(con: sqlite3.Connection, vault: Path, query: str, scope: str, limit:
     rival = lib[0]["score"] if lib else None
     crowded = bool(lib) and len(lib) >= min(DIRECT_FIRST, len(lib) + len(hits)) and all(
         h["rel"] in lib_map for h in sorted(lib + hits, key=lambda h: -h["score"])[:DIRECT_FIRST])
-    order = evidence.rerank(hits, EVIDENCE_PAGES, evidence.time_window(query, evidence.today()) if ev_on else None,
-                            ev_on) if hits and any(h.get("ev") for h in hits[:EVIDENCE_PAGES]) else None
+    has_evidence = any(h.get("ev") for h in hits[:EVIDENCE_PAGES])
+    order = None
+    if has_evidence:
+        if ev_on:
+            order = evidence.rerank(hits, EVIDENCE_PAGES, window)
+        elif current_lookup and has_cjk and ev_setting is not False:
+            order = evidence.rerank(hits, DIRECT_FIRST)
     cap = None
-    if limit == PAGES and order is not None and evidence.aggregate(query):
+    if limit == PAGES and has_evidence and evidence.aggregate(query):
         args = args[:3] + (AGG_PAGES,) + args[4:]  # 加总题、列举题：答案散在好几页里，多交几页直接命中
         cap = PAGES - DIRECT_FIRST  # 联想的位置照旧两个，多出来的都给直接命中
     out = _decide(*args, hits, assoc, conflict, rival=rival, crowded=crowded, order=order, assoc_cap=cap,
                   ev_gate=ev_on)
+    if expired and out["confidence"] == "none":
+        out["expired"] = [h["rel"] for h in expired]
+    if expired and out["confidence"] != "none" and not out.get("assoc"):
+        # Keep superseded history for context only, in slots no live citation needs.
+        free = limit - len(page_list(out, limit))
+        for h in expired[:max(0, free)]:
+            h.pop("rid")
+            out["hits"].append(h)
     if lib:
         ref = _decide(*args[:3], KB_PAGES, *args[4:], lib, False, False, library=True)
         if ref["hits"] and ref["confidence"] != "none":
             out["kb"] = [kb_entry(vault, h, lib_map[h["rel"]], con) for h in ref["hits"]]
             out["kb_confidence"] = ref["confidence"]
+    if identifiers and not hits:
+        out["missing_identifiers"] = sorted(identifiers)
     if study is not None:
         out["study"] = study
     return out
@@ -738,7 +786,7 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
             order: list[dict] | None = None, assoc_cap: int | None = None, ev_gate: bool = False) -> dict:
     """The gate, the confidence and the pages for one ranked list: your memory's (`library=False`), or the knowledge
     base's (`library=True`: no answer cards, no associated pages, no conflict tie-break, no asked-before check)."""
-    qset = set(raw)
+    qset = set(raw) | set(qtok)
     # 自己以前问过、那次没有记下答案的会话摘录：对上的只是你自己的提问，不是知识，不当证据（真实库里发现）
     asked = []
     for h in ([] if library else hits[:ASKED_CHECK]):
@@ -799,7 +847,7 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
         conf = "none"  # 首位只有你以前的提问，剩下的又只是弱匹配：库里没有
     # 段落证据（evidence.py）：门槛照旧按整页排序算；交出去的页按最好的一段重排，再看证据补拒或补答
     ev_none = rescued = ""
-    if order is not None:
+    if order is not None and ev_gate:
         first = hits[0]
         ranked = [h for h in order if h["rel"] not in asked]
         hits = ranked[:limit]
@@ -820,6 +868,9 @@ def _decide(con: sqlite3.Connection, vault: Path, query: str, limit: int, stats:
             found = associate.conflicts(sys.modules[__name__], con, vault, ranked, qtok, query)
             if found:
                 associate.apply_conflict(ranked, found)
+        # An already detected correction takes precedence over a stronger-looking passage.
+        if order is not None and not ev_gate and not found and conf in ("low", "medium") and not partial:
+            ranked = [h for h in order if h["rel"] not in asked]
         # 前 DIRECT_FIRST 个位置永远是直接命中；联想只填后面的位置（直接命中不够时可以往前补），
         # 用不完的位置再给后面的直接命中。拒答时（conf == none）不走这里：联想不会把"库里没有"变成"有"
         keep = min(DIRECT_FIRST, len(ranked))
@@ -1153,7 +1204,7 @@ MEMORY_NONE = {
 
 # ---------- 三态回执：记忆里有直接依据 / 只有相关的页 / 没有 ----------
 # 只是把置信度说成一句话放在回执第一行，不改排序、不改交哪些页、不改置信度怎么算。
-# direct：别名锁命中，或置信度 high；related：medium 或 low；none：拒答。
+# direct：有原文的精确别名或唯一已核验的历史回答；其余用排序找线索。
 SETTINGS_FILE = "lmemory-settings.psv"  # 记忆文件夹根目录，一行一个 `key|value`；目前只有 `strict|on`
 RELATED_USE = {
     "en": ("Answer only if one of the pages below has a sentence that answers the question outright: quote that sentence "
@@ -1180,12 +1231,12 @@ RELATED_PAGES = {"en": "related_pages: {pages} (strict mode: not evidence; say t
 
 
 def answer_state(res: dict | None, locked: bool = False) -> str:
-    """`direct` (an alias lock, or confidence `high`), `related` (`medium` or `low`) or `none` (refused)."""
+    """A grounded alias or one verified historical answer is direct. Relevance alone is related."""
     if locked:
         return "direct"
     if not res or not res.get("hits") or res.get("confidence") in (None, "none"):
         return "none"
-    return "direct" if res.get("confidence") == "high" else "related"
+    return "direct" if res.get("history_matches") == 1 else "related"
 
 
 def strict_on(vault: Path | None) -> bool:

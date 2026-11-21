@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -20,9 +21,11 @@ def _status_texts() -> dict[str, str]:
 
 
 def test_source_status_links_to_current_comparison_and_attributes_upstream():
+    version = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
     for lang, text in _status_texts().items():
         assert "Lmemory" in text and "Tink" in text
-        assert f"../README{lang}.md" in text
+        assert f"/releases/tag/v{version}" in text
+        assert f"/blob/v{version}/README{lang}.md" in text
         assert f"NUMBERS{lang}.md" in text
 
         history = (ROOT / f"docs/NUMBERS{lang}.md").read_text(encoding="utf-8")
