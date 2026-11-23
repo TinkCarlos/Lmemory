@@ -100,6 +100,20 @@ It stops and removes the nightly job, the router, the rules, Lmemory's MCP entri
 memory folder or your keys file. `--purge` also removes the cache, the state and `~/.dsh-lmemory`.
 
 
+### T3 Code
+
+T3 Code delegates each thread to its selected provider:
+
+- **Claude Code / Codex / Cursor providers** automatically inherit your host Lmemory MCP and hook setup; Lmemory's prompt capture and session importer automatically unwrap T3 Code's `<t3_code_instructions>` / `<user_request>` / `<runtime_info>` wrapper.
+- **Antigravity provider** uses an isolated config directory under `~/.t3/userdata/providers/antigravity/<id>/config/`. Connect Lmemory's MCP server, hooks, and skill in one step (preserving other hooks/servers):
+
+```bash
+python3 extras/antigravity/install_t3.py --dry-run
+python3 extras/antigravity/install_t3.py --vault "/absolute/path/to/your/vault"
+```
+
+See [`extras/antigravity/README.md`](../extras/antigravity/README.md) for options (`--uninstall`, `--t3-dir`, `--skip-hooks`).
+
 ### Hermes and OpenClaw
 
 **Hermes** (Hermes Agent) takes Lmemory as a stdio MCP server. The installer does not write Hermes's settings; add it once:

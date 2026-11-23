@@ -19,3 +19,24 @@ Optional environment variables:
 - `AGY_HOOK_STATE_DIR`: overrides hook turn-dedupe state directory (defaults to `~/.gemini/config/hooks/state`).
 - `LMEMORY_STATE_DIR` / `OBSIDIAN_VAULT`: standard Lmemory overrides.
 - `LMEMORY_INJECT=0`: disables `SessionStart` injection.
+
+## T3 Code (Antigravity provider)
+
+T3 Code stores Antigravity provider settings in isolated directories under `~/.t3/userdata/providers/antigravity/<id>/config/`. Its `skills` folder is normally symlinked to `~/.gemini/config/skills`, while `mcp_config.json` and `hooks.json` are separate.
+
+`lmemory-agy.py` automatically unwraps T3 Code's `<t3_code_instructions>` / `<user_request>` / `<runtime_info>` wrapper so recall, correction capture, and session import see only the user's actual message.
+
+Use the helper script to merge Lmemory's MCP server, hooks, and `SKILL.md` into every T3 Code Antigravity provider directory without overwriting other entries:
+
+```bash
+python3 extras/antigravity/install_t3.py --dry-run
+python3 extras/antigravity/install_t3.py --vault "/absolute/path/to/your/vault"
+```
+
+Remove the T3 Code entries cleanly with:
+
+```bash
+python3 extras/antigravity/install_t3.py --uninstall
+```
+
+Other T3 Code providers (Claude Code, Codex, Cursor) reuse their native host configs automatically; `lmemory_redact.human_words()` also unwraps T3 Code prompt wrappers for their hooks and session imports.

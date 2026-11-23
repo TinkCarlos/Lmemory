@@ -57,6 +57,41 @@ class TestAntigravityHook(unittest.TestCase):
             self.assertTrue(mod._dedupe_turn("lmemory", "c-1", payload))
             self.assertFalse(mod._dedupe_turn("lmemory", "c-1", payload))
 
+    def test_extract_user_text_unwraps_t3_harness_and_preserves_literal_tags(self):
+        mod = _load_adapter()
+        wrapped = (
+            "<USER_REQUEST>\n"
+            "<t3_code_instructions>\n## T3 Code interaction mode: Default\n</t3_code_instructions>\n\n"
+            "<user_request>\n帮我查一下上次决定的发布策略\n</user_request>"
+            "<runtime_info>T3 Code</runtime_info>\n"
+            "</USER_REQUEST>\n"
+            "<ADDITIONAL_METADATA>\nThe current local time is: 2026-11-23T15:48:00+08:00.\n</ADDITIONAL_METADATA>"
+        )
+        self.assertEqual(mod._extract_user_text(wrapped), "帮我查一下上次决定的发布策略")
+
+        literal = "<USER_REQUEST>\n帮我解释 <user_request>foo</user_request> 标签\n</USER_REQUEST>"
+        self.assertEqual(mod._extract_user_text(literal), "帮我解释 <user_request>foo</user_request> 标签")
+
+        # Outer timestamp changes must produce the same turn key
+        wrapped2 = wrapped.replace("15:48:00", "15:48:09")
+        self.assertEqual(
+            mod._turn_keys({"initialNumSteps": 1, "lastUserInput": wrapped})["initKey"],
+            mod._turn_keys({"initialNumSteps": 1, "lastUserInput": wrapped2})["initKey"],
+        )
+
+        # Transcript turn reader must store clean user prompt, not T3 instructions
+        with tempfile.TemporaryDirectory() as tmp:
+            tpath = Path(tmp) / "transcript.jsonl"
+            rows = [
+                {"step_index": 0, "type": "USER_INPUT", "source": "USER_EXPLICIT", "content": wrapped},
+                {"step_index": 1, "type": "PLANNER_RESPONSE", "content": "已查到上次发布策略。"},
+            ]
+            tpath.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            turns = mod._read_antigravity_turns(tpath)
+            self.assertEqual(len(turns), 1)
+            self.assertEqual(turns[0]["ask"], "帮我查一下上次决定的发布策略")
+            self.assertEqual(turns[0]["answer"], "已查到上次发布策略。")
+
 
 if __name__ == "__main__":
     unittest.main()

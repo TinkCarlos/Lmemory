@@ -81,6 +81,20 @@ sh ~/.dsh-lmemory/current/scripts/uninstall.sh     # 在 clone 里：sh scripts/
 它会停掉并删除夜间任务、路由器、规则、Lmemory 的 MCP 条目和钩子、Claude Code 插件（插件市场指向本机文件夹时一并删）和记下的库路径；你的记忆文件夹和钥匙文件一律不动。`--purge` 另外删缓存、状态和 `~/.dsh-lmemory`。
 
 
+### T3 Code
+
+T3 Code 按线程所选 Provider 分别加载配置：
+
+- **Claude Code / Codex / Cursor**：直接复用本机对应的 Lmemory MCP 与 Hook 配置；Lmemory 的提问捕捉与会话导入会自动剥离 T3 Code 的 `<t3_code_instructions>` / `<user_request>` / `<runtime_info>` 外壳，不会污染记忆召回或会话摘录。
+- **Antigravity**：T3 Code 使用独立的 `~/.t3/userdata/providers/antigravity/<id>/config/` 目录。运行下面命令可一键合并写入 Lmemory 的 MCP、`hooks.json` 与 `SKILL.md`（保留其他已有条目）：
+
+```bash
+python3 extras/antigravity/install_t3.py --dry-run
+python3 extras/antigravity/install_t3.py --vault "/你的/记忆库/绝对路径"
+```
+
+支持 `--uninstall`、`--t3-dir`、`--skip-hooks` 等选项，详见 [`extras/antigravity/README.md`](../extras/antigravity/README.md)。
+
 ### Hermes 和 OpenClaw
 
 **Hermes**（Hermes Agent）把 Lmemory 当作一个 stdio 的 MCP 服务接入。安装脚本不写 Hermes 的设置，自己加一次：

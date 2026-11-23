@@ -123,15 +123,28 @@ MACHINE_TAGS = ("cross-session-message", "task-notification", "system-reminder",
                 "ci-monitor-event")
 _TAG = r"<\\?~?(?:" + "|".join(MACHINE_TAGS) + r")\b"
 MACHINE_BLOCK = re.compile(_TAG + r"[^>]*>.*?(?:</\\?~?(?:" + "|".join(MACHINE_TAGS) + r")>|\Z)", re.S | re.I)
+T3_WRAP = re.compile(
+    r"^(?:<(?:t3_code_instructions|runtime_info)\b[^>]*>[\s\S]*?</(?:t3_code_instructions|runtime_info)>\s*)*"
+    r"<user_request>([\s\S]*)</user_request>"
+    r"(?:\s*<(?:t3_code_instructions|runtime_info)\b[^>]*>[\s\S]*?</(?:t3_code_instructions|runtime_info)>)*\s*$"
+)
 HOOK_TEXT = re.compile(r"^\s*(?:Lmemory (?:memory note|standing index|tools|'s two write tools)|Lmemory 记忆提示|"
                        r"Lmemory 下意识索引|Lmemory 工具|Lmemory 的两个写入工具|Lmemory: decisions recorded|Lmemory：这个仓库|"
                        r"\[SYSTEM NOTIFICATION)", re.I)
 
 
+def _unwrap_harness_prompt(text: str) -> str:
+    s = text.strip()
+    if not s or "<user_request>" not in s:
+        return text
+    m = T3_WRAP.match(s)
+    return m.group(1).strip() if m else text
+
+
 def human_words(text: str) -> str:
-    """What a person said in a message: machine blocks taken out; "" when the message is machine-made (it starts
-    with such a block or with text a Lmemory hook injected)."""
-    raw = text or ""
+    """What a person said in a message: harness wrappers unwrapped and machine blocks taken out; "" when the message
+    is machine-made (it starts with such a block or with text a Lmemory hook injected)."""
+    raw = _unwrap_harness_prompt(text or "")
     if re.match(r"^\s*" + _TAG, raw, re.I) or HOOK_TEXT.match(raw):
         return ""
     return MACHINE_BLOCK.sub(" ", raw).strip()

@@ -75,9 +75,16 @@ def _apps() -> list[str]:
     else:
         desktop = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "Claude/claude_desktop_config.json"
     for name, path, key in (("Claude Desktop", desktop, "mcpServers"), ("Cursor", home / ".cursor/mcp.json", "mcpServers"),
-                            ("Gemini CLI", home / ".gemini/settings.json", "mcpServers")):
+                            ("Gemini CLI", home / ".gemini/settings.json", "mcpServers"),
+                            ("Antigravity", home / ".gemini/config/mcp_config.json", "mcpServers")):
         if "lmemory" in (_json(path).get(key) or {}):
             found.append(name)
+    t3_root = Path(os.environ.get("T3_DATA_DIR") or home / ".t3") / "userdata/providers/antigravity"
+    if t3_root.is_dir():
+        for cfg in sorted(t3_root.glob("*/config/mcp_config.json")):
+            if "lmemory" in (_json(cfg).get("mcpServers") or {}):
+                found.append("T3 Code (Antigravity MCP)")
+                break
     return found
 
 

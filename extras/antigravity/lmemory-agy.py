@@ -28,6 +28,11 @@ import zones  # noqa: E402
 STATE_ROOT = Path(os.environ.get("AGY_HOOK_STATE_DIR") or Path.home() / ".gemini/config/hooks/state")
 USER_REQ_RE = re.compile(r"<USER_REQUEST>\s*([\s\S]*?)\s*</USER_REQUEST>")
 META_RE = re.compile(r"<(?:ADDITIONAL_METADATA|USER_SETTINGS_CHANGE)>[\s\S]*?</(?:ADDITIONAL_METADATA|USER_SETTINGS_CHANGE)>")
+HARNESS_WRAP_RE = re.compile(
+    r"^(?:<(?:t3_code_instructions|runtime_info)\b[^>]*>[\s\S]*?</(?:t3_code_instructions|runtime_info)>\s*)*"
+    r"<user_request>([\s\S]*)</user_request>"
+    r"(?:\s*<(?:t3_code_instructions|runtime_info)\b[^>]*>[\s\S]*?</(?:t3_code_instructions|runtime_info)>)*\s*$"
+)
 MACHINE_RE = re.compile(
     r"^\s*(?:\[plan review(?:\s+due)?\]|<(?:hook_prompt|system-reminder|task-notification)\b)",
     re.I,
@@ -38,14 +43,24 @@ def _out(obj: dict) -> None:
     sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
 
+def _unwrap_harness_prompt(text: str) -> str:
+    s = str(text or "").strip()
+    if not s or "<user_request>" not in s:
+        return s
+    m = HARNESS_WRAP_RE.match(s)
+    return m.group(1).strip() if m else s
+
+
 def _extract_user_text(raw: str) -> str:
     if not raw:
         return ""
     cleaned = META_RE.sub("", str(raw))
     matches = USER_REQ_RE.findall(cleaned)
     if matches:
-        return "\n".join(m.strip() for m in matches if m.strip())
-    return cleaned.strip()
+        body = "\n".join(m.strip() for m in matches if m.strip())
+    else:
+        body = cleaned.strip()
+    return _unwrap_harness_prompt(body)
 
 
 def _resolve_cwd(payload: dict) -> str:
@@ -110,7 +125,8 @@ def _latest_step_key(payload: dict) -> str | None:
 def _turn_keys(payload: dict) -> dict:
     step_key = _latest_step_key(payload)
     raw_input = str(payload.get("lastUserInput") or "")
-    digest = hashlib.sha256(raw_input.encode("utf-8", errors="replace")).hexdigest()[:16]
+    normalized = _extract_user_text(raw_input) or raw_input
+    digest = hashlib.sha256(normalized.encode("utf-8", errors="replace")).hexdigest()[:16]
     init_steps = payload.get("initialNumSteps")
     init_key = f"init:{init_steps}:{digest}" if init_steps is not None else None
     fallback_key = step_key or init_key or f"raw:{digest}"
