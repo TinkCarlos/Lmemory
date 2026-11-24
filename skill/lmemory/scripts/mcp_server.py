@@ -783,7 +783,8 @@ def handle(msg: dict) -> dict | None:
     elif method == "tools/list":
         result = {"tools": tools()}
     elif method == "tools/call":
-        result = call(str(params.get("name") or ""), params.get("arguments") or {})
+        raw_args = params.get("arguments")
+        result = call(str(params.get("name") or ""), raw_args if isinstance(raw_args, dict) else {})
     else:
         return {"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"method not found: {method}"}}
     return {"jsonrpc": "2.0", "id": mid, "result": result}
@@ -799,7 +800,15 @@ def serve_stdio() -> int:
         except ValueError:
             reply = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}}
         else:
-            reply = handle(msg) if isinstance(msg, dict) else None
+            if isinstance(msg, dict):
+                try:
+                    reply = handle(msg)
+                except Exception as exc:  # noqa: BLE001  single bad call must not kill a long-lived stdio server
+                    mid = msg.get("id")
+                    reply = ({"jsonrpc": "2.0", "id": mid, "error": {"code": -32603, "message": f"internal error: {str(exc)[:300]}"}}
+                             if mid is not None else None)
+            else:
+                reply = None
         if reply is not None:
             sys.stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
             sys.stdout.flush()

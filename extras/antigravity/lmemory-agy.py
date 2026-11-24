@@ -122,20 +122,184 @@ def _latest_step_key(payload: dict) -> str | None:
     return None
 
 
-def _turn_keys(payload: dict) -> dict:
-    step_key = _latest_step_key(payload)
+def _atomic_write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _scan_state_file(conv_id: str) -> Path:
+    cid = hashlib.sha256((conv_id or "default").encode("utf-8")).hexdigest()[:16]
+    return STATE_ROOT / "lmemory" / f"scan-{cid}.json"
+
+
+def _scan_transcript(tpath: Path, conv_id: str) -> dict:
+    """Incrementally scan only newly appended bytes of Antigravity's transcript for latest USER_INPUT step,
+    CHECKPOINT compaction step, and `#不记` marker — stays O(delta bytes) even on multi-compaction >16MB logs."""
+    cur = {
+        "ino": 0,
+        "offset": 0,
+        "latest_user_step": None,
+        "latest_checkpoint_step": -1,
+        "rehydrated_checkpoint_step": -1,
+        "nocapture": False,
+        "full_ino": 0,
+        "full_offset": 0,
+    }
+    if not tpath or not tpath.is_file():
+        return {**cur, "new_compaction": False}
+    try:
+        st_stat = tpath.stat()
+    except OSError:
+        return {**cur, "new_compaction": False}
+    ino, size = int(st_stat.st_ino), int(st_stat.st_size)
+    sf = _scan_state_file(conv_id) if conv_id else None
+    if sf is not None:
+        try:
+            loaded = json.loads(sf.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                cur.update({k: loaded[k] for k in cur if k in loaded})
+        except (OSError, ValueError):
+            pass
+    changed = False
+    if cur["ino"] != ino or size < int(cur["offset"]):
+        keep_rehydrated = int(cur.get("rehydrated_checkpoint_step", -1)) if cur["ino"] == 0 else -1
+        cur.update({"ino": ino, "offset": 0, "latest_user_step": None, "latest_checkpoint_step": -1,
+                    "rehydrated_checkpoint_step": keep_rehydrated, "nocapture": False})
+        changed = True
+
+    old_offset = int(cur["offset"])
+    saw_truncated_user = False
+    if size > old_offset:
+        try:
+            with tpath.open("rb") as fh:
+                fh.seek(old_offset)
+                pos = old_offset
+                while True:
+                    raw_bytes = fh.readline()
+                    if not raw_bytes or not raw_bytes.endswith(b"\n"):
+                        break
+                    pos += len(raw_bytes)
+                    if b'"USER_INPUT"' not in raw_bytes and b'"CHECKPOINT"' not in raw_bytes:
+                        continue
+                    try:
+                        d = json.loads(raw_bytes.decode("utf-8", errors="replace"))
+                    except ValueError:
+                        continue
+                    if not isinstance(d, dict):
+                        continue
+                    typ = d.get("type")
+                    if typ == "CHECKPOINT":
+                        idx = d.get("step_index")
+                        cur["latest_checkpoint_step"] = max(
+                            int(cur["latest_checkpoint_step"]),
+                            int(idx) if idx is not None else int(cur["latest_checkpoint_step"]) + 1,
+                        )
+                    elif typ == "USER_INPUT" and d.get("source") in ("USER_EXPLICIT", None):
+                        idx = d.get("step_index")
+                        if idx is not None:
+                            cur["latest_user_step"] = int(idx)
+                        if not cur["nocapture"]:
+                            txt = _extract_user_text(str(d.get("content") or ""))
+                            if import_sessions.NO_CAPTURE.search(txt):
+                                cur["nocapture"] = True
+                            elif isinstance(d.get("truncated_fields"), list) and "content" in d["truncated_fields"]:
+                                saw_truncated_user = True
+                if pos > old_offset:
+                    cur["offset"] = pos
+                    changed = True
+        except OSError:
+            pass
+
+    if saw_truncated_user and not cur["nocapture"]:
+        full = tpath.with_name("transcript_full.jsonl")
+        if full.is_file():
+            try:
+                fst = full.stat()
+                fino, fsize = int(fst.st_ino), int(fst.st_size)
+                if cur["full_ino"] != fino or fsize < int(cur["full_offset"]):
+                    cur["full_ino"], cur["full_offset"] = fino, 0
+                    changed = True
+                if fsize > int(cur["full_offset"]):
+                    with full.open("rb") as fh:
+                        fpos = int(cur["full_offset"])
+                        fh.seek(fpos)
+                        while True:
+                            raw_bytes = fh.readline()
+                            if not raw_bytes or not raw_bytes.endswith(b"\n"):
+                                break
+                            fpos += len(raw_bytes)
+                            if b"#" not in raw_bytes or b'"USER_INPUT"' not in raw_bytes:
+                                continue
+                            try:
+                                d = json.loads(raw_bytes.decode("utf-8", errors="replace"))
+                            except ValueError:
+                                continue
+                            if isinstance(d, dict) and d.get("type") == "USER_INPUT" and d.get("source") in ("USER_EXPLICIT", None):
+                                if import_sessions.NO_CAPTURE.search(_extract_user_text(str(d.get("content") or ""))):
+                                    cur["nocapture"] = True
+                                    break
+                        if fpos > int(cur["full_offset"]):
+                            cur["full_offset"] = fpos
+                            changed = True
+            except OSError:
+                pass
+
+    if changed and sf is not None:
+        try:
+            _atomic_write(sf, json.dumps(cur))
+        except OSError:
+            pass
+    return {**cur, "new_compaction": bool(sf is not None and int(cur["latest_checkpoint_step"]) > int(cur["rehydrated_checkpoint_step"]))}
+
+
+def _mark_checkpoint_rehydrated(conv_id: str, checkpoint_step: int) -> None:
+    if not conv_id:
+        return
+    sf = _scan_state_file(conv_id)
+    try:
+        cur = json.loads(sf.read_text(encoding="utf-8"))
+        if not isinstance(cur, dict):
+            cur = {}
+    except (OSError, ValueError):
+        cur = {}
+    cur["rehydrated_checkpoint_step"] = max(int(cur.get("rehydrated_checkpoint_step", -1)), int(checkpoint_step))
+    try:
+        _atomic_write(sf, json.dumps(cur))
+    except OSError:
+        pass
+
+
+def _extract_outer_meta(raw: str) -> str:
+    if not raw:
+        return ""
+    return "\n".join(m.group(0).strip() for m in META_RE.finditer(str(raw))).strip()
+
+
+def _turn_keys(payload: dict, scan: dict | None = None) -> dict:
+    step_num = scan.get("latest_user_step") if isinstance(scan, dict) else None
+    step_key = f"step:{step_num}" if step_num is not None else _latest_step_key(payload)
     raw_input = str(payload.get("lastUserInput") or "")
     normalized = _extract_user_text(raw_input) or raw_input
     digest = hashlib.sha256(normalized.encode("utf-8", errors="replace")).hexdigest()[:16]
+    outer_meta = _extract_outer_meta(raw_input)
+    meta_digest = hashlib.sha256(outer_meta.encode("utf-8", errors="replace")).hexdigest()[:16] if outer_meta else None
     init_steps = payload.get("initialNumSteps")
     init_key = f"init:{init_steps}:{digest}" if init_steps is not None else None
     fallback_key = step_key or init_key or f"raw:{digest}"
-    return {"stepKey": step_key, "initKey": init_key, "fallbackKey": fallback_key}
+    return {
+        "stepKey": step_key,
+        "initKey": init_key,
+        "digest": digest,
+        "metaDigest": meta_digest,
+        "fallbackKey": fallback_key,
+    }
 
 
-def _dedupe_turn(tool: str, conv_id: str, payload: dict) -> bool:
+def _dedupe_turn(tool: str, conv_id: str, payload: dict, scan: dict | None = None) -> bool:
     """Return True if this turn has NOT been processed yet (and persist its key)."""
-    cur = _turn_keys(payload)
+    cur = _turn_keys(payload, scan)
     cid = hashlib.sha256((conv_id or "default").encode("utf-8")).hexdigest()[:16]
     state_file = STATE_ROOT / tool / f"turn-{cid}.json"
     try:
@@ -144,16 +308,14 @@ def _dedupe_turn(tool: str, conv_id: str, payload: dict) -> bool:
             if (
                 (cur["initKey"] and prev.get("initKey") == cur["initKey"])
                 or (cur["stepKey"] and prev.get("stepKey") == cur["stepKey"])
+                or (cur["metaDigest"] and prev.get("metaDigest") == cur["metaDigest"] and prev.get("digest") == cur["digest"])
                 or prev.get("fallbackKey") == cur["fallbackKey"]
             ):
                 return False
     except (OSError, ValueError, AttributeError):
         pass
     try:
-        state_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp = state_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps(cur), encoding="utf-8")
-        os.replace(tmp, state_file)
+        _atomic_write(state_file, json.dumps(cur))
     except OSError:
         pass
     return True
@@ -233,6 +395,12 @@ def _note_correction(vault: Path, conv_id: str, cwd: str, text: str, quiet: bool
 
 
 def cmd_start(payload: dict) -> int:
+    conv_id = str(payload.get("conversationId") or "")
+    tpath = Path(str(payload.get("transcriptPath") or ""))
+    if conv_id and tpath.is_file():
+        scan = _scan_transcript(tpath, conv_id)
+        if scan["latest_checkpoint_step"] >= 0:
+            _mark_checkpoint_rehydrated(conv_id, scan["latest_checkpoint_step"])
     mode = os.environ.get("LMEMORY_INJECT", "")
     if mode == "0":
         _out({})
@@ -242,7 +410,6 @@ def cmd_start(payload: dict) -> int:
         _out({})
         return 0
     cwd = _resolve_cwd(payload)
-    conv_id = str(payload.get("conversationId") or "")
     text = lmemory_capture.start_text({"cwd": cwd, "session_id": conv_id}, Path(raw), mode)
     if text:
         _out({"injectSteps": [{"systemMessage": {"systemMessage": text}}]})
@@ -257,27 +424,37 @@ def cmd_prompt(payload: dict) -> int:
         _out({})
         return 0
     conv_id = str(payload.get("conversationId") or "")
-    if not _dedupe_turn("lmemory", conv_id, payload):
-        _out({})
+    tpath = Path(str(payload.get("transcriptPath") or ""))
+    scan = _scan_transcript(tpath, conv_id) if tpath.is_file() else None
+    vault_raw = lmemory_home.vault_path()
+    vault = Path(vault_raw).expanduser() if vault_raw and Path(vault_raw).is_dir() else None
+    cwd = _resolve_cwd(payload)
+    mode = os.environ.get("LMEMORY_INJECT", "")
+
+    steps: list[dict] = []
+    if scan and scan["new_compaction"]:
+        recollect.reset_session("antigravity", conv_id)
+        if vault is not None and mode != "0":
+            rehydrate = lmemory_capture.start_text({"cwd": cwd, "session_id": conv_id}, vault, mode)
+            if rehydrate:
+                steps.append({"systemMessage": {"systemMessage": rehydrate}})
+        _mark_checkpoint_rehydrated(conv_id, scan["latest_checkpoint_step"])
+
+    if not _dedupe_turn("lmemory", conv_id, payload, scan):
+        _out({"injectSteps": steps} if steps else {})
         return 0
 
     user_text = _extract_user_text(raw_input)
     text = lmemory_capture.own_words(lmemory_capture.human_words(user_text))
-    if not text.strip():
-        _out({})
+    if not text.strip() or vault is None:
+        _out({"injectSteps": steps} if steps else {})
         return 0
-
-    vault_raw = lmemory_home.vault_path()
-    if not vault_raw or not Path(vault_raw).is_dir():
-        _out({})
-        return 0
-    vault = Path(vault_raw).expanduser()
-    cwd = _resolve_cwd(payload)
-    tpath = Path(str(payload.get("transcriptPath") or ""))
 
     has_nocap_now = bool(import_sessions.NO_CAPTURE.search(user_text))
     quiet = recollect.no_capture("antigravity", conv_id, has_nocap_now)
-    if not quiet and _transcript_has_nocapture(tpath):
+    if not quiet and scan and scan["nocapture"]:
+        quiet = recollect.no_capture("antigravity", conv_id, True)
+    elif not quiet and not scan and _transcript_has_nocapture(tpath):
         quiet = recollect.no_capture("antigravity", conv_id, True)
 
     try:
@@ -297,9 +474,8 @@ def cmd_prompt(payload: dict) -> int:
             injected = recollect.render(hits)
 
     if injected:
-        _out({"injectSteps": [{"systemMessage": {"systemMessage": injected}}]})
-    else:
-        _out({})
+        steps.append({"systemMessage": {"systemMessage": injected}})
+    _out({"injectSteps": steps} if steps else {})
     return 0
 
 
@@ -308,7 +484,7 @@ def cmd_stop(payload: dict) -> int:
     conv_id = str(payload.get("conversationId") or "")
     cwd = _resolve_cwd(payload)
     if tpath and Path(tpath).is_file() and not os.environ.get("LMEMORY_IN_DISTILL") and lmemory_capture.consented():
-        log_dir = Path(lmemory_home.state_dir())
+        log_dir = recollect.state_dir()
         log_dir.mkdir(parents=True, exist_ok=True)
         log = log_dir / "session-hook.log"
         argv = [sys.executable, str(Path(__file__).resolve()), "import-bg", tpath, conv_id, cwd]
@@ -439,7 +615,7 @@ def cmd_import_bg(argv: list[str]) -> int:
                 page += "\n" + lmemory_redact.redact(supplement) + "\n"
 
         folder.mkdir(parents=True, exist_ok=True)
-        tmp = target.with_name(target.name + ".tmp")
+        tmp = target.with_name(f"{target.name}.tmp-{os.getpid()}")
         tmp.write_text(page, encoding="utf-8")
         os.replace(tmp, target)
         if before and before != target and before.exists():

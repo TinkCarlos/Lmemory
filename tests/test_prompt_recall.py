@@ -333,3 +333,107 @@ def test_a_page_fetched_with_a_windows_path_is_found(tmp_path):
             {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "t2",
                                                       "content": "recall:\n- 团队手册\\测试环境.md tier=rule score=3"}]}}]
     assert recollect.fetched_pages(vault, rows) == ["团队手册/测试环境.md"]
+
+
+def test_codex_compaction_resets_recall_rehydrates_and_preserves_nocapture(box):
+    """Across multiple Codex compactions, Lmemory re-hydrates once per compaction, resets per-session recall dedupe/cap,
+    keeps `#不记` sticky, and scans transcripts incrementally by byte offset."""
+    tx = box["tmp"] / "codex-long.jsonl"
+    tx.write_text(
+        json.dumps({"type": "response_item", "payload": {"type": "message", "role": "user",
+                    "content": [{"type": "input_text", "text": "测试环境的数据怎么保留 #不记"}]}}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    def say_with_tx(text: str, sid: str = "codex-cmp") -> str:
+        payload = {"prompt": text, "session_id": sid, "cwd": str(box["tmp"]), "transcript_path": str(tx)}
+        res = subprocess.run([sys.executable, str(HOOK), "prompt", "--agent", "codex"], input=json.dumps(payload),
+                             env=box["env"], capture_output=True, text=True, timeout=60)
+        assert res.returncode == 0, res.stderr
+        return res.stdout
+
+    # Turn 1: recalls 测试环境, and `#不记` prevents sentence logging
+    out1 = _note(say_with_tx("测试环境的数据有没有办法留下来，我下周要演示"))
+    assert "团队手册/测试环境.md" in out1
+    # Turn 2 before compaction: same page suppressed
+    assert say_with_tx("测试环境的数据有没有办法留下来，我下周要演示") == ""
+
+    # Compaction #1 appended to Codex transcript
+    with tx.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "compacted", "payload": {"message": "", "replacement_history": []}}) + "\n")
+
+    # First prompt after compaction #1: re-hydrates standing index/tools AND recalls 测试环境 again
+    out_cmp1 = _note(say_with_tx("测试环境的数据有没有办法留下来，我下周要演示"))
+    assert "团队手册/测试环境.md" in out_cmp1 and "lmemory_" in out_cmp1
+    # Immediate next prompt without new compaction: no duplicate re-hydration, same page suppressed again
+    assert say_with_tx("测试环境的数据有没有办法留下来，我下周要演示") == ""
+
+    # Compaction #2: resets and re-hydrates again
+    with tx.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "event_msg", "payload": {"type": "context_compacted"}}) + "\n")
+    out_cmp2 = _note(say_with_tx("测试环境的数据有没有办法留下来，我下周要演示"))
+    assert "团队手册/测试环境.md" in out_cmp2 and "lmemory_" in out_cmp2
+
+    # `#不记` remained sticky across both compactions: recalled.jsonl kept empty sentences
+    rows = [json.loads(ln) for ln in (box["state"] / "recalled.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 3 and all(r["sentence"] == "" for r in rows)
+
+
+def test_claude_session_start_compact_resets_recall_without_double_rehydrate(box):
+    tx = box["tmp"] / "claude-cmp.jsonl"
+    tx.write_text(json.dumps({"type": "user", "message": {"role": "user", "content": "测试环境怎么保留"}}) + "\n", encoding="utf-8")
+    payload_p = {"prompt": "测试环境的数据有没有办法留下来，我下周要演示", "session_id": "cl-cmp", "cwd": str(box["tmp"]), "transcript_path": str(tx)}
+    r1 = subprocess.run([sys.executable, str(HOOK), "prompt", "--agent", "claude"], input=json.dumps(payload_p),
+                        env=box["env"], capture_output=True, text=True, timeout=60)
+    assert "团队手册/测试环境.md" in _note(r1.stdout)
+    r2 = subprocess.run([sys.executable, str(HOOK), "prompt", "--agent", "claude"], input=json.dumps(payload_p),
+                        env=box["env"], capture_output=True, text=True, timeout=60)
+    assert r2.stdout == ""
+
+    # Claude writes compact_boundary and fires SessionStart(source="compact")
+    with tx.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "system", "subtype": "compact_boundary"}) + "\n")
+    rs = subprocess.run([sys.executable, str(HOOK), "start", "--agent", "claude"],
+                        input=json.dumps({"session_id": "cl-cmp", "source": "compact", "cwd": str(box["tmp"]), "transcript_path": str(tx)}),
+                        env=box["env"], capture_output=True, text=True, timeout=60)
+    assert rs.returncode == 0
+    # Post-compact prompt recalls 测试环境 again without double-injecting SessionStart text
+    # Even when Claude subsequently appends isCompactSummary=true for the same compaction,
+    # it must NOT double-count compaction or false-trigger nocapture if summary mentions `#不记`.
+    with tx.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "user", "isCompactSummary": True, "message": {"role": "user", "content": "前面助手解释过 #不记 的用法"}}) + "\n")
+    r3 = subprocess.run([sys.executable, str(HOOK), "prompt", "--agent", "claude"], input=json.dumps(payload_p),
+                        env=box["env"], capture_output=True, text=True, timeout=60)
+    note3 = _note(r3.stdout)
+    assert "团队手册/测试环境.md" in note3 and "Lmemory 工具" not in note3
+    # Verify summary mention of `#不记` did NOT falsely mark session nocapture
+    rows = [json.loads(ln) for ln in (box["state"] / "recalled.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rows[-1]["sentence"] != ""
+
+
+def test_scan_transcript_persists_reset_on_truncate_to_empty_and_guards_empty_sid(box):
+    tx = box["tmp"] / "trunc.jsonl"
+    tx.write_text(json.dumps({"type": "response_item", "payload": {"type": "message", "role": "user",
+                  "content": [{"type": "input_text", "text": "# AGENTS.md\n说明里提到了 #不记\n"}]}}, ensure_ascii=False) + "\n"
+                  + "x" * 200 + "\n", encoding="utf-8")
+    env_old = os.environ.get("LMEMORY_STATE_DIR")
+    os.environ["LMEMORY_STATE_DIR"] = str(box["state"])
+    try:
+        s1 = recollect.scan_transcript("codex", "trunc-sid", tx)
+        assert s1["nocapture"] is False and s1["offset"] > 200
+        # Truncate in-place to 0 bytes (same inode): offset reset MUST persist
+        tx.write_text("", encoding="utf-8")
+        s2 = recollect.scan_transcript("codex", "trunc-sid", tx)
+        assert s2["offset"] == 0
+        # Grow past previous offset with a compaction at byte 0: must be seen!
+        tx.write_text(json.dumps({"type": "compacted", "payload": {"message": ""}}) + "\n" + "y" * 300 + "\n", encoding="utf-8")
+        s3 = recollect.scan_transcript("codex", "trunc-sid", tx)
+        assert s3["compacts"] == 1 and s3["new_compaction"] is True
+        # Empty session_id must never claim new_compaction
+        s_empty = recollect.scan_transcript("codex", "", tx)
+        assert s_empty["new_compaction"] is False
+    finally:
+        if env_old is None:
+            os.environ.pop("LMEMORY_STATE_DIR", None)
+        else:
+            os.environ["LMEMORY_STATE_DIR"] = env_old

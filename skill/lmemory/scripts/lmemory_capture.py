@@ -448,6 +448,19 @@ def start_text(payload: dict, vault: Path, mode: str = "") -> str:
 
 
 def start(payload: dict, agent: str = "claude") -> int:
+    sid = str(payload.get("session_id") or "")
+    transcript = str(payload.get("transcript_path") or "")
+    if sid:
+        try:
+            import recollect
+
+            if str(payload.get("source") or "").lower() in ("compact", "clear"):
+                recollect.reset_session(agent, sid)
+            if transcript and Path(transcript).is_file():
+                scan = recollect.scan_transcript(agent, sid, Path(transcript))
+                recollect.mark_rehydrated(agent, sid, scan["compacts"])
+        except Exception as exc:  # noqa: BLE001
+            print(f"lmemory hook: {str(exc)[:200]}", file=sys.stderr)
     mode = os.environ.get("LMEMORY_INJECT", "")
     if mode == "0":
         return 0
@@ -520,29 +533,17 @@ def learn_from_turn(payload: dict, agent: str) -> None:
         print(f"lmemory hook: {str(exc)[:200]}", file=sys.stderr)
 
 
-def marked_out(transcript: Path, agent: str = "claude") -> bool:
+def marked_out(transcript: Path, agent: str = "claude", sid: str = "") -> bool:
     """An earlier question of this session carries `#不记`. Only what the person typed counts: an agent's answer or a
     tool's output that merely mentions the marker does not."""
-    if agent != "claude":
-        import import_sessions
+    import recollect
 
-        try:
-            turns = import_sessions.READERS[import_sessions.agent_of(transcript)](transcript)["turns"]
-        except (OSError, ValueError, KeyError):
-            return False
-        return any(NO_CAPTURE.search(t["ask"]) for t in turns)
+    if sid and agent in ("claude", "codex", "cursor"):
+        return bool(recollect.scan_transcript(agent, sid, transcript).get("nocapture"))
     try:
         with transcript.open(encoding="utf-8", errors="replace") as fh:
             for raw in fh:
-                if "#" not in raw or '"user"' not in raw:
-                    continue
-                try:
-                    d = json.loads(raw)
-                except ValueError:
-                    continue
-                msg = d.get("message") if isinstance(d, dict) and d.get("type") == "user" else None
-                content = msg.get("content") if isinstance(msg, dict) else None
-                if isinstance(content, str) and NO_CAPTURE.search(content):
+                if recollect._line_has_nocapture(raw, agent):
                     return True
     except OSError:
         return False
@@ -564,31 +565,50 @@ def prompt(payload: dict, agent: str = "claude") -> int:
 
 def recall_note(payload: dict, agent: str, text: str) -> None:
     """Mention it and it comes to mind (`recollect.py`): the pages this message names, handed to the agent as context
-    marked as memory. Prints nothing when nothing matches, when it is off, or when anything goes wrong."""
+    marked as memory. Also re-hydrates session-start memory and resets per-session recall dedupe once after a context
+    compaction when the host does not re-run `SessionStart`. Prints nothing when nothing matches or when off."""
     try:
         import recollect
 
-        if not recollect.routes():
+        mode = os.environ.get("LMEMORY_INJECT", "")
+        if mode == "0":
             return
         raw = vault_path()
         if not raw or not Path(raw).is_dir():
             return
+        vault = Path(raw).expanduser()
         sid = str(payload.get("session_id") or "")
-        recollect.keep_index_fresh(Path(raw).expanduser())
-        hits = recollect.keep_new(recollect.recollect(Path(raw).expanduser(), text), agent, sid)
         transcript = str(payload.get("transcript_path") or "")
-        # 「#不记」：这句话里有，或这个会话前面说过（记成一个标记文件，免得每句话都去扫整份会话记录）
-        quiet = recollect.no_capture(agent, sid, bool(NO_CAPTURE.search(text)))
-        if hits and not quiet and transcript and marked_out(Path(transcript), agent):
-            quiet = recollect.no_capture(agent, sid, True)
-        recollect.remember_turn(agent, sid, text, hits, quiet)  # 这一轮结束时 turn 看宿主自己取了什么
-        if not hits:
+        scan = recollect.scan_transcript(agent, sid, Path(transcript)) if transcript and Path(transcript).is_file() else None
+
+        rehydrate = ""
+        if scan and scan["new_compaction"]:
+            recollect.reset_session(agent, sid)
+            rehydrate = start_text(payload, vault, mode)
+            recollect.mark_rehydrated(agent, sid, scan["compacts"])
+
+        recalled_text = ""
+        if recollect.routes():
+            recollect.keep_index_fresh(vault)
+            hits = recollect.keep_new(recollect.recollect(vault, text), agent, sid)
+            # 「#不记」：这句话里有，或这个会话前面说过（记成一个标记文件，免得每句话都去扫整份会话记录）
+            quiet = recollect.no_capture(agent, sid, bool(NO_CAPTURE.search(text)))
+            if not quiet and scan and scan["nocapture"]:
+                quiet = recollect.no_capture(agent, sid, True)
+            elif hits and not quiet and transcript and not scan and marked_out(Path(transcript), agent, sid):
+                quiet = recollect.no_capture(agent, sid, True)
+            recollect.remember_turn(agent, sid, text, hits, quiet)  # 这一轮结束时 turn 看宿主自己取了什么
+            if hits:
+                if quiet:
+                    hits = [{**h, "sentence": ""} for h in hits]  # 标了不记：照样想起，但不把你的话写进记录
+                recollect.log(hits, agent, sid)
+                recalled_text = recollect.render(hits)
+
+        combined = "\n\n".join(part for part in (rehydrate, recalled_text) if part)
+        if not combined:
             return
-        if quiet:
-            hits = [{**h, "sentence": ""} for h in hits]  # 标了不记：照样想起，但不把你的话写进记录
-        recollect.log(hits, agent, sid)
         print(json.dumps({"hookSpecificOutput": {"hookEventName": "UserPromptSubmit",
-                                                 "additionalContext": recollect.render(hits)}}, ensure_ascii=False))
+                                                 "additionalContext": combined}}, ensure_ascii=False))
     except Exception as exc:  # noqa: BLE001  想不起来不能让这一轮失败
         print(f"lmemory hook: {str(exc)[:200]}", file=sys.stderr)
 
@@ -602,7 +622,7 @@ def note_correction(payload: dict, agent: str, text: str) -> None:
         return
     sid = str(payload.get("session_id") or "")
     transcript = str(payload.get("transcript_path") or "")
-    if transcript and marked_out(Path(transcript), agent):
+    if transcript and marked_out(Path(transcript), agent, sid):
         return  # 这个会话前面标过不记
     vault = Path(raw).expanduser()
     now = datetime.now()

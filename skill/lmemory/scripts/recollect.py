@@ -634,9 +634,258 @@ def _strings(obj):
             yield from _strings(v)
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.tmp-{os.getpid()}")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def _last_file(agent: str, session: str) -> Path:
     safe = re.sub(r"[^\w.-]", "_", f"{agent}-{session}")[:120]
     return state_dir() / "recalled" / f"{safe}.last.json"
+
+
+NO_CAPTURE_RE = re.compile(r"#(不记|nocapture)(?![0-9A-Za-z_])", re.I)
+
+
+def _line_has_nocapture(raw: str, agent: str) -> bool:
+    if "#" not in raw:
+        return False
+    if agent in ("claude", "codex", "cursor") and '"user"' not in raw:
+        return False
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        return False
+    if not isinstance(d, dict):
+        return False
+    import import_sessions
+    from lmemory_redact import human_words
+
+    if agent == "claude":
+        if d.get("type") != "user" or d.get("isSidechain") or d.get("isMeta") or d.get("isCompactSummary"):
+            return False
+        origin = d.get("origin")
+        if isinstance(origin, dict) and origin.get("kind") not in (None, "human"):
+            return False
+        content = (d.get("message") or {}).get("content")
+        texts = [content] if isinstance(content, str) else (
+            [str(c.get("text") or "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
+            if isinstance(content, list) else []
+        )
+        return any(
+            t.strip() and not import_sessions.NOISE.match(t) and NO_CAPTURE_RE.search(human_words(t))
+            for t in texts
+        )
+    if agent == "codex":
+        p = d.get("payload")
+        if d.get("type") != "response_item" or not isinstance(p, dict) or p.get("type") != "message" or p.get("role") != "user":
+            return False
+        content = p.get("content")
+        texts = [content] if isinstance(content, str) else (
+            [str(c.get("text") or "") for c in content if isinstance(c, dict) and c.get("type") in ("input_text", "text")]
+            if isinstance(content, list) else []
+        )
+        return any(
+            t.strip() and not import_sessions.NOISE.match(t) and NO_CAPTURE_RE.search(human_words(t))
+            for t in texts
+        )
+    if agent == "cursor":
+        if d.get("role") != "user":
+            return False
+        content = (d.get("message") or {}).get("content")
+        texts = [content] if isinstance(content, str) else (
+            [str(c.get("text") or "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
+            if isinstance(content, list) else []
+        )
+        joined = "\n".join(t for t in texts if t.strip())
+        if not joined:
+            return False
+        qs = import_sessions.CURSOR_QUERY.findall(joined)
+        ask = "\n".join(q.strip() for q in qs) if qs else import_sessions.CURSOR_WRAP.sub("", joined).strip()
+        if not ask or import_sessions.NOISE.match(ask):
+            return False
+        return bool(NO_CAPTURE_RE.search(human_words(ask)))
+    return False
+
+
+def _line_compaction_kind(raw: str, agent: str) -> str:
+    """Return compaction event kind for this line ('boundary', 'summary', 'compacted', or '')."""
+    if agent == "codex":
+        if '"compacted"' not in raw and '"context_compacted"' not in raw:
+            return ""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return ""
+        if not isinstance(d, dict):
+            return ""
+        p = d.get("payload")
+        if d.get("type") == "compacted" or (isinstance(p, dict) and p.get("type") in ("compacted", "context_compacted")):
+            return "compacted"
+        return ""
+    if agent == "claude":
+        if '"isCompactSummary"' not in raw and '"compact_boundary"' not in raw:
+            return ""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return ""
+        if not isinstance(d, dict):
+            return ""
+        if d.get("type") == "system" and d.get("subtype") == "compact_boundary":
+            return "boundary"
+        if d.get("isCompactSummary"):
+            return "summary"
+        return ""
+    if agent == "antigravity":
+        if '"CHECKPOINT"' not in raw:
+            return ""
+        try:
+            d = json.loads(raw)
+        except ValueError:
+            return ""
+        return "compacted" if isinstance(d, dict) and d.get("type") == "CHECKPOINT" else ""
+    return ""
+
+
+def _scan_file(agent: str, session: str) -> Path:
+    return _last_file(agent, session).with_suffix(".scan.json")
+
+
+def scan_transcript(agent: str, session: str, transcript: Path) -> dict:
+    """Incrementally scan only newly appended bytes of `transcript` for `#不记` and compaction boundaries.
+    Avoids re-parsing multi-hundred-MB transcripts from byte 0 on every turn."""
+    default = {
+        "ino": 0,
+        "offset": 0,
+        "compacts": 0,
+        "nocapture": False,
+        "rehydrated_compacts": 0,
+        "pending_compact_summary": False,
+        "new_compaction": False,
+    }
+    if not transcript or not transcript.is_file():
+        return default
+    try:
+        st_stat = transcript.stat()
+    except OSError:
+        return default
+    ino, size = int(st_stat.st_ino), int(st_stat.st_size)
+    sf = _scan_file(agent, session) if session else None
+    cur = {
+        "ino": 0,
+        "offset": 0,
+        "compacts": 0,
+        "nocapture": False,
+        "rehydrated_compacts": 0,
+        "pending_compact_summary": False,
+    }
+    if sf is not None:
+        try:
+            loaded = json.loads(sf.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                cur.update({k: loaded[k] for k in cur if k in loaded})
+        except (OSError, ValueError):
+            pass
+    changed = False
+    if cur["ino"] != ino or size < int(cur["offset"]):
+        keep_rehydrated = int(cur.get("rehydrated_compacts") or 0) if cur["ino"] == 0 else 0
+        cur = {
+            "ino": ino,
+            "offset": 0,
+            "compacts": 0,
+            "nocapture": False,
+            "rehydrated_compacts": keep_rehydrated,
+            "pending_compact_summary": False,
+        }
+        changed = True
+
+    old_offset = int(cur["offset"])
+    if size > old_offset:
+        try:
+            with transcript.open("rb") as fh:
+                fh.seek(old_offset)
+                pos = old_offset
+                while True:
+                    raw_bytes = fh.readline()
+                    if not raw_bytes or not raw_bytes.endswith(b"\n"):
+                        break
+                    pos += len(raw_bytes)
+                    # Fast byte-level prefilter avoids decoding/parsing huge tool-output lines
+                    need_nocap = not cur["nocapture"] and b"#" in raw_bytes
+                    need_cmp = (
+                        b"compacted" in raw_bytes
+                        or b"isCompactSummary" in raw_bytes
+                        or b"compact_boundary" in raw_bytes
+                        or b"CHECKPOINT" in raw_bytes
+                    )
+                    need_user_reset = bool(cur["pending_compact_summary"]) and agent == "claude" and b'"user"' in raw_bytes
+                    if not need_nocap and not need_cmp and not need_user_reset:
+                        continue
+                    raw = raw_bytes.decode("utf-8", errors="replace")
+                    if need_nocap and _line_has_nocapture(raw, agent):
+                        cur["nocapture"] = True
+                    cmp_kind = _line_compaction_kind(raw, agent) if need_cmp else ""
+                    if cmp_kind == "boundary":
+                        cur["compacts"] = int(cur["compacts"]) + 1
+                        cur["pending_compact_summary"] = True
+                    elif cmp_kind == "summary":
+                        if cur["pending_compact_summary"]:
+                            cur["pending_compact_summary"] = False
+                        else:
+                            cur["compacts"] = int(cur["compacts"]) + 1
+                    elif cmp_kind:
+                        cur["compacts"] = int(cur["compacts"]) + 1
+                    elif need_user_reset:
+                        try:
+                            d = json.loads(raw)
+                        except ValueError:
+                            d = None
+                        if isinstance(d, dict) and d.get("type") == "user" and not d.get("isCompactSummary"):
+                            cur["pending_compact_summary"] = False
+                if pos > old_offset:
+                    cur["offset"] = pos
+                    changed = True
+        except OSError:
+            pass
+    if changed and sf is not None:
+        try:
+            _atomic_write(sf, json.dumps(cur, ensure_ascii=False))
+        except OSError:
+            pass
+    return {**cur, "new_compaction": bool(sf is not None and int(cur["compacts"]) > int(cur["rehydrated_compacts"]))}
+
+
+def mark_rehydrated(agent: str, session: str, compacts: int) -> None:
+    if not session:
+        return
+    sf = _scan_file(agent, session)
+    try:
+        cur = json.loads(sf.read_text(encoding="utf-8"))
+        if not isinstance(cur, dict):
+            cur = {}
+    except (OSError, ValueError):
+        cur = {}
+    cur["rehydrated_compacts"] = max(int(cur.get("rehydrated_compacts") or 0), int(compacts))
+    try:
+        _atomic_write(sf, json.dumps(cur, ensure_ascii=False))
+    except OSError:
+        pass
+
+
+def reset_session(agent: str, session: str) -> bool:
+    """Clear per-session recall dedupe & cap after compaction while preserving `.nocapture`."""
+    if not session:
+        return False
+    safe = re.sub(r"[^\w.-]", "_", f"{agent}-{session}")[:120]
+    f = state_dir() / "recalled" / f"{safe}.json"
+    try:
+        f.unlink()
+        return True
+    except OSError:
+        return False
 
 
 def no_capture(agent: str, session: str, now: bool) -> bool:
@@ -828,7 +1077,7 @@ def keep_new(hits: list[dict], agent: str, session: str) -> list[dict]:
         try:
             folder.mkdir(parents=True, exist_ok=True)
             fresh = not f.exists()
-            f.write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+            _atomic_write(f, json.dumps(st, ensure_ascii=False))
             if fresh:
                 old = time.time() - KEEP_DAYS * 86400
                 for g in folder.glob("*"):

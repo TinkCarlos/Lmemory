@@ -118,3 +118,34 @@ def test_http_server_is_read_only_unless_asked(tmp_path):
         assert res["isError"] is True and "unknown tool" in res["content"][0]["text"]
     finally:
         m.WRITE = saved
+
+
+def test_serve_stdio_survives_internal_error_and_non_dict_arguments(monkeypatch):
+    import io
+
+    sys.path.insert(0, str(SCRIPTS))
+    import mcp_server as m
+
+    orig_call = m.call
+
+    def flaky_call(name, args):
+        if name == "boom":
+            raise RuntimeError("transient lock failure")
+        return orig_call(name, args)
+
+    monkeypatch.setattr(m, "call", flaky_call)
+    msgs = [
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "lmemory_ask", "arguments": "not-a-dict"}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "boom", "arguments": {}}},
+        {"jsonrpc": "2.0", "id": 3, "method": "ping"},
+    ]
+    stdin = io.StringIO("\n".join(json.dumps(x) for x in msgs) + "\n")
+    stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdin", stdin)
+    monkeypatch.setattr(sys, "stdout", stdout)
+    assert m.serve_stdio() == 0
+    replies = [json.loads(line) for line in stdout.getvalue().splitlines() if line.strip()]
+    assert len(replies) == 3
+    assert replies[0]["id"] == 1 and replies[0]["result"]["isError"] is True
+    assert replies[1]["id"] == 2 and replies[1]["error"]["code"] == -32603
+    assert replies[2]["id"] == 3 and replies[2]["result"] == {}

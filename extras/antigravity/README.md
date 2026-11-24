@@ -5,7 +5,7 @@ Default `install.sh` does not enable this.
 `lmemory-agy.py` bridges Antigravity lifecycle hooks (`SessionStart`, `PreInvocation`, `Stop`) to Lmemory:
 
 - `SessionStart`: injects session startup context from your configured vault.
-- `PreInvocation`: captures correction candidates, recalls relevant notes, and deduplicates mid-turn wakeups across long agent turns (widening transcript tail reads from 512 KB up to 16 MB).
+- `PreInvocation`: incrementally scans newly appended transcript bytes (O(delta)), automatically re-hydrates `SessionStart` context and resets per-session recall dedupe/cap once after each `CHECKPOINT` compaction (preserving `#不记` / `#nocapture`), captures correction candidates, recalls relevant notes, and deduplicates mid-turn wakeups across long agent turns.
 - `Stop`: imports the finished session transcript in the background.
 
 ## Setup
